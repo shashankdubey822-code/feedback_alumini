@@ -38,7 +38,55 @@ document.addEventListener('DOMContentLoaded', () => {
     setupDashboardHandlers();
     setupSidebarNav();
     setupModal();
+    setupAdminAuth();
+    loadInitialData();
 });
+
+// ========== DATA LOADING ==========
+async function loadInitialData() {
+    try {
+        console.log("loadInitialData: Fetching /api/data");
+        const response = await fetch(`${API_BASE}/api/data`);
+        console.log("loadInitialData: Response status", response.status);
+        if (!response.ok) {
+            console.log("loadInitialData: No data (404), showing admin prompt");
+            // Show admin prompt if 404
+            document.getElementById('loading-status').textContent = 'No data available. Admin upload required.';
+            document.getElementById('loading-status').style.color = '#fbbf24';
+            document.getElementById('btn-show-admin').style.display = 'inline-block';
+            document.querySelector('#loading-screen .brand-icon').style.animation = 'none';
+            return;
+        }
+        
+        console.log("loadInitialData: Parsing JSON");
+        const analytics = await response.json();
+        console.log("loadInitialData: Setting state variables");
+        state.analytics = analytics;
+        state.columns = analytics.meta.columns;
+        state.columnTypes = analytics.meta.columnTypes;
+        state.tableData = analytics.tableData || [];
+        state.fileName = analytics.meta.filename || 'Database Record';
+
+        console.log("loadInitialData: Scheduling switchToDashboardFromLoading");
+        setTimeout(() => {
+            console.log("Timeout triggered: Switching screens and rendering");
+            switchToDashboardFromLoading();
+            renderDashboard();
+            console.log("Timeout triggered: Render complete");
+        }, 300);
+    } catch (err) {
+        document.getElementById('loading-status').textContent = 'Failed to connect to server.';
+        document.getElementById('loading-status').style.color = '#ef4444';
+        document.querySelector('#loading-screen .brand-icon').style.animation = 'none';
+        console.error(err);
+    }
+}
+
+function switchToDashboardFromLoading() {
+    document.getElementById('loading-screen').classList.remove('active');
+    document.getElementById('dashboard-screen').classList.add('active');
+    document.getElementById('file-badge').textContent = state.fileName;
+}
 
 // ========== FILE UPLOAD ==========
 function setupUploadHandlers() {
@@ -68,18 +116,25 @@ async function handleFile(file) {
         alert('Please upload a CSV, TSV, or TXT file.');
         return;
     }
+    
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+        alert('Admin session expired');
+        return;
+    }
 
     state.fileName = file.name;
-    showProgress('Uploading to Python server...', 20);
+    showProgress('Uploading to database...', 40);
 
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-        showProgress('AI is analyzing your data...', 50);
-
-        const response = await fetch(`${API_BASE}/api/upload`, {
+        const response = await fetch(`${API_BASE}/api/admin/upload_csv`, {
             method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
             body: formData,
         });
 
@@ -88,20 +143,13 @@ async function handleFile(file) {
             throw new Error(err.error || 'Upload failed');
         }
 
-        showProgress('Building dashboard...', 85);
-        const analytics = await response.json();
-
-        state.analytics = analytics;
-        state.columns = analytics.meta.columns;
-        state.columnTypes = analytics.meta.columnTypes;
-        state.tableData = analytics.tableData || [];
-
         showProgress('Done!', 100);
 
         setTimeout(() => {
-            switchToDashboard();
-            renderDashboard();
-        }, 300);
+            document.getElementById('upload-screen').classList.remove('active');
+            document.getElementById('loading-screen').classList.add('active');
+            loadInitialData();
+        }, 800);
 
     } catch (err) {
         alert('Error: ' + err.message);
@@ -132,6 +180,7 @@ function switchToUpload() {
     document.getElementById('upload-screen').classList.add('active');
     hideProgress();
     document.getElementById('file-input').value = '';
+    document.getElementById('google-link-input').value = '';
     destroyCharts();
 }
 
@@ -161,10 +210,130 @@ function setupSidebarNav() {
 
 // ========== DASHBOARD HANDLERS ==========
 function setupDashboardHandlers() {
-    document.getElementById('btn-new-file').addEventListener('click', switchToUpload);
+    const btnAdminPanel = document.getElementById('btn-admin-panel');
+    if (btnAdminPanel) {
+        btnAdminPanel.addEventListener('click', showAdminPanel);
+    }
     document.getElementById('btn-download-csv').addEventListener('click', downloadFilteredCSV);
     document.getElementById('btn-clear-filters').addEventListener('click', clearAllFilters);
     document.getElementById('global-search').addEventListener('input', debounce(applyFilters, 400));
+}
+
+// ========== ADMIN AUTH & LOGIC ==========
+function setupAdminAuth() {
+    const btnShowAdmin = document.getElementById('btn-show-admin');
+    const modal = document.getElementById('admin-login-modal');
+    const btnClose = document.getElementById('admin-login-close');
+    const btnSubmit = document.getElementById('btn-admin-submit');
+    const errorMsg = document.getElementById('admin-login-error');
+    
+    if (btnShowAdmin) {
+        btnShowAdmin.addEventListener('click', () => {
+            if (localStorage.getItem('adminToken')) {
+                showAdminPanel();
+            } else {
+                modal.classList.remove('hidden');
+            }
+        });
+    }
+
+    if (btnClose) {
+        btnClose.addEventListener('click', () => modal.classList.add('hidden'));
+    }
+
+    if (btnSubmit) {
+        btnSubmit.addEventListener('click', async () => {
+            const pwd = document.getElementById('admin-password').value;
+            try {
+                const res = await fetch(`${API_BASE}/api/admin/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: pwd })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    localStorage.setItem('adminToken', data.token);
+                    modal.classList.add('hidden');
+                    errorMsg.style.display = 'none';
+                    showAdminPanel();
+                } else {
+                    errorMsg.style.display = 'block';
+                }
+            } catch (e) {
+                errorMsg.style.display = 'block';
+                errorMsg.textContent = 'Connection error';
+            }
+        });
+    }
+
+    const btnBackToDashboard = document.getElementById('btn-back-to-dashboard');
+    if (btnBackToDashboard) {
+        btnBackToDashboard.addEventListener('click', () => {
+            document.getElementById('upload-screen').classList.remove('active');
+            document.getElementById('loading-screen').classList.add('active');
+            document.getElementById('dashboard-screen').classList.remove('active');
+            loadInitialData();
+        });
+    }
+
+    const btnGoogleFetch = document.getElementById('btn-google-fetch');
+    if (btnGoogleFetch) {
+        btnGoogleFetch.addEventListener('click', async () => {
+            const url = document.getElementById('google-link-input').value.trim();
+            if (!url) {
+                alert('Please enter a valid Google Sheets link');
+                return;
+            }
+
+            const token = localStorage.getItem('adminToken');
+            if (!token) {
+                alert('Admin session expired');
+                return;
+            }
+
+            showProgress('Fetching from Google...', 30);
+            
+            try {
+                const res = await fetch(`${API_BASE}/api/admin/fetch_google_link`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ url })
+                });
+                
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Fetch failed');
+                }
+
+                showProgress('Data loaded successfully!', 100);
+                setTimeout(() => {
+                    document.getElementById('upload-screen').classList.remove('active');
+                    document.getElementById('loading-screen').classList.add('active');
+                    loadInitialData();
+                }, 1000);
+            } catch (err) {
+                alert('Error: ' + err.message);
+                hideProgress();
+            }
+        });
+    }
+}
+
+function showAdminPanel() {
+    if (!localStorage.getItem('adminToken')) {
+        document.getElementById('admin-login-modal').classList.remove('hidden');
+        return;
+    }
+    document.getElementById('loading-screen').classList.remove('active');
+    document.getElementById('dashboard-screen').classList.remove('active');
+    document.getElementById('upload-screen').classList.add('active');
+    hideProgress();
+    document.getElementById('file-input').value = '';
+    const googleInput = document.getElementById('google-link-input');
+    if (googleInput) googleInput.value = '';
 }
 
 // ========== RENDER DASHBOARD ==========
@@ -172,18 +341,18 @@ function renderDashboard() {
     const a = state.analytics;
     if (!a) return;
 
-    renderKPIs(a.kpis);
-    renderFilters(a.filters);
-    renderAIInsights(a.aiInsights);
-    renderCharts(a.charts);
-    renderTimeTrends(a.timeTrends);
-    renderSentiment(a.sentiment);
-    renderKeywords(a.keywords);
-    renderSpeakers(a.speakerStats);
-    renderTable();
+    try { renderKPIs(a.kpis); } catch(e) { console.error("Error renderKPIs:", e); }
+    try { renderFilters(a.filters); } catch(e) { console.error("Error renderFilters:", e); }
+    try { renderAIInsights(a.aiInsights); } catch(e) { console.error("Error renderAIInsights:", e); }
+    try { renderCharts(a.charts); } catch(e) { console.error("Error renderCharts:", e); }
+    try { renderTimeTrends(a.timeTrends); } catch(e) { console.error("Error renderTimeTrends:", e); }
+    try { renderSentiment(a.sentiment); } catch(e) { console.error("Error renderSentiment:", e); }
+    try { renderKeywords(a.keywords); } catch(e) { console.error("Error renderKeywords:", e); }
+    try { renderSpeakers(a.speakerStats); } catch(e) { console.error("Error renderSpeakers:", e); }
+    try { renderTable(); } catch(e) { console.error("Error renderTable:", e); }
 
     // Hide sections with no data
-    toggleSectionVisibility('speakers-section', a.speakerStats && a.speakerStats.length > 0);
+    try { toggleSectionVisibility('speakers-section', a.speakerStats && a.speakerStats.length > 0); } catch(e) {}
 }
 
 function toggleSectionVisibility(sectionId, hasData) {

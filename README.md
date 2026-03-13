@@ -21,4 +21,5 @@ User uploads CSV → Browser sends file to Python Flask API → Python processes
 - **Data Processing**: pandas (DataFrames), rapidfuzz (fuzzy string matching)
 - **NLP/AI**: TextBlob (sentiment analysis), NLTK (tokenization, stopwords)
 - **Frontend**: HTML + CSS + JavaScript + Chart.js
-- **No database** — everything is in-memory per session
+- **Database**: SQLite (persistent storage for admissions data)
+- **Admin Panel**: Secure access for data uploads and Google Sheets integration

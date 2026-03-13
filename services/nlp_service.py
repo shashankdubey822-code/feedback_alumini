@@ -105,8 +105,7 @@ def build_keywords(df, column_types, columns):
         top_bigrams = [{'text': b, 'count': c, 'type': 'bigram'}
                        for b, c in bigram_freq.most_common(10) if c >= 2]
 
-        combined = sorted(top_bigrams + top_words,
-                         key=lambda x: x['count'], reverse=True)[:25]
+        combined = sorted(top_bigrams + top_words,key=lambda x: x['count'], reverse=True)[:25]
 
         if len(combined) < 2:
             continue

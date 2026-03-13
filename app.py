@@ -12,6 +12,8 @@ import numpy as np
 from collections import Counter
 from datetime import datetime
 from io import StringIO
+import sqlite3
+import requests
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -180,6 +182,9 @@ def classify_axis_labels(col_name, col_type, chart_context='distribution'):
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 
+DB_PATH = 'dashboard.db'
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
+
 current_data = {
     'df': None,
     'original_df': None,
@@ -201,10 +206,86 @@ def serve_static(path):
 
 
 # ════════════════════════════════════════════════════════════════════
-#  CSV UPLOAD
+#  DATABASE HELPERS
 # ════════════════════════════════════════════════════════════════════
-@app.route('/api/upload', methods=['POST'])
+
+def load_data_from_db():
+    try:
+        if not os.path.exists(DB_PATH):
+            return False
+        conn = sqlite3.connect(DB_PATH)
+        df = pd.read_sql('SELECT * FROM dashboard_data', conn)
+        conn.close()
+        
+        if df.empty:
+            return False
+            
+        # Optional: any necessary string cleanup
+        for col in df.select_dtypes(include='object').columns:
+            df[col] = df[col].astype(str).str.strip()
+            
+        current_data['original_df'] = df.copy()
+        current_data['df'] = df.copy()
+        current_data['columns'] = list(df.columns)
+        current_data['filename'] = 'Database Record'
+        current_data['column_types'] = detect_column_types(df)
+
+        current_data['department_map'] = {}
+        for col in df.columns:
+            if current_data['column_types'].get(col) == 'categorical':
+                if is_department_like(col, df[col]):
+                    mapping = fuzzy_normalize(df[col].tolist())
+                    current_data['department_map'][col] = mapping
+                    df[col + ' (Normalized)'] = df[col].map(mapping).fillna(df[col])
+
+        current_data['df'] = df
+        return True
+    except Exception as e:
+        print("DB Load Error:", e)
+        return False
+
+
+def save_data_to_db(df):
+    conn = sqlite3.connect(DB_PATH)
+    df.to_sql('dashboard_data', conn, if_exists='replace', index=False)
+    conn.close()
+
+
+# ════════════════════════════════════════════════════════════════════
+#  PUBLIC API
+# ════════════════════════════════════════════════════════════════════
+
+@app.route('/api/data', methods=['GET'])
+def get_data():
+    if current_data['df'] is None:
+        loaded = load_data_from_db()
+        if not loaded:
+            return jsonify({'error': 'No data available. Admin needs to upload data.'}), 404
+            
+    analytics = build_analytics(current_data['df'], current_data['column_types'],
+                                 current_data['department_map'],
+                                 current_data['columns'])
+    return jsonify(analytics)
+
+# ════════════════════════════════════════════════════════════════════
+#  ADMIN API
+# ════════════════════════════════════════════════════════════════════
+
+@app.route('/api/admin/login', methods=['POST'])
+def admin_login():
+    data = request.json or {}
+    pwd = data.get('password', '')
+    if pwd == ADMIN_PASSWORD:
+        return jsonify({'success': True, 'token': 'admin_stateless_token'})
+    return jsonify({'error': 'Invalid password', 'success': False}), 401
+
+
+@app.route('/api/admin/upload_csv', methods=['POST'])
 def upload_csv():
+    token = request.headers.get('Authorization', '')
+    if token != 'Bearer admin_stateless_token':
+        return jsonify({'error': 'Unauthorized'}), 401
+
     if 'file' not in request.files:
         return jsonify({'error': 'No file uploaded'}), 400
 
@@ -221,31 +302,48 @@ def upload_csv():
         for col in df.select_dtypes(include='object').columns:
             df[col] = df[col].astype(str).str.strip()
 
-        current_data['original_df'] = df.copy()
-        current_data['df'] = df.copy()
-        current_data['columns'] = list(df.columns)
-        current_data['filename'] = file.filename
-        current_data['column_types'] = detect_column_types(df)
+        save_data_to_db(df)
+        load_data_from_db()
 
-        # Fuzzy-normalize categorical columns
-        current_data['department_map'] = {}
-        for col in df.columns:
-            if current_data['column_types'].get(col) == 'categorical':
-                if is_department_like(col, df[col]):
-                    mapping = fuzzy_normalize(df[col].tolist())
-                    current_data['department_map'][col] = mapping
-                    df[col + ' (Normalized)'] = df[col].map(mapping).fillna(df[col])
-
-        current_data['df'] = df
-
-        analytics = build_analytics(df, current_data['column_types'],
-                                     current_data['department_map'],
-                                     current_data['columns'])
-
-        return jsonify(analytics)
+        return jsonify({'success': True, 'message': 'Data successfully uploaded to db'})
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/fetch_google_link', methods=['POST'])
+def fetch_google_link():
+    token = request.headers.get('Authorization', '')
+    if token != 'Bearer admin_stateless_token':
+        return jsonify({'error': 'Unauthorized'}), 401
+        
+    data = request.json or {}
+    url = data.get('url', '')
+    if not url:
+        return jsonify({'error': 'No URL provided'}), 400
+        
+    # Convert standard Google Sheets URL to export CSV URL
+    if '/edit' in url:
+        url = url.split('/edit')[0] + '/export?format=csv'
+        
+    try:
+        resp = requests.get(url)
+        resp.raise_for_status()
+        content = resp.content.decode('utf-8')
+        
+        df = pd.read_csv(StringIO(content))
+        df.columns = [c.strip() for c in df.columns]
+        df = df.dropna(how='all')
+        df = df.fillna('')
+        for col in df.select_dtypes(include='object').columns:
+            df[col] = df[col].astype(str).str.strip()
+            
+        save_data_to_db(df)
+        load_data_from_db()
+        
+        return jsonify({'success': True, 'message': 'Data loaded from Google Sheets'})
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch or parse from Google link: {str(e)}'}), 500
 
 
 # ════════════════════════════════════════════════════════════════════

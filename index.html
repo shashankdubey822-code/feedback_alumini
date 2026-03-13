@@ -1,264 +1,770 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DataLens — Advanced CSV Analytics Dashboard</title>
-    <meta name="description" content="Upload any CSV and get instant AI-powered analytics with NLP sentiment analysis, fuzzy matching, bigram extraction, and smart visualizations.">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <meta
+      name="description"
+      content="Upload any CSV and get instant AI-powered analytics with NLP sentiment analysis, fuzzy matching, bigram extraction, and smart visualizations."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- ======================== LOADING SCREEN ======================== -->
+    <div
+      id="loading-screen"
+      class="screen active"
+      style="
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        text-align: center;
+      "
+    >
+      <div
+        class="brand-icon"
+        style="
+          margin-bottom: 24px;
+          animation: pulse 2s infinite;
+          display: inline-flex;
+          justify-content: center;
+          align-items: center;
+          border-radius: 14px;
+          padding: 4px;
+        "
+      >
+        <svg width="64" height="64" viewBox="0 0 48 48" fill="none">
+          <rect width="48" height="48" rx="14" fill="url(#grad2)" />
+          <path
+            d="M14 34V14h6l4 8 4-8h6v20h-6V22l-4 8-4-8v12h-6z"
+            fill="#fff"
+            opacity="0.9"
+          />
+          <defs>
+            <linearGradient id="grad2" x1="0" y1="0" x2="48" y2="48">
+              <stop stop-color="#3b82f6" />
+              <stop offset="1" stop-color="#8b5cf6" />
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <h2 style="color: white; font-size: 24px; margin-bottom: 8px">
+        Loading Dashboard...
+      </h2>
+      <p id="loading-status" style="color: #8b8b9e">Connecting to database</p>
+      <button
+        id="btn-show-admin"
+        style="
+          margin-top: 24px;
+          padding: 10px 20px;
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.05);
+          color: #fff;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          cursor: pointer;
+          display: none;
+          font-family: Inter;
+          font-weight: 500;
+        "
+      >
+        Admin Access
+      </button>
+    </div>
 
-    <!-- ======================== UPLOAD SCREEN ======================== -->
-    <div id="upload-screen" class="screen active">
-        <div class="upload-container">
-            <div class="brand">
-                <div class="brand-icon">
-                    <svg width="56" height="56" viewBox="0 0 48 48" fill="none">
-                        <rect width="48" height="48" rx="14" fill="url(#grad1)"/>
-                        <path d="M14 34V14h6l4 8 4-8h6v20h-6V22l-4 8-4-8v12h-6z" fill="#fff" opacity="0.9"/>
-                        <defs><linearGradient id="grad1" x1="0" y1="0" x2="48" y2="48">
-                            <stop stop-color="#6366f1"/><stop offset="1" stop-color="#a855f7"/>
-                        </linearGradient></defs>
-                    </svg>
-                </div>
-                <h1 class="brand-title">DataLens</h1>
-                <p class="brand-subtitle">AI-Powered CSV Analytics · Python Backend</p>
-            </div>
-
-            <div id="drop-zone" class="drop-zone">
-                <div class="drop-zone-content">
-                    <div class="upload-icon">
-                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="17 8 12 3 7 8"/>
-                            <line x1="12" y1="3" x2="12" y2="15"/>
-                        </svg>
-                    </div>
-                    <p class="drop-text">Drag & drop your CSV file here</p>
-                    <p class="drop-subtext">or</p>
-                    <label for="file-input" class="browse-btn">Browse Files</label>
-                    <input type="file" id="file-input" accept=".csv,.tsv,.txt" hidden>
-                    <p class="file-hint">Supports .csv, .tsv files · Python AI processes your data</p>
-                </div>
-            </div>
-
-            <div id="upload-progress" class="upload-progress hidden">
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progress-fill"></div>
-                </div>
-                <p class="progress-text" id="progress-text">Uploading to Python server...</p>
-            </div>
+    <!-- ======================== ADMIN UPLOAD SCREEN ======================== -->
+    <div id="upload-screen" class="screen">
+      <div class="upload-container">
+        <div class="brand">
+          <div class="brand-icon">
+            <svg width="56" height="56" viewBox="0 0 48 48" fill="none">
+              <rect width="48" height="48" rx="14" fill="url(#grad1)" />
+              <path
+                d="M14 34V14h6l4 8 4-8h6v20h-6V22l-4 8-4-8v12h-6z"
+                fill="#fff"
+                opacity="0.9"
+              />
+              <defs>
+                <linearGradient id="grad1" x1="0" y1="0" x2="48" y2="48">
+                  <stop stop-color="#6366f1" />
+                  <stop offset="1" stop-color="#a855f7" />
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <h1 class="brand-title">DataLens</h1>
+          <p class="brand-subtitle">
+            AI-Powered CSV Analytics · Python Backend
+          </p>
         </div>
+
+        <div id="drop-zone" class="drop-zone">
+          <div class="drop-zone-content">
+            <div class="upload-icon">
+              <svg
+                width="64"
+                height="64"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+            </div>
+            <p class="drop-text">Drag & drop your CSV file here</p>
+            <p class="drop-subtext">or</p>
+            <label for="file-input" class="browse-btn">Browse Files</label>
+            <input type="file" id="file-input" accept=".csv,.tsv,.txt" hidden />
+            <p class="file-hint">Supports .csv, .tsv files</p>
+            <div
+              style="
+                margin-top: 32px;
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
+                padding-top: 32px;
+              "
+            >
+              <p class="drop-text" style="font-size: 16px; margin-bottom: 12px">
+                Or load from Google Sheets / Drive
+              </p>
+              <input
+                type="text"
+                id="google-link-input"
+                placeholder="Paste full Google Sheets share link..."
+                class="filter-input"
+                style="
+                  width: 80%;
+                  display: block;
+                  margin: 0 auto;
+                  padding: 12px;
+                  font-size: 14px;
+                  text-align: center;
+                  border-radius: 8px;
+                  border: 1px solid rgba(255, 255, 255, 0.2);
+                  background: rgba(0, 0, 0, 0.2);
+                  color: #fff;
+                  outline: none;
+                "
+              />
+              <button
+                id="btn-google-fetch"
+                class="browse-btn"
+                style="margin-top: 16px; display: inline-block"
+              >
+                Fetch Data
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="upload-progress" class="upload-progress hidden">
+          <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
+          <p class="progress-text" id="progress-text">
+            Uploading to database...
+          </p>
+        </div>
+
+        <button
+          id="btn-back-to-dashboard"
+          style="
+            margin-top: 24px;
+            padding: 10px 20px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+            font-family: Inter;
+            font-weight: 500;
+          "
+        >
+          Back to Dashboard
+        </button>
+      </div>
     </div>
 
     <!-- ======================== DASHBOARD SCREEN ======================== -->
     <div id="dashboard-screen" class="screen">
-        <!-- Sidebar Navigation -->
-        <nav class="sidebar" id="sidebar">
-            <div class="sidebar-brand">
-                <svg width="28" height="28" viewBox="0 0 48 48" fill="none">
-                    <rect width="48" height="48" rx="12" fill="url(#gradSB)"/>
-                    <path d="M14 34V14h6l4 8 4-8h6v20h-6V22l-4 8-4-8v12h-6z" fill="#fff" opacity="0.9"/>
-                    <defs><linearGradient id="gradSB" x1="0" y1="0" x2="48" y2="48">
-                        <stop stop-color="#6366f1"/><stop offset="1" stop-color="#a855f7"/>
-                    </linearGradient></defs>
-                </svg>
-                <span class="sidebar-brand-text">DataLens</span>
-            </div>
-
-            <div class="sidebar-nav">
-                <button class="nav-item active" data-section="overview-section" id="nav-overview">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                    <span>Overview</span>
-                </button>
-                <button class="nav-item" data-section="insights-section" id="nav-insights">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                    <span>AI Insights</span>
-                </button>
-                <button class="nav-item" data-section="charts-section" id="nav-charts">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-                    <span>Charts</span>
-                </button>
-                <button class="nav-item" data-section="nlp-section" id="nav-nlp">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                    <span>NLP Analysis</span>
-                </button>
-                <button class="nav-item" data-section="speakers-section" id="nav-speakers">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    <span>Speakers</span>
-                </button>
-                <button class="nav-item" data-section="table-section" id="nav-table">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
-                    <span>Data Table</span>
-                </button>
-            </div>
-
-            <div class="sidebar-footer">
-                <button class="nav-item" id="btn-new-file" title="Upload new file">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    <span>New File</span>
-                </button>
-                <button class="nav-item" id="btn-download-csv" title="Download filtered data">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    <span>Download</span>
-                </button>
-            </div>
-        </nav>
-
-        <!-- Main Content Area -->
-        <main class="main-content" id="main-content">
-            <!-- Top Bar -->
-            <header class="topbar">
-                <div class="topbar-left">
-                    <button class="sidebar-toggle" id="sidebar-toggle">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-                    </button>
-                    <span class="file-badge" id="file-badge">No file loaded</span>
-                </div>
-                <div class="topbar-right">
-                    <div class="search-box-top">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        <input type="text" id="global-search" placeholder="Search all data...">
-                    </div>
-                </div>
-            </header>
-
-            <!-- ███ OVERVIEW SECTION ███ -->
-            <section class="dashboard-section active" id="overview-section">
-                <div class="section-header">
-                    <h2 class="section-title">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                        Overview
-                    </h2>
-                </div>
-
-                <!-- KPI Cards -->
-                <div class="kpi-grid" id="kpi-grid"></div>
-
-                <!-- Filters -->
-                <div class="filters-panel">
-                    <div class="filters-header">
-                        <h3 class="subsection-title">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-                            Filters
-                        </h3>
-                        <button class="btn-clear" id="btn-clear-filters">Clear All</button>
-                    </div>
-                    <div class="filters-grid" id="filters-grid"></div>
-                </div>
-            </section>
-
-            <!-- ███ AI INSIGHTS SECTION ███ -->
-            <section class="dashboard-section" id="insights-section">
-                <div class="section-header">
-                    <h2 class="section-title">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                        AI-Generated Insights
-                    </h2>
-                </div>
-                <div class="insights-container" id="insights-container"></div>
-            </section>
-
-            <!-- ███ CHARTS SECTION ███ -->
-            <section class="dashboard-section" id="charts-section">
-                <div class="section-header">
-                    <h2 class="section-title">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-                        Visualizations
-                    </h2>
-                </div>
-                <div class="charts-grid" id="charts-grid"></div>
-
-
-
-                <!-- Time Trends -->
-                <div class="subsection" id="trends-area">
-                    <h3 class="subsection-title">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                        Trends Over Time
-                    </h3>
-                    <div class="charts-grid" id="trends-grid"></div>
-                </div>
-            </section>
-
-            <!-- ███ NLP ANALYSIS SECTION ███ -->
-            <section class="dashboard-section" id="nlp-section">
-                <div class="section-header">
-                    <h2 class="section-title">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                        NLP Analysis — Sentiment & Keywords
-                    </h2>
-                </div>
-
-                <!-- Sentiment Analysis -->
-                <div class="subsection">
-                    <h3 class="subsection-title">Sentiment Analysis (AI-Filtered)</h3>
-                    <p class="subsection-note" id="sentiment-note"></p>
-                    <div class="sentiment-grid" id="sentiment-grid"></div>
-                </div>
-
-                <!-- Keywords / Word Cloud -->
-                <div class="subsection">
-                    <h3 class="subsection-title">Keywords & Phrases (Bigrams)</h3>
-                    <div class="keywords-grid" id="keywords-grid"></div>
-                </div>
-            </section>
-
-            <!-- ███ SPEAKERS SECTION ███ -->
-            <section class="dashboard-section" id="speakers-section">
-                <div class="section-header">
-                    <h2 class="section-title">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                        Speaker Analysis
-                    </h2>
-                </div>
-                <div class="speakers-grid" id="speakers-grid"></div>
-                <div class="charts-grid" id="speaker-charts-grid" style="margin-top: 24px;"></div>
-            </section>
-
-            <!-- ███ DATA TABLE SECTION ███ -->
-            <section class="dashboard-section" id="table-section">
-                <div class="section-header">
-                    <h2 class="section-title">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
-                        Data Table
-                    </h2>
-                    <span id="showing-count" class="showing-count">Showing 0 of 0 rows</span>
-                </div>
-                <div class="table-wrapper">
-                    <table id="data-table">
-                        <thead id="table-head"></thead>
-                        <tbody id="table-body"></tbody>
-                    </table>
-                </div>
-                <div class="pagination" id="pagination"></div>
-            </section>
-        </main>
-
-        <!-- ███ DATA MODAL ███ -->
-        <div id="data-modal" class="modal-overlay hidden">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3 id="modal-title" class="modal-title">Raw Data</h3>
-                    <button id="modal-close" class="modal-close">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                    </button>
-                </div>
-                <div class="modal-body table-wrapper">
-                    <table id="modal-table">
-                        <thead id="modal-table-head"></thead>
-                        <tbody id="modal-table-body"></tbody>
-                    </table>
-                </div>
-            </div>
+      <!-- Sidebar Navigation -->
+      <nav class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+          <svg width="28" height="28" viewBox="0 0 48 48" fill="none">
+            <rect width="48" height="48" rx="12" fill="url(#gradSB)" />
+            <path
+              d="M14 34V14h6l4 8 4-8h6v20h-6V22l-4 8-4-8v12h-6z"
+              fill="#fff"
+              opacity="0.9"
+            />
+            <defs>
+              <linearGradient id="gradSB" x1="0" y1="0" x2="48" y2="48">
+                <stop stop-color="#6366f1" />
+                <stop offset="1" stop-color="#a855f7" />
+              </linearGradient>
+            </defs>
+          </svg>
+          <span class="sidebar-brand-text">DataLens</span>
         </div>
+
+        <div class="sidebar-nav">
+          <button
+            class="nav-item active"
+            data-section="overview-section"
+            id="nav-overview"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+            </svg>
+            <span>Overview</span>
+          </button>
+          <button
+            class="nav-item"
+            data-section="insights-section"
+            id="nav-insights"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
+            <span>AI Insights</span>
+          </button>
+          <button
+            class="nav-item"
+            data-section="charts-section"
+            id="nav-charts"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="18" y1="20" x2="18" y2="10" />
+              <line x1="12" y1="20" x2="12" y2="4" />
+              <line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+            <span>Charts</span>
+          </button>
+          <button class="nav-item" data-section="nlp-section" id="nav-nlp">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+              />
+            </svg>
+            <span>NLP Analysis</span>
+          </button>
+          <button
+            class="nav-item"
+            data-section="speakers-section"
+            id="nav-speakers"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            <span>Speakers</span>
+          </button>
+          <button class="nav-item" data-section="table-section" id="nav-table">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <line x1="3" y1="9" x2="21" y2="9" />
+              <line x1="3" y1="15" x2="21" y2="15" />
+              <line x1="9" y1="3" x2="9" y2="21" />
+            </svg>
+            <span>Data Table</span>
+          </button>
+        </div>
+
+        <div class="sidebar-footer">
+          <button class="nav-item" id="btn-admin-panel" title="Admin Panel">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <span>Admin Panel</span>
+          </button>
+          <button
+            class="nav-item"
+            id="btn-download-csv"
+            title="Download filtered data"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            <span>Download</span>
+          </button>
+        </div>
+      </nav>
+
+      <!-- Main Content Area -->
+      <main class="main-content" id="main-content">
+        <!-- Top Bar -->
+        <header class="topbar">
+          <div class="topbar-left">
+            <button class="sidebar-toggle" id="sidebar-toggle">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+            <span class="file-badge" id="file-badge">No file loaded</span>
+          </div>
+          <div class="topbar-right">
+            <div class="search-box-top">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                type="text"
+                id="global-search"
+                placeholder="Search all data..."
+              />
+            </div>
+          </div>
+        </header>
+
+        <!-- ███ OVERVIEW SECTION ███ -->
+        <section class="dashboard-section active" id="overview-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+              </svg>
+              Overview
+            </h2>
+          </div>
+
+          <!-- KPI Cards -->
+          <div class="kpi-grid" id="kpi-grid"></div>
+
+          <!-- Filters -->
+          <div class="filters-panel">
+            <div class="filters-header">
+              <h3 class="subsection-title">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polygon
+                    points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"
+                  />
+                </svg>
+                Filters
+              </h3>
+              <button class="btn-clear" id="btn-clear-filters">
+                Clear All
+              </button>
+            </div>
+            <div class="filters-grid" id="filters-grid"></div>
+          </div>
+        </section>
+
+        <!-- ███ AI INSIGHTS SECTION ███ -->
+        <section class="dashboard-section" id="insights-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="16" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12.01" y2="8" />
+              </svg>
+              AI-Generated Insights
+            </h2>
+          </div>
+          <div class="insights-container" id="insights-container"></div>
+        </section>
+
+        <!-- ███ CHARTS SECTION ███ -->
+        <section class="dashboard-section" id="charts-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <line x1="18" y1="20" x2="18" y2="10" />
+                <line x1="12" y1="20" x2="12" y2="4" />
+                <line x1="6" y1="20" x2="6" y2="14" />
+              </svg>
+              Visualizations
+            </h2>
+          </div>
+          <div class="charts-grid" id="charts-grid"></div>
+
+          <!-- Time Trends -->
+          <div class="subsection" id="trends-area">
+            <h3 class="subsection-title">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
+              Trends Over Time
+            </h3>
+            <div class="charts-grid" id="trends-grid"></div>
+          </div>
+        </section>
+
+        <!-- ███ NLP ANALYSIS SECTION ███ -->
+        <section class="dashboard-section" id="nlp-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                />
+              </svg>
+              NLP Analysis — Sentiment & Keywords
+            </h2>
+          </div>
+
+          <!-- Sentiment Analysis -->
+          <div class="subsection">
+            <h3 class="subsection-title">Sentiment Analysis (AI-Filtered)</h3>
+            <p class="subsection-note" id="sentiment-note"></p>
+            <div class="sentiment-grid" id="sentiment-grid"></div>
+          </div>
+
+          <!-- Keywords / Word Cloud -->
+          <div class="subsection">
+            <h3 class="subsection-title">Keywords & Phrases (Bigrams)</h3>
+            <div class="keywords-grid" id="keywords-grid"></div>
+          </div>
+        </section>
+
+        <!-- ███ SPEAKERS SECTION ███ -->
+        <section class="dashboard-section" id="speakers-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              Speaker Analysis
+            </h2>
+          </div>
+          <div class="speakers-grid" id="speakers-grid"></div>
+          <div
+            class="charts-grid"
+            id="speaker-charts-grid"
+            style="margin-top: 24px"
+          ></div>
+        </section>
+
+        <!-- ███ DATA TABLE SECTION ███ -->
+        <section class="dashboard-section" id="table-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <line x1="3" y1="9" x2="21" y2="9" />
+                <line x1="3" y1="15" x2="21" y2="15" />
+                <line x1="9" y1="3" x2="9" y2="21" />
+                <line x1="15" y1="3" x2="15" y2="21" />
+              </svg>
+              Data Table
+            </h2>
+            <span id="showing-count" class="showing-count"
+              >Showing 0 of 0 rows</span
+            >
+          </div>
+          <div class="table-wrapper">
+            <table id="data-table">
+              <thead id="table-head"></thead>
+              <tbody id="table-body"></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="pagination"></div>
+        </section>
+      </main>
+
+      <!-- ███ DATA MODAL ███ -->
+      <div id="data-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 id="modal-title" class="modal-title">Raw Data</h3>
+            <button id="modal-close" class="modal-close">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="modal-body table-wrapper">
+            <table id="modal-table">
+              <thead id="modal-table-head"></thead>
+              <tbody id="modal-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <!-- ███ ADMIN LOGIN MODAL ███ -->
+      <div id="admin-login-modal" class="modal-overlay hidden">
+        <div
+          class="modal-content"
+          style="max-width: 400px; padding: 32px; text-align: center"
+        >
+          <div
+            class="modal-header"
+            style="justify-content: center; margin-bottom: 24px"
+          >
+            <h3 class="modal-title">Admin Access</h3>
+            <button
+              id="admin-login-close"
+              class="modal-close"
+              style="position: absolute; right: 24px"
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <input
+              type="password"
+              id="admin-password"
+              placeholder="Enter Admin Password"
+              style="
+                width: 100%;
+                margin-bottom: 16px;
+                padding: 12px;
+                font-size: 16px;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                background: rgba(255, 255, 255, 0.05);
+                color: white;
+                outline: none;
+                font-family: Inter;
+              "
+            />
+            <button
+              id="btn-admin-submit"
+              style="
+                width: 100%;
+                padding: 12px;
+                border-radius: 8px;
+                background: #6366f1;
+                color: white;
+                border: none;
+                font-weight: 600;
+                cursor: pointer;
+                font-family: Inter;
+                font-size: 16px;
+              "
+            >
+              Login
+            </button>
+            <p
+              id="admin-login-error"
+              style="
+                color: #ef4444;
+                margin-top: 12px;
+                display: none;
+                font-size: 14px;
+              "
+            >
+              Invalid password
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script src="app.js"></script>
-</body>
+  </body>
 </html>
