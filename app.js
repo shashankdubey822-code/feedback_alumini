@@ -1550,3 +1550,281 @@ class SmartCalendar {
         }
     }
 }
+
+
+// ========================================================
+//  FEEDBACK FORM MANAGER
+// ========================================================
+(function () {
+
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxY6D1osK0zBjk6LUeDP0emtLKo7TslMyCvIqWwnlxogSxXP01CuA_MbQ4GRupSpGq2aw/exec';
+    let _currentFormUrl = '';
+
+    // ── Token helper (reuses existing auth) ─────────────────
+    function getToken() {
+        return localStorage.getItem('adminToken') || '';
+    }
+
+    function authHeaders() {
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${getToken()}`
+        };
+    }
+
+    // ── Open / close modal ───────────────────────────────────
+    function openFeedbackModal() {
+        if (!getToken()) {
+            // Ask admin to log in first
+            document.getElementById('admin-login-modal').classList.remove('hidden');
+            // After login, re-open feedback modal
+            const origSubmit = document.getElementById('btn-admin-submit');
+            const handler = () => {
+                setTimeout(() => {
+                    if (getToken()) {
+                        document.getElementById('feedback-modal').classList.remove('hidden');
+                        loadEvents();
+                    }
+                    origSubmit.removeEventListener('click', handler);
+                }, 300);
+            };
+            origSubmit.addEventListener('click', handler);
+            return;
+        }
+        resetForm();
+        document.getElementById('feedback-modal').classList.remove('hidden');
+        loadEvents();
+    }
+
+    function closeFeedbackModal() {
+        document.getElementById('feedback-modal').classList.add('hidden');
+    }
+
+    function resetForm() {
+        document.getElementById('fb-speaker-name').value = '';
+        document.getElementById('fb-venue-date').value = '';
+        document.getElementById('fb-status').style.display = 'none';
+        document.getElementById('fb-result').style.display = 'none';
+        const btn = document.getElementById('btn-generate-form');
+        btn.disabled = false;
+        btn.textContent = 'Generate Google Form';
+        btn.style.opacity = '1';
+        _currentFormUrl = '';
+    }
+
+    // ── Status helpers ───────────────────────────────────────
+    function showStatus(msg, type) {
+        const el = document.getElementById('fb-status');
+        el.style.display = 'block';
+        el.textContent = msg;
+        el.style.background = type === 'error'
+            ? 'rgba(239,68,68,0.1)' : 'rgba(99,102,241,0.1)';
+        el.style.color = type === 'error' ? '#ef4444' : '#a5b4fc';
+        el.style.border = type === 'error'
+            ? '1px solid rgba(239,68,68,0.2)' : '1px solid rgba(99,102,241,0.2)';
+    }
+
+    function hideStatus() {
+        document.getElementById('fb-status').style.display = 'none';
+    }
+
+    // ── Generate form ────────────────────────────────────────
+    async function generateForm() {
+        const speaker = document.getElementById('fb-speaker-name').value.trim();
+        const date    = document.getElementById('fb-venue-date').value.trim();
+
+        if (!speaker || !date) {
+            showStatus('Please fill in both Speaker Name and Venue Date.', 'error');
+            return;
+        }
+
+        const btn = document.getElementById('btn-generate-form');
+        btn.disabled = true;
+        btn.textContent = 'Creating event...';
+        btn.style.opacity = '0.7';
+        hideStatus();
+        document.getElementById('fb-result').style.display = 'none';
+
+        try {
+            // Step 1: Create event in DB
+            const evRes = await fetch(`${API_BASE}/api/admin/create-event`, {
+                method: 'POST',
+                headers: authHeaders(),
+                body: JSON.stringify({ speaker_name: speaker, venue_date: date })
+            });
+            const evData = await evRes.json();
+            if (!evData.success) throw new Error(evData.error || 'Failed to create event');
+            const eventId = evData.event_id;
+
+            btn.textContent = 'Generating Google Form...';
+
+            // Step 2: Generate Google Form
+            const fmRes = await fetch(`${API_BASE}/api/admin/generate-form`, {
+                method: 'POST',
+                headers: authHeaders(),
+                body: JSON.stringify({ event_id: eventId })
+            });
+            const fmData = await fmRes.json();
+            if (!fmData.success) throw new Error(fmData.error || 'Failed to generate form');
+
+            _currentFormUrl = fmData.form_url;
+            document.getElementById('fb-form-url-text').textContent = fmData.form_url;
+            document.getElementById('fb-result').style.display = 'block';
+
+            btn.textContent = 'Generate Another Form';
+            btn.disabled = false;
+            btn.style.opacity = '1';
+
+            loadEvents(); // refresh list
+
+        } catch (err) {
+            showStatus('Error: ' + err.message, 'error');
+            btn.textContent = 'Generate Google Form';
+            btn.disabled = false;
+            btn.style.opacity = '1';
+        }
+    }
+
+    // ── Load events list ─────────────────────────────────────
+    async function loadEvents() {
+        const list = document.getElementById('fb-events-list');
+        list.innerHTML = '<div style="color:#8b8b9e;font-size:13px;text-align:center;padding:16px;">Loading...</div>';
+        try {
+            const res  = await fetch(`${API_BASE}/api/admin/events`, { headers: authHeaders() });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error);
+
+            if (!data.events || data.events.length === 0) {
+                list.innerHTML = '<div style="color:#8b8b9e;font-size:13px;text-align:center;padding:20px;">No events yet. Create your first one above!</div>';
+                return;
+            }
+
+            list.innerHTML = '';
+            data.events.forEach(ev => {
+                const card = document.createElement('div');
+                card.style.cssText = 'background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px;';
+                const hasForm = !!ev.form_url;
+                card.innerHTML = `
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+                        <div>
+                            <div style="font-size:13px;font-weight:600;color:#f0f0f5;">${esc(ev.speaker_name)}</div>
+                            <div style="font-size:11px;color:#8b8b9e;margin-top:2px;">${esc(ev.venue_date)} &nbsp;·&nbsp; ${ev.responses} response${ev.responses !== 1 ? 's' : ''}</div>
+                        </div>
+                        <span style="font-size:10px;padding:3px 8px;border-radius:12px;font-weight:600;${hasForm ? 'background:rgba(34,211,102,0.1);color:#34d399;border:1px solid rgba(34,211,102,0.2);' : 'background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.2);'}">
+                            ${hasForm ? 'Form Ready' : 'No Form'}
+                        </span>
+                    </div>
+                    ${hasForm ? `
+                    <div style="display:flex;gap:6px;margin-top:8px;">
+                        <button onclick="navigator.clipboard.writeText('${ev.form_url}').then(()=>this.textContent='Copied!');setTimeout(()=>this.textContent='Copy Link',1500)"
+                            style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Copy Link</button>
+                        <button onclick="window.open('${ev.form_url}','_blank')"
+                            style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Open Form</button>
+                        <button data-event-id="${ev.id}" class="btn-sync-responses"
+                            style="flex:1;padding:6px;border-radius:6px;background:rgba(168,85,247,0.15);color:#c084fc;border:1px solid rgba(168,85,247,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Sync</button>
+                    </div>` : `
+                    <button data-event-id="${ev.id}" class="btn-generate-existing"
+                        style="width:100%;margin-top:8px;padding:6px;border-radius:6px;background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.2);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Generate Form</button>`}
+                `;
+                list.appendChild(card);
+            });
+
+            // Sync response buttons
+            list.querySelectorAll('.btn-sync-responses').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const id = btn.dataset.eventId;
+                    btn.textContent = 'Syncing...';
+                    btn.disabled = true;
+                    try {
+                        const r = await fetch(`${API_BASE}/api/admin/sync-responses`, {
+                            method: 'POST', headers: authHeaders(),
+                            body: JSON.stringify({ event_id: parseInt(id) })
+                        });
+                        const d = await r.json();
+                        btn.textContent = d.success ? `Synced ${d.responses_synced}` : 'Error';
+                        setTimeout(() => { btn.textContent = 'Sync'; btn.disabled = false; }, 2000);
+                        if (d.success) loadEvents();
+                    } catch (e) {
+                        btn.textContent = 'Error';
+                        setTimeout(() => { btn.textContent = 'Sync'; btn.disabled = false; }, 2000);
+                    }
+                });
+            });
+
+            // Generate form for existing event
+            list.querySelectorAll('.btn-generate-existing').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const id = btn.dataset.eventId;
+                    btn.textContent = 'Generating...';
+                    btn.disabled = true;
+                    try {
+                        const r = await fetch(`${API_BASE}/api/admin/generate-form`, {
+                            method: 'POST', headers: authHeaders(),
+                            body: JSON.stringify({ event_id: parseInt(id) })
+                        });
+                        const d = await r.json();
+                        if (d.success) loadEvents();
+                        else { btn.textContent = 'Error'; setTimeout(() => { btn.textContent = 'Generate Form'; btn.disabled = false; }, 2000); }
+                    } catch (e) {
+                        btn.textContent = 'Error';
+                        setTimeout(() => { btn.textContent = 'Generate Form'; btn.disabled = false; }, 2000);
+                    }
+                });
+            });
+
+        } catch (err) {
+            list.innerHTML = `<div style="color:#ef4444;font-size:13px;text-align:center;padding:16px;">Error: ${err.message}</div>`;
+        }
+    }
+
+    // ── Wire everything up on DOMContentLoaded ───────────────
+    document.addEventListener('DOMContentLoaded', () => {
+
+        // "Admin Panel" sidebar button → now opens Feedback Modal
+        const btnAdminPanel = document.getElementById('btn-admin-panel');
+        if (btnAdminPanel) {
+            // Remove existing listener by cloning
+            const newBtn = btnAdminPanel.cloneNode(true);
+            btnAdminPanel.parentNode.replaceChild(newBtn, btnAdminPanel);
+            newBtn.addEventListener('click', openFeedbackModal);
+        }
+
+        // Close button
+        document.getElementById('feedback-modal-close')
+            ?.addEventListener('click', closeFeedbackModal);
+
+        // Click outside to close
+        document.getElementById('feedback-modal')
+            ?.addEventListener('click', (e) => {
+                if (e.target === document.getElementById('feedback-modal')) closeFeedbackModal();
+            });
+
+        // Generate form button
+        document.getElementById('btn-generate-form')
+            ?.addEventListener('click', generateForm);
+
+        // Refresh events list
+        document.getElementById('btn-refresh-events')
+            ?.addEventListener('click', loadEvents);
+
+        // Copy form URL
+        document.getElementById('btn-copy-form-url')
+            ?.addEventListener('click', () => {
+                if (_currentFormUrl) {
+                    navigator.clipboard.writeText(_currentFormUrl)
+                        .then(() => {
+                            const btn = document.getElementById('btn-copy-form-url');
+                            btn.textContent = 'Copied!';
+                            setTimeout(() => btn.textContent = 'Copy Link', 1500);
+                        });
+                }
+            });
+
+        // Open form in new tab
+        document.getElementById('btn-open-form-url')
+            ?.addEventListener('click', () => {
+                if (_currentFormUrl) window.open(_currentFormUrl, '_blank');
+            });
+    });
+
+})();

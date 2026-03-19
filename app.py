@@ -181,9 +181,17 @@ def classify_axis_labels(col_name, col_type, chart_context='distribution'):
 # ── Flask App ───────────────────────────────────────────────────────
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
+app.secret_key = os.environ.get('SECRET_KEY', 'datalens-secret-key-2026')
 
 DB_PATH = 'dashboard.db'
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
+
+# ── Feedback System: DB init + Blueprint ────────────────────────────
+from utils.db_init import init_db
+init_db()
+
+from api.events import events_bp
+app.register_blueprint(events_bp)
 
 current_data = {
     'df': None,
