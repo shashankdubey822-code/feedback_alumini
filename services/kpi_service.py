@@ -11,15 +11,11 @@ def build_kpis(df, column_types, columns, total_original):
         'icon': 'records',
     })
 
-    num_cols = sum(1 for t in column_types.values() if t == 'numeric')
-    kpis.append({
-        'label': 'Columns',
-        'value': len(columns),
-        'sub': f'{num_cols} numeric',
-        'icon': 'columns',
-    })
-
     for col in columns:
+        col_lower = col.lower()
+        if "did the session help you" in col_lower:
+            continue
+            
         ctype = column_types.get(col, 'text')
         values = df[col].astype(str).str.strip()
         values = values[values.ne('') & values.ne('NA') & values.ne('N/A')
