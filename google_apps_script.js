@@ -59,6 +59,12 @@ function doGet(e) {
   return jsonResponse({ success: true, message: "DataLens Apps Script is running!" });
 }
 
+// ── Setup: Run this ONCE manually to authorize permissions ───
+function authorizeScript() {
+  var triggers = ScriptApp.getProjectTriggers();
+  Logger.log("Authorization successful! You can now use the dashboard to generate forms.");
+}
+
 // ── Action: Create a Google Form ──────────────────────────────
 function handleCreateForm(payload) {
   var speakerName = payload.speaker_name;
