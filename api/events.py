@@ -8,6 +8,7 @@ from services.google_forms_service import (
     get_form_responses,
     parse_response_to_submission,
     ping as ping_script,
+    toggle_form_status,
     AppsScriptError,
 )
 
@@ -98,8 +99,17 @@ def generate_form():
             })
 
         # Create the Google Form via Apps Script
+        # Build webhook URL dynamically based on current host
+        scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+        webhook_url = f"{scheme}://{request.host}/api/webhook/google-submit"
+
         try:
-            form_data = create_feedback_form(event["speaker_name"], event["venue_date"])
+            form_data = create_feedback_form(
+                speaker_name=event["speaker_name"],
+                venue_date=event["venue_date"],
+                webhook_url=webhook_url,
+                event_id=event_id
+            )
         except AppsScriptError as e:
             conn.close()
             return jsonify({"success": False, "error": f"Google Forms error: {e}"}), 502
@@ -269,7 +279,7 @@ def list_events():
         cursor = conn.cursor()
         cursor.execute(
             """SELECT e.id, e.speaker_name, e.venue_date, e.created_at,
-                      f.google_form_url,
+                      f.google_form_url, f.google_form_id,
                       (SELECT COUNT(*) FROM feedback_submissions s WHERE s.event_id = e.id) as response_count
                FROM events e
                LEFT JOIN feedback_forms f ON f.event_id = e.id
@@ -285,6 +295,7 @@ def list_events():
                 "speaker_name"  : row["speaker_name"],
                 "venue_date"    : row["venue_date"],
                 "form_url"      : row["google_form_url"],
+                "form_id"       : row["google_form_id"],
                 "responses"     : row["response_count"],
                 "created_at"    : row["created_at"],
             })
@@ -306,3 +317,94 @@ def ping_apps_script():
         "success": ok,
         "message": "Apps Script is reachable" if ok else "Apps Script is NOT reachable — check APPS_SCRIPT_URL",
     })
+
+
+# ─────────────────────────────────────────────────────────────
+# POST /api/admin/toggle-form
+# Body: { "form_id": "...", "accepting_responses": bool (optional) }
+# ─────────────────────────────────────────────────────────────
+@events_bp.route("/api/admin/toggle-form", methods=["POST"])
+def admin_toggle_form():
+    if not _check_admin(request):
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+    data = request.get_json(force=True) or {}
+    form_id = data.get("form_id")
+    accepting = data.get("accepting_responses")
+
+    if not form_id:
+        return jsonify({"success": False, "error": "form_id required"}), 400
+
+    try:
+        new_status = toggle_form_status(form_id, accepting)
+        return jsonify({
+            "success": True,
+            "accepting_responses": new_status,
+            "message": "Form toggled successfully"
+        })
+    except AppsScriptError as e:
+        return jsonify({"success": False, "error": str(e)}), 502
+
+
+# ─────────────────────────────────────────────────────────────
+# POST /api/webhook/google-submit
+# ─────────────────────────────────────────────────────────────
+@events_bp.route("/api/webhook/google-submit", methods=["POST"])
+def webhook_google_submit():
+    data = request.get_json(force=True) or {}
+    
+    # Simple verification using a shared secret
+    from services.google_forms_service import APPS_SCRIPT_SECRET
+    if data.get("secret") != APPS_SCRIPT_SECRET:
+        return jsonify({"success": False, "error": "Unauthorized webhook"}), 403
+
+    event_id = data.get("event_id")
+    response_data = data.get("response_data", {})
+    if not event_id or not response_data:
+        return jsonify({"success": False, "error": "Invalid payload"}), 400
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Find the form DB ID
+        cursor.execute("SELECT id FROM feedback_forms WHERE event_id = ?", (event_id,))
+        form_record = cursor.fetchone()
+        if not form_record:
+            conn.close()
+            return jsonify({"success": False, "error": "Form not found"}), 404
+            
+        form_db_id = form_record["id"]
+
+        # Parse live webhook response into normal submission format
+        # It's structured almost exactly like a get_responses() item
+        submission = parse_response_to_submission(response_data, event_id, form_db_id)
+
+        # Check for duplicates (webhook retries)
+        cursor.execute(
+            "SELECT id FROM feedback_submissions WHERE event_id=? AND roll_no=? AND submitted_at=?",
+            (event_id, submission["roll_no"], submission["submitted_at"]),
+        )
+        if not cursor.fetchone():
+            cursor.execute(
+                """INSERT INTO feedback_submissions
+                   (event_id, form_id, student_name, department, roll_no, year,
+                    helpfulness_rating, valuable_aspect, improvements, future_topics,
+                    raw_answers, submitted_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    submission["event_id"], submission["form_id"],
+                    submission["student_name"], submission["department"],
+                    submission["roll_no"], submission["year"],
+                    submission["helpfulness_rating"], submission["valuable_aspect"],
+                    submission["improvements"], submission["future_topics"],
+                    submission["raw_answers"], submission["submitted_at"],
+                )
+            )
+            conn.commit()
+
+        conn.close()
+        return jsonify({"success": True, "message": "Webhook processed"})
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500

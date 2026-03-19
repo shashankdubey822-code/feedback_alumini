@@ -76,7 +76,7 @@ def ping() -> bool:
         return False
 
 
-def create_feedback_form(speaker_name: str, venue_date: str) -> dict:
+def create_feedback_form(speaker_name: str, venue_date: str, webhook_url: str = None, event_id: int = None) -> dict:
     """
     Ask the Apps Script to create a Google Form.
 
@@ -87,16 +87,38 @@ def create_feedback_form(speaker_name: str, venue_date: str) -> dict:
             "form_edit_url": "https://docs.google.com/forms/d/.../edit",
         }
     """
-    result = _call_script({
+    payload = {
         "action"      : "create_form",
         "speaker_name": speaker_name,
         "venue_date"  : venue_date,
-    })
+    }
+    if webhook_url and event_id:
+        payload["webhook_url"] = webhook_url
+        payload["event_id"] = event_id
+        
+    result = _call_script(payload)
+    
     return {
         "form_id"      : result["form_id"],
         "form_url"     : result["form_url"],
         "form_edit_url": result.get("form_edit_url", ""),
     }
+
+def toggle_form_status(form_id: str, accepting_responses: bool = None) -> bool:
+    """
+    Toggle a form's Open/Closed status. If accepting_responses is None,
+    the Apps Script automatically toggles the current state.
+    Returns the new accepting_responses (bool).
+    """
+    payload = {
+        "action" : "toggle_form",
+        "form_id": form_id,
+    }
+    if accepting_responses is not None:
+        payload["accepting_responses"] = accepting_responses
+        
+    result = _call_script(payload)
+    return result.get("accepting_responses", False)
 
 
 def get_form_responses(form_id: str) -> list:

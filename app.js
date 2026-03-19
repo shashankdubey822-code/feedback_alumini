@@ -214,9 +214,23 @@ function setupDashboardHandlers() {
     if (btnAdminPanel) {
         btnAdminPanel.addEventListener('click', showAdminPanel);
     }
-    document.getElementById('btn-download-csv').addEventListener('click', downloadFilteredCSV);
     document.getElementById('btn-clear-filters').addEventListener('click', clearAllFilters);
     document.getElementById('global-search').addEventListener('input', debounce(applyFilters, 400));
+
+    // Auto-refresh the dashboard live (Webhooks sync)
+    // Every 10 seconds, if on dashboard and not typing in search, gently refresh
+    setInterval(async () => {
+        const dash = document.getElementById('dashboard-screen');
+        if (!dash || !dash.classList.contains('active')) return;
+        
+        const searchVal = document.getElementById('global-search').value.trim();
+        if (searchVal.length > 0) return; // Don't disrupt active searching
+        
+        try {
+            // We just re-run the normal filter workflow silently to pull new webhook data
+            await applyFilters(true); // true = silent flag
+        } catch(e) {}
+    }, 10000);
 }
 
 // ========== ADMIN AUTH & LOGIC ==========
@@ -486,18 +500,25 @@ async function applyFilters() {
         if (!response.ok) throw new Error('Filter failed');
 
         const analytics = await response.json();
+        // Check if data actually changed simply using string length as a fast heuristic
+        const currentDataHash = JSON.stringify(state.tableData).length;
+        const newDataHash = JSON.stringify(analytics.tableData || []).length;
+        
         state.analytics = analytics;
         state.tableData = analytics.tableData || [];
         state.currentPage = 1;
 
-        renderKPIs(analytics.kpis);
-        renderAIInsights(analytics.aiInsights);
-        renderCharts(analytics.charts);
-        renderTimeTrends(analytics.timeTrends);
-        renderSentiment(analytics.sentiment);
-        renderKeywords(analytics.keywords);
-        renderSpeakers(analytics.speakerStats);
-        renderTable();
+        // Prevent full re-render flicker on auto-refresh if identical
+        if (currentDataHash !== newDataHash) {
+            renderKPIs(analytics.kpis);
+            renderAIInsights(analytics.aiInsights);
+            renderCharts(analytics.charts);
+            renderTimeTrends(analytics.timeTrends);
+            renderSentiment(analytics.sentiment);
+            renderKeywords(analytics.keywords);
+            renderSpeakers(analytics.speakerStats);
+            renderTable();
+        }
     } catch (err) {
         console.error('Filter error:', err);
     }
@@ -1717,9 +1738,11 @@ class SmartCalendar {
                     ${hasForm ? `
                     <div style="display:flex;gap:6px;margin-top:8px;">
                         <button onclick="navigator.clipboard.writeText('${ev.form_url}').then(()=>this.textContent='Copied!');setTimeout(()=>this.textContent='Copy Link',1500)"
-                            style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Copy Link</button>
+                            style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Copy</button>
                         <button onclick="window.open('${ev.form_url}','_blank')"
-                            style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Open Form</button>
+                            style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Open</button>
+                        <button data-form="${ev.form_id}" class="btn-toggle-form"
+                            style="flex:1;padding:6px;border-radius:6px;background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Toggle</button>
                         <button data-event-id="${ev.id}" class="btn-sync-responses"
                             style="flex:1;padding:6px;border-radius:6px;background:rgba(168,85,247,0.15);color:#c084fc;border:1px solid rgba(168,85,247,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Sync</button>
                     </div>` : `
@@ -1747,6 +1770,28 @@ class SmartCalendar {
                     } catch (e) {
                         btn.textContent = 'Error';
                         setTimeout(() => { btn.textContent = 'Sync'; btn.disabled = false; }, 2000);
+                    }
+                });
+            });
+
+            // Toggle form status buttons
+            list.querySelectorAll('.btn-toggle-form').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const formId = btn.dataset.form;
+                    if (!formId) return;
+                    btn.textContent = '...';
+                    btn.disabled = true;
+                    try {
+                        const r = await fetch(`${API_BASE}/api/admin/toggle-form`, {
+                            method: 'POST', headers: authHeaders(),
+                            body: JSON.stringify({ form_id: formId })
+                        });
+                        const d = await r.json();
+                        btn.textContent = d.success ? (d.accepting_responses ? 'Opened!' : 'Closed!') : 'Error';
+                        setTimeout(() => { btn.textContent = 'Toggle'; btn.disabled = false; }, 2000);
+                    } catch (e) {
+                        btn.textContent = 'Error';
+                        setTimeout(() => { btn.textContent = 'Toggle'; btn.disabled = false; }, 2000);
                     }
                 });
             });

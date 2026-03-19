@@ -39,6 +39,8 @@ function doPost(e) {
 
     if (action === "create_form") {
       return handleCreateForm(payload);
+    } else if (action === "toggle_form") {
+      return handleToggleForm(payload);
     } else if (action === "get_responses") {
       return handleGetResponses(payload);
     } else if (action === "ping") {
@@ -135,6 +137,13 @@ function handleCreateForm(payload) {
   var formId       = form.getId();
   var formEditUrl  = form.getEditUrl();
 
+  // ── Attach Webhook Trigger if requested ────────────────────
+  if (payload.webhook_url && payload.event_id) {
+    PropertiesService.getScriptProperties().setProperty('webhook_' + formId, payload.webhook_url);
+    PropertiesService.getScriptProperties().setProperty('event_' + formId, String(payload.event_id));
+    ScriptApp.newTrigger('onFormSubmitTrigger').forForm(form).onFormSubmit().create();
+  }
+
   return jsonResponse({
     success      : true,
     form_id      : formId,
@@ -185,6 +194,68 @@ function handleGetResponses(payload) {
 
   } catch (err) {
     return jsonResponse({ success: false, error: "Could not open form: " + err.toString() }, 500);
+  }
+}
+
+// ── Action: Toggle Form Open/Close ────────────────────────────
+function handleToggleForm(payload) {
+  var formId = payload.form_id;
+  if (!formId) return jsonResponse({ success: false, error: "form_id is required" }, 400);
+
+  try {
+    var form = FormApp.openById(formId);
+    var isAccepting = form.isAcceptingResponses();
+    var newState = payload.accepting_responses;
+    if (newState === undefined) newState = !isAccepting;
+    form.setAcceptingResponses(newState);
+
+    return jsonResponse({
+      success: true,
+      form_id: formId,
+      accepting_responses: form.isAcceptingResponses(),
+      message: "Form is now " + (form.isAcceptingResponses() ? "Open" : "Closed")
+    });
+  } catch (err) {
+    return jsonResponse({ success: false, error: err.toString() }, 500);
+  }
+}
+
+// ── Webhook Trigger: Fires automatically on submit ────────────
+function onFormSubmitTrigger(e) {
+  try {
+    var form = e.source;
+    var formId = form.getId();
+    
+    var webhookUrl = PropertiesService.getScriptProperties().getProperty('webhook_' + formId);
+    var eventIdStr = PropertiesService.getScriptProperties().getProperty('event_' + formId);
+    if (!webhookUrl || !eventIdStr) return;
+    
+    var response = e.response;
+    var itemResponses = response.getItemResponses();
+    var itemMap = {};
+    for (var i = 0; i < itemResponses.length; i++) {
+        itemMap[itemResponses[i].getItem().getTitle()] = itemResponses[i].getResponse();
+    }
+    
+    var payload = {
+      secret: SECRET_KEY,
+      event_id: parseInt(eventIdStr, 10),
+      response_data: {
+        response_id: response.getId(),
+        submitted_at: response.getTimestamp().toISOString(),
+        answers: itemMap
+      }
+    };
+    
+    var options = {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(payload)
+    };
+    
+    UrlFetchApp.fetch(webhookUrl, options);
+  } catch(err) {
+    console.error("Webhook failed: " + err);
   }
 }
 
