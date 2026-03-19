@@ -221,21 +221,60 @@ def load_data_from_db():
     try:
         if not os.path.exists(DB_PATH):
             return False
+            
         conn = sqlite3.connect(DB_PATH)
-        df = pd.read_sql('SELECT * FROM dashboard_data', conn)
+        
+        # 1. Load uploaded CSV data (if any)
+        df_csv = pd.DataFrame()
+        try:
+            df_csv = pd.read_sql('SELECT * FROM dashboard_data', conn)
+        except Exception:
+            pass # Table might not exist yet if they never uploaded a CSV
+            
+        # 2. Load live Google Forms feedback data
+        df_forms = pd.DataFrame()
+        try:
+            query = """
+                SELECT 
+                    s.student_name AS "Your Full Name",
+                    s.department AS "Department",
+                    s.roll_no AS "Roll Number",
+                    s.year AS "Year / Semester",
+                    e.speaker_name AS "Speaker Name",
+                    e.venue_date AS "Venue Date",
+                    s.helpfulness_rating AS "How helpful was this session?",
+                    s.valuable_aspect AS "What was the most valuable aspect of this session?",
+                    s.improvements AS "What could be improved?",
+                    s.future_topics AS "What topics would you like covered in future sessions?",
+                    s.submitted_at AS "Timestamp"
+                FROM feedback_submissions s
+                JOIN events e ON s.event_id = e.id
+            """
+            df_forms = pd.read_sql(query, conn)
+        except Exception as e:
+            print("Error loading feedback submissions:", e)
+            
         conn.close()
         
-        if df.empty:
+        # 3. Combine them
+        if df_csv.empty and df_forms.empty:
             return False
             
-        # Optional: any necessary string cleanup
+        if not df_csv.empty and not df_forms.empty:
+            df = pd.concat([df_csv, df_forms], ignore_index=True)
+        elif not df_forms.empty:
+            df = df_forms
+        else:
+            df = df_csv
+            
+        # Clean up strings
         for col in df.select_dtypes(include='object').columns:
             df[col] = df[col].astype(str).str.strip()
             
         current_data['original_df'] = df.copy()
         current_data['df'] = df.copy()
         current_data['columns'] = list(df.columns)
-        current_data['filename'] = 'Database Record'
+        current_data['filename'] = f"Live Forms ({len(df_forms)}) + CSV ({len(df_csv)})" if not df_csv.empty else f"Live Events Data ({len(df_forms)} responses)"
         current_data['column_types'] = detect_column_types(df)
 
         current_data['department_map'] = {}
@@ -265,10 +304,10 @@ def save_data_to_db(df):
 
 @app.route('/api/data', methods=['GET'])
 def get_data():
-    if current_data['df'] is None:
-        loaded = load_data_from_db()
-        if not loaded:
-            return jsonify({'error': 'No data available. Admin needs to upload data.'}), 404
+    # Always try to reload from DB to ensure Webhook submissions are visible!
+    loaded = load_data_from_db()
+    if not loaded and current_data['df'] is None:
+        return jsonify({'error': 'No data available. Admin needs to upload data or wait for form submissions.'}), 404
             
     analytics = build_analytics(current_data['df'], current_data['column_types'],
                                  current_data['department_map'],
@@ -359,6 +398,9 @@ def fetch_google_link():
 # ════════════════════════════════════════════════════════════════════
 @app.route('/api/filter', methods=['POST'])
 def filter_data():
+    # Always reload to catch new Webhook data from SQLite before filtering
+    load_data_from_db()
+    
     if current_data['df'] is None:
         return jsonify({'error': 'No data loaded'}), 400
 
