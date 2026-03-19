@@ -1,189 +1,278 @@
 /**
- * ============================================================
- * DataLens Feedback System — Google Apps Script Web App
- * ============================================================
- * WHAT IT DOES:
- *   - Runs as YOUR Google account (bypasses service account bug)
- *   - Accepts POST requests from the Flask backend
- *   - Creates Google Forms with 9 fixed questions
- *   - Returns form URL + form ID as JSON
+ * ╔══════════════════════════════════════════════════════════════╗
+ * ║       DataLens Feedback System — Google Apps Script          ║
+ * ╚══════════════════════════════════════════════════════════════╝
  *
- * HOW TO DEPLOY:
- *   1. Go to script.google.com
- *   2. Click "New Project"
- *   3. Delete all existing code
- *   4. Paste THIS entire file contents
- *   5. Click Deploy > New Deployment
- *   6. Type: Web App
- *   7. Execute as: Me (your Google account)
- *   8. Who has access: Anyone
- *   9. Click Deploy > Copy the Web App URL
- *  10. Paste that URL into your Flask .env as APPS_SCRIPT_URL
- * ============================================================
+ * DEPLOYMENT STEPS (do this once, then again if you change code):
+ *   1. Paste this entire file into script.google.com
+ *   2. In the toolbar, select "authorizeScript" in the dropdown → click Run
+ *      (You MUST click Allow in the popup that appears — only once ever!)
+ *   3. Click Deploy → Manage Deployments → Edit (pencil icon)
+ *   4. Under Version, choose "New version" → click Deploy
+ *   5. Copy the Web App URL → paste it as APPS_SCRIPT_URL in HF Secrets
+ *
+ * SUPPORTED ACTIONS (sent as POST from Python backend):
+ *   • create_form       – Creates a new Google Form for a speaker/event
+ *   • toggle_form       – Opens or closes ONE specific form
+ *   • terminate_all     – Closes ALL forms managed by this script at once
+ *   • get_responses     – Returns all responses for a given form
+ *   • ping              – Health check; returns {success:true}
  */
 
-// ── Security: simple secret key to prevent abuse ─────────────
-var SECRET_KEY = "datalens2026";   // <-- Change this to anything you like
+// ─── Config ───────────────────────────────────────────────────────────────────
+var SECRET_KEY = "datalens2026"; // Must match APPS_SCRIPT_SECRET in HF Secrets
 
-// ── Main entry point (called by Flask backend) ────────────────
+// ─── Entry point ──────────────────────────────────────────────────────────────
 function doPost(e) {
   try {
-    var payload = JSON.parse(e.postData.contents);
-
-    // Verify secret key
-    if (payload.secret !== SECRET_KEY) {
-      return jsonResponse({ success: false, error: "Unauthorized" }, 403);
+    if (!e || !e.postData || !e.postData.contents) {
+      return _json({ success: false, error: "Empty request body" });
     }
 
-    var action = payload.action;
-
-    if (action === "create_form") {
-      return handleCreateForm(payload);
-    } else if (action === "toggle_form") {
-      return handleToggleForm(payload);
-    } else if (action === "get_responses") {
-      return handleGetResponses(payload);
-    } else if (action === "ping") {
-      return jsonResponse({ success: true, message: "Apps Script is alive!" });
-    } else {
-      return jsonResponse({ success: false, error: "Unknown action: " + action }, 400);
+    var payload;
+    try {
+      payload = JSON.parse(e.postData.contents);
+    } catch (parseErr) {
+      return _json({ success: false, error: "Invalid JSON: " + parseErr.message });
     }
+
+    // Security check
+    if (!payload.secret || payload.secret !== SECRET_KEY) {
+      return _json({ success: false, error: "Unauthorized — wrong secret key" });
+    }
+
+    var action = (payload.action || "").trim();
+
+    if      (action === "create_form"   ) return _createForm(payload);
+    else if (action === "toggle_form"   ) return _toggleForm(payload);
+    else if (action === "terminate_all" ) return _terminateAll(payload);
+    else if (action === "get_responses" ) return _getResponses(payload);
+    else if (action === "ping"          ) return _json({ success: true, message: "Apps Script is alive!" });
+    else return _json({ success: false, error: "Unknown action: " + action });
 
   } catch (err) {
-    return jsonResponse({ success: false, error: err.toString() }, 500);
+    return _json({ success: false, error: "Unhandled error: " + err.message });
   }
 }
 
-// ── GET handler (for ping/health check from browser) ─────────
+// ─── GET handler (browser health check) ──────────────────────────────────────
 function doGet(e) {
-  return jsonResponse({ success: true, message: "DataLens Apps Script is running!" });
+  return _json({ success: true, message: "DataLens Apps Script is running!" });
 }
 
-// ── Setup: Run this ONCE manually to authorize permissions ───
+// ─── ONE-TIME SETUP: Run this manually ONCE to grant OAuth permissions ────────
+// Instructions: Select "authorizeScript" in the toolbar dropdown → click Run
+// Click "Allow" in the popup → done!
 function authorizeScript() {
-  var triggers = ScriptApp.getProjectTriggers();
-  Logger.log("Authorization successful! You can now use the dashboard to generate forms.");
+  // Touching ScriptApp forces Google to request the script.scriptapp permission
+  var existing = ScriptApp.getProjectTriggers();
+  Logger.log("✅ Authorization successful! Existing triggers: " + existing.length);
+  Logger.log("You can now deploy and use the dashboard without any permission errors.");
 }
 
-// ── Action: Create a Google Form ──────────────────────────────
-function handleCreateForm(payload) {
-  var speakerName = payload.speaker_name;
-  var venueDate   = payload.venue_date;
+// ═══════════════════════════════════════════════════════════════════════════════
+//  ACTION HANDLERS
+// ═══════════════════════════════════════════════════════════════════════════════
 
-  if (!speakerName || !venueDate) {
-    return jsonResponse({ success: false, error: "speaker_name and venue_date are required" }, 400);
+// ─── Create Form ──────────────────────────────────────────────────────────────
+function _createForm(payload) {
+  var speakerName = (payload.speaker_name || "").trim();
+  var venueDate   = (payload.venue_date   || "").trim();
+  var webhookUrl  = (payload.webhook_url  || "").trim();
+  var eventId     = payload.event_id;
+
+  if (!speakerName) return _json({ success: false, error: "speaker_name is required" });
+  if (!venueDate)   return _json({ success: false, error: "venue_date is required" });
+
+  try {
+    var form = FormApp.create("Feedback: " + speakerName);
+    form.setDescription(
+      "Please share your feedback for the session held on " + venueDate + ".\n" +
+      "Your responses help us improve future events!"
+    );
+    form.setCollectEmail(false);
+    form.setLimitOneResponsePerUser(false);
+
+    // Q1 — Name
+    form.addTextItem().setTitle("Your Full Name").setRequired(true);
+
+    // Q2 — Department
+    form.addMultipleChoiceItem()
+        .setTitle("Department / School")
+        .setChoiceValues([
+          "School of Computer Applications (SCA)",
+          "School of Engineering (SOE)",
+          "School of Management (SOM)",
+          "School of Design (SOD)",
+          "Other"
+        ])
+        .setRequired(true);
+
+    // Q3 — Roll Number
+    form.addTextItem().setTitle("Roll Number / Student ID").setRequired(true);
+
+    // Q4 — Year
+    form.addMultipleChoiceItem()
+        .setTitle("Year / Semester")
+        .setChoiceValues(["1st Year", "2nd Year", "3rd Year", "4th Year", "Alumni / Faculty"])
+        .setRequired(true);
+
+    // Q5 — Helpfulness scale
+    form.addScaleItem()
+        .setTitle("How helpful was this session for your understanding?")
+        .setBounds(1, 5)
+        .setLabels("Not Helpful at All", "Extremely Helpful")
+        .setRequired(true);
+
+    // Q6 — Technical clarity scale
+    form.addScaleItem()
+        .setTitle("How clear were the technical explanations?")
+        .setBounds(1, 5)
+        .setLabels("Very Unclear", "Very Clear")
+        .setRequired(true);
+
+    // Q7 — Most valuable aspect
+    form.addParagraphTextItem()
+        .setTitle("What was the most valuable aspect of this session?")
+        .setRequired(true);
+
+    // Q8 — What could be improved
+    form.addParagraphTextItem()
+        .setTitle("What could be improved?")
+        .setRequired(false);
+
+    // Q9 — Future topics
+    form.addParagraphTextItem()
+        .setTitle("What topics would you like covered in future sessions?")
+        .setRequired(false);
+
+    var formId = form.getId();
+
+    // Store all form IDs managed by this script (for terminate_all)
+    _registerFormId(formId);
+
+    // Attach real-time webhook trigger if requested
+    if (webhookUrl && eventId) {
+      PropertiesService.getScriptProperties()
+          .setProperty("webhook_" + formId, webhookUrl);
+      PropertiesService.getScriptProperties()
+          .setProperty("event_" + formId, String(eventId));
+
+      // Only create if trigger does not already exist for this form
+      var triggers = ScriptApp.getProjectTriggers();
+      var alreadyExists = false;
+      for (var i = 0; i < triggers.length; i++) {
+        if (triggers[i].getTriggerSourceId() === formId) {
+          alreadyExists = true;
+          break;
+        }
+      }
+      if (!alreadyExists) {
+        ScriptApp.newTrigger("onFormSubmitTrigger")
+            .forForm(form)
+            .onFormSubmit()
+            .create();
+      }
+    }
+
+    return _json({
+      success      : true,
+      form_id      : formId,
+      form_url     : form.getPublishedUrl(),
+      form_edit_url: form.getEditUrl(),
+      message      : "Form created successfully"
+    });
+
+  } catch (err) {
+    return _json({ success: false, error: "Could not create form: " + err.message });
   }
-
-  // Create the form
-  var form = FormApp.create("Feedback Form: " + speakerName + " | " + venueDate);
-  form.setDescription(
-    "Please fill in your feedback for the session by " + speakerName + " on " + venueDate + "."
-  );
-  form.setCollectEmail(false);
-  form.setAllowResponseEdits(false);
-
-  // ── Question 1: Speaker Name (read-only info) ────────────
-  form.addSectionHeaderItem()
-      .setTitle("Session Details")
-      .setHelpText("Speaker: " + speakerName + "  |  Date: " + venueDate);
-
-  // ── Question 2: Student Name ─────────────────────────────
-  form.addTextItem()
-      .setTitle("Your Full Name")
-      .setRequired(true);
-
-  // ── Question 3: Department ───────────────────────────────
-  var deptItem = form.addListItem();
-  deptItem.setTitle("Department")
-          .setRequired(true)
-          .setChoiceValues([
-            "Computer Science",
-            "Electronics",
-            "Mechanical",
-            "Civil",
-            "Information Technology",
-            "Other"
-          ]);
-
-  // ── Question 4: Roll No ──────────────────────────────────
-  form.addTextItem()
-      .setTitle("Roll Number")
-      .setRequired(true);
-
-  // ── Question 5: Year / Semester ──────────────────────────
-  var yearItem = form.addListItem();
-  yearItem.setTitle("Year / Semester")
-          .setRequired(true)
-          .setChoiceValues(["1st Year", "2nd Year", "3rd Year", "4th Year"]);
-
-  // ── Question 6: Helpfulness Rating ──────────────────────
-  var ratingItem = form.addScaleItem();
-  ratingItem.setTitle("How helpful was this session?")
-            .setLabels("Not helpful at all", "Extremely helpful")
-            .setBounds(1, 5)
-            .setRequired(true);
-
-  // ── Question 7: Most Valuable Aspect ────────────────────
-  form.addParagraphTextItem()
-      .setTitle("What was the most valuable aspect of this session?")
-      .setRequired(true);
-
-  // ── Question 8: Improvements ────────────────────────────
-  form.addParagraphTextItem()
-      .setTitle("What could be improved?")
-      .setRequired(false);
-
-  // ── Question 9: Future Topics ────────────────────────────
-  form.addParagraphTextItem()
-      .setTitle("What topics would you like covered in future sessions?")
-      .setRequired(false);
-
-  // Get the published form URL (for students to fill)
-  var formUrl      = form.getPublishedUrl();
-  var formId       = form.getId();
-  var formEditUrl  = form.getEditUrl();
-
-  // ── Attach Webhook Trigger if requested ────────────────────
-  if (payload.webhook_url && payload.event_id) {
-    PropertiesService.getScriptProperties().setProperty('webhook_' + formId, payload.webhook_url);
-    PropertiesService.getScriptProperties().setProperty('event_' + formId, String(payload.event_id));
-    ScriptApp.newTrigger('onFormSubmitTrigger').forForm(form).onFormSubmit().create();
-  }
-
-  return jsonResponse({
-    success      : true,
-    form_id      : formId,
-    form_url     : formUrl,
-    form_edit_url: formEditUrl,
-    speaker_name : speakerName,
-    venue_date   : venueDate,
-    message      : "Form created successfully"
-  });
 }
 
-// ── Action: Get form responses ────────────────────────────────
-function handleGetResponses(payload) {
-  var formId = payload.form_id;
-  if (!formId) {
-    return jsonResponse({ success: false, error: "form_id is required" }, 400);
+// ─── Toggle one Form ──────────────────────────────────────────────────────────
+function _toggleForm(payload) {
+  var formId = (payload.form_id || "").trim();
+  if (!formId) return _json({ success: false, error: "form_id is required" });
+
+  try {
+    var form = FormApp.openById(formId);
+    var currentState = form.isAcceptingResponses();
+
+    // If accepting_responses is explicitly provided, use it; otherwise just flip
+    var newState;
+    if (payload.accepting_responses !== undefined && payload.accepting_responses !== null) {
+      newState = Boolean(payload.accepting_responses);
+    } else {
+      newState = !currentState;
+    }
+
+    form.setAcceptingResponses(newState);
+    var finalState = form.isAcceptingResponses();
+
+    return _json({
+      success             : true,
+      form_id             : formId,
+      accepting_responses : finalState,
+      message             : "Form is now " + (finalState ? "OPEN ✅" : "CLOSED 🔒")
+    });
+
+  } catch (err) {
+    return _json({ success: false, error: "Could not toggle form: " + err.message });
   }
+}
+
+// ─── Terminate ALL forms ──────────────────────────────────────────────────────
+function _terminateAll(payload) {
+  try {
+    var allFormIds = _getAllFormIds();
+    if (allFormIds.length === 0) {
+      return _json({ success: true, closed: 0, message: "No forms registered — nothing to close." });
+    }
+
+    var closed = 0;
+    var errors = [];
+
+    for (var i = 0; i < allFormIds.length; i++) {
+      var fid = allFormIds[i];
+      try {
+        var form = FormApp.openById(fid);
+        form.setAcceptingResponses(false);
+        closed++;
+      } catch (e) {
+        errors.push(fid + ": " + e.message);
+      }
+    }
+
+    return _json({
+      success : true,
+      closed  : closed,
+      total   : allFormIds.length,
+      errors  : errors,
+      message : "🔒 " + closed + " of " + allFormIds.length + " forms have been CLOSED. No further submissions accepted."
+    });
+
+  } catch (err) {
+    return _json({ success: false, error: "terminate_all failed: " + err.message });
+  }
+}
+
+// ─── Get form responses ───────────────────────────────────────────────────────
+function _getResponses(payload) {
+  var formId = (payload.form_id || "").trim();
+  if (!formId) return _json({ success: false, error: "form_id is required" });
 
   try {
     var form      = FormApp.openById(formId);
     var responses = form.getResponses();
-    var items     = form.getItems();
     var result    = [];
 
     for (var i = 0; i < responses.length; i++) {
-      var resp    = responses[i];
-      var itemMap = {};
-      var itemResponses = resp.getItemResponses();
-
-      for (var j = 0; j < itemResponses.length; j++) {
-        var ir = itemResponses[j];
+      var resp         = responses[i];
+      var itemMap      = {};
+      var itemResps    = resp.getItemResponses();
+      for (var j = 0; j < itemResps.length; j++) {
+        var ir = itemResps[j];
         itemMap[ir.getItem().getTitle()] = ir.getResponse();
       }
-
       result.push({
         response_id  : resp.getId(),
         submitted_at : resp.getTimestamp().toISOString(),
@@ -191,7 +280,7 @@ function handleGetResponses(payload) {
       });
     }
 
-    return jsonResponse({
+    return _json({
       success        : true,
       form_id        : formId,
       response_count : result.length,
@@ -199,75 +288,83 @@ function handleGetResponses(payload) {
     });
 
   } catch (err) {
-    return jsonResponse({ success: false, error: "Could not open form: " + err.toString() }, 500);
+    return _json({ success: false, error: "Could not fetch responses: " + err.message });
   }
 }
 
-// ── Action: Toggle Form Open/Close ────────────────────────────
-function handleToggleForm(payload) {
-  var formId = payload.form_id;
-  if (!formId) return jsonResponse({ success: false, error: "form_id is required" }, 400);
-
-  try {
-    var form = FormApp.openById(formId);
-    var isAccepting = form.isAcceptingResponses();
-    var newState = payload.accepting_responses;
-    if (newState === undefined) newState = !isAccepting;
-    form.setAcceptingResponses(newState);
-
-    return jsonResponse({
-      success: true,
-      form_id: formId,
-      accepting_responses: form.isAcceptingResponses(),
-      message: "Form is now " + (form.isAcceptingResponses() ? "Open" : "Closed")
-    });
-  } catch (err) {
-    return jsonResponse({ success: false, error: err.toString() }, 500);
-  }
-}
-
-// ── Webhook Trigger: Fires automatically on submit ────────────
+// ─── Real-time Webhook trigger ────────────────────────────────────────────────
 function onFormSubmitTrigger(e) {
   try {
-    var form = e.source;
+    var form   = e.source;
     var formId = form.getId();
-    
-    var webhookUrl = PropertiesService.getScriptProperties().getProperty('webhook_' + formId);
-    var eventIdStr = PropertiesService.getScriptProperties().getProperty('event_' + formId);
-    if (!webhookUrl || !eventIdStr) return;
-    
-    var response = e.response;
-    var itemResponses = response.getItemResponses();
-    var itemMap = {};
-    for (var i = 0; i < itemResponses.length; i++) {
-        itemMap[itemResponses[i].getItem().getTitle()] = itemResponses[i].getResponse();
+
+    var webhookUrl = PropertiesService.getScriptProperties().getProperty("webhook_" + formId);
+    var eventIdStr = PropertiesService.getScriptProperties().getProperty("event_"   + formId);
+
+    if (!webhookUrl || !eventIdStr) {
+      Logger.log("No webhook URL or event_id found for form: " + formId);
+      return;
     }
-    
-    var payload = {
-      secret: SECRET_KEY,
-      event_id: parseInt(eventIdStr, 10),
+
+    var response      = e.response;
+    var itemResponses = response.getItemResponses();
+    var itemMap       = {};
+
+    for (var i = 0; i < itemResponses.length; i++) {
+      var ir = itemResponses[i];
+      itemMap[ir.getItem().getTitle()] = ir.getResponse();
+    }
+
+    var postPayload = {
+      secret   : SECRET_KEY,
+      event_id : parseInt(eventIdStr, 10),
       response_data: {
-        response_id: response.getId(),
-        submitted_at: response.getTimestamp().toISOString(),
-        answers: itemMap
+        response_id  : response.getId(),
+        submitted_at : response.getTimestamp().toISOString(),
+        answers      : itemMap
       }
     };
-    
-    var options = {
-      method: "post",
-      contentType: "application/json",
-      payload: JSON.stringify(payload)
-    };
-    
-    UrlFetchApp.fetch(webhookUrl, options);
-  } catch(err) {
-    console.error("Webhook failed: " + err);
+
+    UrlFetchApp.fetch(webhookUrl, {
+      method      : "post",
+      contentType : "application/json",
+      payload     : JSON.stringify(postPayload),
+      muteHttpExceptions: true
+    });
+
+  } catch (err) {
+    Logger.log("Webhook trigger error: " + err.message);
   }
 }
 
-// ── Helper: Build a JSON ContentService response ─────────────
-function jsonResponse(obj) {
+// ═══════════════════════════════════════════════════════════════════════════════
+//  INTERNAL HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Keep a registry of all form IDs so terminate_all knows what to close
+function _registerFormId(formId) {
+  var props   = PropertiesService.getScriptProperties();
+  var allJson = props.getProperty("all_form_ids") || "[]";
+  var all     = JSON.parse(allJson);
+  if (all.indexOf(formId) === -1) {
+    all.push(formId);
+    props.setProperty("all_form_ids", JSON.stringify(all));
+  }
+}
+
+function _getAllFormIds() {
+  var props   = PropertiesService.getScriptProperties();
+  var allJson = props.getProperty("all_form_ids") || "[]";
+  try {
+    return JSON.parse(allJson);
+  } catch (e) {
+    return [];
+  }
+}
+
+// Unified JSON response builder
+function _json(obj) {
   return ContentService
-    .createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
+      .createTextOutput(JSON.stringify(obj))
+      .setMimeType(ContentService.MimeType.JSON);
 }

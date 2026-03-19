@@ -377,7 +377,6 @@ def webhook_google_submit():
         form_db_id = form_record["id"]
 
         # Parse live webhook response into normal submission format
-        # It's structured almost exactly like a get_responses() item
         submission = parse_response_to_submission(response_data, event_id, form_db_id)
 
         # Check for duplicates (webhook retries)
@@ -405,6 +404,45 @@ def webhook_google_submit():
 
         conn.close()
         return jsonify({"success": True, "message": "Webhook processed"})
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ─────────────────────────────────────────────────────────────
+# POST /api/admin/terminate-all-forms
+# Closes EVERY Google Form registered in the DB at once.
+# ─────────────────────────────────────────────────────────────
+@events_bp.route("/api/admin/terminate-all-forms", methods=["POST"])
+def terminate_all_forms():
+    if not _check_admin(request):
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+    try:
+        conn   = get_db()
+        cursor = conn.cursor()
+
+        # Fetch every form_id that has ever been created
+        cursor.execute("SELECT google_form_id FROM feedback_forms WHERE google_form_id IS NOT NULL")
+        rows = cursor.fetchall()
+        conn.close()
+
+        if not rows:
+            return jsonify({"success": True, "closed": 0, "message": "No forms found to terminate."})
+
+        # Call Apps Script terminate_all action — it will close all forms simultaneously
+        from services.google_forms_service import _call_script, AppsScriptError
+        try:
+            result = _call_script({"action": "terminate_all"})
+        except AppsScriptError as e:
+            return jsonify({"success": False, "error": f"Apps Script error: {e}"}), 502
+
+        return jsonify({
+            "success": True,
+            "closed" : result.get("closed", 0),
+            "total"  : result.get("total",  0),
+            "message": result.get("message", "All forms terminated"),
+        })
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

@@ -1825,13 +1825,43 @@ class SmartCalendar {
     // ── Wire everything up on DOMContentLoaded ───────────────
     document.addEventListener('DOMContentLoaded', () => {
 
-        // "Admin Panel" sidebar button → now opens Feedback Modal
+        // "Admin Panel" (Manage Forms) sidebar button → now opens Feedback Modal
         const btnAdminPanel = document.getElementById('btn-admin-panel');
         if (btnAdminPanel) {
             // Remove existing listener by cloning
             const newBtn = btnAdminPanel.cloneNode(true);
             btnAdminPanel.parentNode.replaceChild(newBtn, btnAdminPanel);
             newBtn.addEventListener('click', openFeedbackModal);
+        }
+
+        // "Upload Data" sidebar button
+        const btnUploadData = document.getElementById('btn-upload-data');
+        if (btnUploadData) {
+            btnUploadData.addEventListener('click', () => {
+                if (!getToken()) {
+                    document.getElementById('admin-login-modal').classList.remove('hidden');
+                    const origSubmit = document.getElementById('btn-admin-submit');
+                    const handler = () => {
+                        setTimeout(() => {
+                            if (getToken()) switchToUpload();
+                            origSubmit.removeEventListener('click', handler);
+                        }, 300);
+                    };
+                    origSubmit.addEventListener('click', handler);
+                } else {
+                    switchToUpload();
+                }
+            });
+        }
+
+        // Go Back button on upload screen
+        const btnBackToDashboard = document.getElementById('btn-back-to-dashboard');
+        if (btnBackToDashboard) {
+            btnBackToDashboard.addEventListener('click', () => {
+                document.getElementById('upload-screen').classList.remove('active');
+                document.getElementById('dashboard-screen').classList.add('active');
+                loadInitialData();
+            });
         }
 
         // Close button
