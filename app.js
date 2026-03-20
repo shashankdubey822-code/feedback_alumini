@@ -67,6 +67,14 @@ async function loadInitialData() {
         state.tableData = analytics.tableData || [];
         state.fileName = analytics.meta.filename || 'Database Record';
 
+        // Auto-sort by timestamp in descending order (latest first)
+        const timestampCol = state.columns.find(col => col.toUpperCase().includes('TIMESTAMP'));
+        if (timestampCol) {
+            state.sortColumn = timestampCol;
+            state.sortDirection = 'desc';
+            sortTableData();
+        }
+
         console.log("loadInitialData: Scheduling switchToDashboardFromLoading");
         setTimeout(() => {
             console.log("Timeout triggered: Switching screens and rendering");

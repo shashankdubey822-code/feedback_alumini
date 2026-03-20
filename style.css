@@ -1007,7 +1007,7 @@ body {
     padding: 10px 16px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.02);
     color: var(--text-secondary);
-    max-width: 280px;
+    min-width: 150px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
