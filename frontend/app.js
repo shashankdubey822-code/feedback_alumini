@@ -100,7 +100,37 @@ async function loadInitialData() {
         const analytics = await response.json();
         console.log("loadInitialData: Setting state variables");
         state.analytics = analytics;
-        state.columns = analytics.meta.columns;
+        const allowedColumns = [
+            'timestamp_original',
+            'name_of_student',
+            'department_original',
+            'roll_no_original',
+            'date_of_lecture',
+            'alumni_speaker_name',
+            'session_help_understanding',
+            'aspect_most_valuable',
+            'session_rating',
+            'improvements_suggestions',
+            'future_topics'
+        ];
+
+        state.friendlyNames = {
+            'timestamp_original': 'Timestamp',
+            'name_of_student': 'Name of Student',
+            'department_original': 'Department',
+            'roll_no_original': 'Roll No.',
+            'date_of_lecture': 'Date of the Session',
+            'alumni_speaker_name': 'Alumni Speaker Name',
+            'session_help_understanding': 'Did the session help you gain a better understanding...?',
+            'aspect_most_valuable': 'What aspect of the session did you find most valuable?',
+            'session_rating': 'How would you rate the session overall?',
+            'improvements_suggestions': 'What improvements or suggestions would you recommend...',
+            'future_topics': "Any specific topics or areas you'd like future alumni speakers to cover?"
+        };
+
+        // strictly bind dashboard table to only these 11 columns
+        state.columns = analytics.meta.columns.filter(col => allowedColumns.includes(col));
+        state.columns.sort((a, b) => allowedColumns.indexOf(a) - allowedColumns.indexOf(b));
         state.columnTypes = analytics.meta.columnTypes;
         state.tableData = analytics.tableData || [];
         state.fileName = analytics.meta.filename || 'Database Record';
@@ -1097,8 +1127,9 @@ function buildTableHead() {
 
     state.columns.forEach(col => {
         const th = document.createElement('th');
-        th.textContent = truncate(col, 25);
-        th.title = col;
+        const displayName = state.friendlyNames && state.friendlyNames[col] ? state.friendlyNames[col] : col;
+        th.textContent = truncate(displayName, 35);
+        th.title = displayName;
 
         const arrow = document.createElement('span');
         arrow.className = 'sort-arrow';
@@ -1265,7 +1296,10 @@ function downloadFilteredCSV() {
         return;
     }
 
-    const header = state.columns.join(',');
+    const header = state.columns.map(col => {
+        let name = state.friendlyNames && state.friendlyNames[col] ? state.friendlyNames[col] : col;
+        return name.includes(',') || name.includes('"') ? `"${name.replace(/"/g, '""')}"` : name;
+    }).join(',');
     const rows = state.tableData.map(row =>
         state.columns.map(col => {
             const val = row[col] || '';
@@ -1380,7 +1414,7 @@ function openDataModal(chartTitle, clickedLabel, clickedValue, column, columnTyp
         const trHead = document.createElement('tr');
         state.columns.forEach(col => {
             const th = document.createElement('th');
-            th.textContent = col;
+            th.textContent = state.friendlyNames && state.friendlyNames[col] ? state.friendlyNames[col] : col;
             trHead.appendChild(th);
         });
         thead.appendChild(trHead);
