@@ -196,5 +196,61 @@ def get_events():
 
 @admin_bp.route('/generate-form', methods=['POST'])
 def generate_form():
-    """Generate a Google Form (stub)"""
-    return jsonify({'success': True, 'form_url': 'https://forms.google.com/test'}), 200
+    """Call Google Apps Script to generate a form"""
+    try:
+        import urllib.request
+        import json
+        data = request.get_json() or {}
+        
+        apps_script_url = os.getenv('APPS_SCRIPT_URL')
+        if not apps_script_url:
+            return jsonify({
+                'success': False, 
+                'error': 'APPS_SCRIPT_URL is not configured in environment variables. Please add your script URL to HF Secrets.'
+            }), 400
+            
+        secret = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
+        
+        webhook_url = request.host_url.rstrip('/') + '/api/v1/webhook/forms/submit'
+        
+        event_id = data.get('event_id')
+        if not event_id:
+            event_id = int(datetime.utcnow().timestamp())
+            
+        speaker_name = data.get('speaker_name', f'Speaker {event_id}')
+        venue_date = data.get('venue_date', datetime.utcnow().strftime('%Y-%m-%d'))
+        
+        payload = {
+            'secret': secret,
+            'action': 'create_form',
+            'speaker_name': speaker_name,
+            'venue_date': venue_date,
+            'webhook_url': webhook_url,
+            'event_id': event_id
+        }
+        
+        payload_bytes = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(
+            apps_script_url, 
+            data=payload_bytes, 
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+        )
+        
+        try:
+            with urllib.request.urlopen(req, timeout=15) as response:
+                response_data = json.loads(response.read().decode('utf-8'))
+                
+                if response_data.get('success'):
+                    return jsonify(response_data), 200
+                else:
+                    err_msg = response_data.get('error', 'Google Apps Script returned an error.')
+                    logger.error(f"Apps Script creation failed: {err_msg}")
+                    return jsonify({'success': False, 'error': err_msg}), 400
+        except Exception as api_err:
+            logger.error(f"HTTP Request failed: {str(api_err)}")
+            return jsonify({'success': False, 'error': f"Failed to connect to Google Script: {str(api_err)}"}), 500
+            
+    except Exception as e:
+        logger.error(f"Error generating form: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
