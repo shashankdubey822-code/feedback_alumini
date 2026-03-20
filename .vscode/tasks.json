@@ -1,0 +1,91 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "HF: Push to Space",
+      "type": "shell",
+      "command": "git",
+      "args": ["push", "huggingface", "main"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "showReuseMessage": false
+      },
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "HF: Check Space Status",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "-c",
+        "from huggingface_hub import model_info; import os; print('Connecting to HF Space...'); print('Space ID: vrfefavr/Feedback_DashBoard')"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "HF: Login to Hugging Face",
+      "type": "shell",
+      "command": "huggingface-cli",
+      "args": ["login"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "echo": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "HF: Validate Credentials",
+      "type": "shell",
+      "command": "huggingface-cli",
+      "args": ["whoami"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Git: View Recent Commits",
+      "type": "shell",
+      "command": "git",
+      "args": ["log", "--oneline", "-10"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Git: Check Status",
+      "type": "shell",
+      "command": "git",
+      "args": ["status"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Git: Commit & Push to HF",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-c", "git status && echo '\\n--- Ready to push? Run: git push huggingface main ---\\n'"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    }
+  ]
+}
