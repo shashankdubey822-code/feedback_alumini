@@ -53,19 +53,23 @@ const CONFIG = {
 
   // Form Configuration
   DEPARTMENT_OPTIONS: [
-    "School of Computer Applications (SCA)",
-    "School of Engineering (SOE)",
-    "School of Management (SOM)",
-    "School of Design (SOD)",
-    "School of Education & Humanities",
-    "B.Tech CSE AIML",
-    "B.Tech ECE VLSI",
-    "B.Tech Mechanical",
-    "B.Tech Civil",
-    "B.Tech Electrical",
-    "BA.LLB (Law)",
-    "School of Business",
-    "Other",
+    // School of Engineering (SOE)
+    "Computer Science & Technology (SOE)",
+    "Electronics and Communication (SOE)",
+    "Mechanical Engineering (SOE)",
+    // School of Sciences
+    "Physics (School of Sciences)",
+    "Chemistry (School of Sciences)",
+    "Mathematics (School of Sciences)",
+    // School of Management & Commerce
+    "Business (School of Management & Commerce)",
+    "Commerce (School of Management & Commerce)",
+    "Management (School of Management & Commerce)",
+    // School of Law
+    "BA LLB (School of Law)",
+    "BBA LLB (School of Law)",
+    // School of Education & Humanities
+    "Education & Humanities",
   ],
 };
 
