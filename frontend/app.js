@@ -19,6 +19,53 @@ const state = {
 
 const API_BASE = '';
 
+// ========== REQUEST MANAGEMENT (FIX: Prevent duplicate requests) ==========
+const pendingRequests = new Map(); // Track active requests
+let currentAutoRefreshController = null; // AbortController for auto-refresh
+
+// Utility: Create unique request key
+function getRequestKey(url, method, body) {
+    return `${method}:${url}:${body ? JSON.stringify(body) : ''}`;
+}
+
+// Utility: Abort pending request if exists
+function abortPendingRequest(key) {
+    if (pendingRequests.has(key)) {
+        pendingRequests.get(key).abort();
+        pendingRequests.delete(key);
+        console.log(`[REQUEST] Aborted duplicate: ${key}`);
+    }
+}
+
+// Enhanced fetch with abort controller and duplicate prevention
+async function safeFetch(url, options = {}) {
+    const key = getRequestKey(url, options.method || 'GET', options.body);
+    
+    // Abort any existing request with same key
+    abortPendingRequest(key);
+    
+    // Create new AbortController
+    const controller = new AbortController();
+    pendingRequests.set(key, controller);
+    
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        
+        pendingRequests.delete(key);
+        return response;
+    } catch (error) {
+        pendingRequests.delete(key);
+        if (error.name === 'AbortError') {
+            console.log(`[REQUEST] Aborted: ${key}`);
+            throw new Error('Request was cancelled');
+        }
+        throw error;
+    }
+}
+
 // ========== COLOR PALETTE ==========
 const CHART_COLORS = [
     '#6366f1', '#a855f7', '#22d3ee', '#34d399', '#fbbf24',
@@ -80,9 +127,119 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
+// ========== ENHANCED CLIPBOARD (FIX: Error handling + fallback) ==========
+async function copyToClipboard(text, successMessage = 'Copied to clipboard!') {
+    try {
+        // Try modern Clipboard API first
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+            showNotification(successMessage, 'success');
+            return true;
+        } else {
+            // Fallback for older browsers or HTTP (non-HTTPS)
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            textArea.style.top = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                if (successful) {
+                    showNotification(successMessage, 'success');
+                    return true;
+                } else {
+                    throw new Error('execCommand failed');
+                }
+            } catch (err) {
+                document.body.removeChild(textArea);
+                throw err;
+            }
+        }
+    } catch (error) {
+        console.error('Clipboard error:', error);
+        showNotification('Failed to copy. Please copy manually.', 'error');
+        
+        // Show the text in an alert as final fallback
+        alert(`Please copy this manually:\n\n${text}`);
+        return false;
+    }
+}
+
+// ========== POPUP BLOCKER DETECTION ==========
+function safeWindowOpen(url, target = '_blank') {
+    try {
+        const newWindow = window.open(url, target);
+        
+        if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+            // Popup was blocked
+            showNotification('Popup blocked! Please allow popups for this site.', 'error');
+            
+            // Show URL as fallback
+            const userChoice = confirm(`Popup was blocked. URL:\n\n${url}\n\nCopy to clipboard?`);
+            if (userChoice) {
+                copyToClipboard(url, 'URL copied!');
+            }
+            return false;
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Window open error:', error);
+        showNotification('Could not open link. Please disable popup blocker.', 'error');
+        return false;
+    }
+}
+
+// ========== CONFIGURATION VALIDATION (CHECK ON STARTUP) ==========
+async function validateBackendConfiguration() {
+    try {
+        const response = await fetch(`${API_BASE}/api/admin/config/validate`);
+        const data = await response.json();
+        
+        if (!data.success || !data.all_valid) {
+            console.warn('[CONFIG] Backend configuration issues detected:', data.checks);
+            
+            const issues = [];
+            if (data.checks) {
+                if (!data.checks.apps_script_url?.valid) {
+                    issues.push('Google Apps Script URL not configured');
+                }
+                if (!data.checks.database?.exists) {
+                    issues.push('Database not found');
+                }
+                if (data.checks.apps_script_secret?.is_default) {
+                    issues.push('Using default secret (security risk)');
+                }
+            }
+            
+            if (issues.length > 0) {
+                showNotification(`⚠️ Configuration warnings: ${issues.join(', ')}`, 'error');
+            }
+            
+            return false;
+        }
+        
+        console.log('[CONFIG] Backend configuration validated successfully');
+        return true;
+    } catch (error) {
+        console.error('[CONFIG] Failed to validate configuration:', error);
+        // Don't block the app if validation endpoint fails
+        return true;
+    }
+}
+
 // ========== DATA LOADING ==========
 async function loadInitialData() {
     try {
+        // Validate configuration first
+        await validateBackendConfiguration();
+        
         console.log("loadInitialData: Fetching /api/data");
         const response = await fetch(`${API_BASE}/api/data`);
         console.log("loadInitialData: Response status", response.status);
@@ -299,8 +456,7 @@ function setupDashboardHandlers() {
     document.getElementById('btn-clear-filters').addEventListener('click', clearAllFilters);
     document.getElementById('global-search').addEventListener('input', debounce(applyFilters, 400));
 
-    // Auto-refresh the dashboard live (Webhooks sync)
-    // Every 10 seconds, if on dashboard and not typing in search, gently refresh
+    // Auto-refresh the dashboard live (Webhooks sync) - ENHANCED with abort control
     setInterval(async () => {
         const dash = document.getElementById('dashboard-screen');
         if (!dash || !dash.classList.contains('active')) return;
@@ -309,9 +465,25 @@ function setupDashboardHandlers() {
         if (searchVal.length > 0) return; // Don't disrupt active searching
         
         try {
+            // Abort any pending auto-refresh request
+            if (currentAutoRefreshController) {
+                currentAutoRefreshController.abort();
+                console.log('[AUTO-REFRESH] Aborted previous request');
+            }
+            
+            // Create new AbortController for this refresh
+            currentAutoRefreshController = new AbortController();
+            
             // We just re-run the normal filter workflow silently to pull new webhook data
             await applyFilters(true); // true = silent flag
-        } catch(e) {}
+            
+            currentAutoRefreshController = null;
+        } catch(e) {
+            if (e.name !== 'AbortError') {
+                console.error('[AUTO-REFRESH] Error:', e);
+            }
+            currentAutoRefreshController = null;
+        }
     }, 10000);
 }
 
@@ -1746,51 +1918,70 @@ class SmartCalendar {
         }
 
         const btn = document.getElementById('btn-generate-form');
+        
+        // Prevent double-click with proper state management
+        if (btn.disabled) {
+            console.log('[FORM] Button already disabled, ignoring click');
+            return;
+        }
+        
         btn.disabled = true;
-        btn.textContent = 'Creating event...';
+        btn.textContent = 'Creating event & form...';
         btn.style.opacity = '0.7';
         hideStatus();
         document.getElementById('fb-result').style.display = 'none';
 
         try {
-            // Step 1: Create event in DB
-            const evRes = await fetch(`${API_BASE}/api/admin/create-event`, {
+            // ✅ NEW: Use atomic endpoint - creates event AND form in single transaction
+            const response = await safeFetch(`${API_BASE}/api/admin/create-event-and-form`, {
                 method: 'POST',
                 headers: authHeaders(),
                 body: JSON.stringify({ speaker_name: speaker, venue_date: date })
             });
-            const evData = await evRes.json();
-            if (!evData.success) throw new Error(evData.error || 'Failed to create event');
-            const eventId = evData.event_id;
-
-            btn.textContent = 'Generating Google Form...';
-
-            // Step 2: Generate Google Form
-            const fmRes = await fetch(`${API_BASE}/api/admin/generate-form`, {
-                method: 'POST',
-                headers: authHeaders(),
-                body: JSON.stringify({ event_id: eventId })
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to create event and form');
+            }
+            
+            // Success! Form created atomically
+            _currentFormUrl = data.form_url;
+            console.log("[FORM] Successfully created:", {
+                event_id: data.event_id,
+                form_id: data.form_id,
+                form_url: data.form_url
             });
-            const fmData = await fmRes.json();
-            if (!fmData.success) throw new Error(fmData.error || 'Failed to generate form');
-
-            _currentFormUrl = fmData.form_url;
-            console.log("New Form URL:", _currentFormUrl);
             
             const urlEl = document.getElementById('fb-form-url-text');
             urlEl.textContent = _currentFormUrl || 'Error: URL not returned';
-            urlEl.style.color = '#ffffff'; // Make it pop on dark background
+            urlEl.style.color = '#ffffff';
             
             document.getElementById('fb-result').style.display = 'block';
 
             btn.textContent = 'Generate Another Form';
             btn.disabled = false;
             btn.style.opacity = '1';
-
+            
+            showNotification('✅ Google Form created successfully!', 'success');
+            
             loadEvents(); // refresh list
 
         } catch (err) {
-            showStatus('Error: ' + err.message, 'error');
+            console.error('[FORM] Error:', err);
+            
+            let errorMessage = 'Error: ' + err.message;
+            
+            // Enhanced error messages
+            if (err.message.includes('APPS_SCRIPT_URL')) {
+                errorMessage = '⚠️ Google Apps Script not configured. Please contact administrator.';
+            } else if (err.message.includes('timeout')) {
+                errorMessage = '⏱️ Request timed out. Google Forms may be slow. Please try again.';
+            } else if (err.message.includes('Connection failed')) {
+                errorMessage = '🌐 Cannot reach Google Apps Script. Check your internet connection.';
+            }
+            
+            showStatus(errorMessage, 'error');
             btn.textContent = 'Generate Google Form';
             btn.disabled = false;
             btn.style.opacity = '1';
@@ -1828,9 +2019,9 @@ class SmartCalendar {
                     </div>
                     ${hasForm ? `
                     <div style="display:flex;gap:6px;margin-top:8px;">
-                        <button onclick="navigator.clipboard.writeText('${ev.form_url}').then(()=>this.textContent='Copied!');setTimeout(()=>this.textContent='Copy Link',1500)"
+                        <button data-copy-url="${ev.form_url}" class="btn-copy-event-url"
                             style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Copy</button>
-                        <button onclick="window.open('${ev.form_url}','_blank')"
+                        <button data-open-url="${ev.form_url}" class="btn-open-event-url"
                             style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Open</button>
                         <button data-form="${ev.form_id}" class="btn-toggle-form"
                             style="flex:1;padding:6px;border-radius:6px;background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Toggle</button>
@@ -1843,24 +2034,86 @@ class SmartCalendar {
                 list.appendChild(card);
             });
 
-            // Sync response buttons
+            // Sync response buttons (enhanced with better feedback)
             list.querySelectorAll('.btn-sync-responses').forEach(btn => {
                 btn.addEventListener('click', async () => {
                     const id = btn.dataset.eventId;
+                    
+                    // Prevent double-click
+                    if (btn.disabled) return;
+                    
+                    const originalText = btn.textContent;
                     btn.textContent = 'Syncing...';
                     btn.disabled = true;
+                    
                     try {
-                        const r = await fetch(`${API_BASE}/api/admin/sync-responses`, {
-                            method: 'POST', headers: authHeaders(),
+                        const r = await safeFetch(`${API_BASE}/api/admin/sync-responses`, {
+                            method: 'POST',
+                            headers: authHeaders(),
                             body: JSON.stringify({ event_id: parseInt(id) })
                         });
                         const d = await r.json();
-                        btn.textContent = d.success ? `Synced ${d.responses_synced}` : 'Error';
-                        setTimeout(() => { btn.textContent = 'Sync'; btn.disabled = false; }, 2000);
-                        if (d.success) loadEvents();
+                        
+                        if (d.success) {
+                            // Show detailed sync info
+                            const synced = d.synced || 0;
+                            const skipped = d.skipped || 0;
+                            const total = d.total || 0;
+                            
+                            if (synced > 0) {
+                                btn.textContent = `✓ ${synced} new`;
+                                showNotification(`Synced ${synced} responses (${skipped} duplicates skipped)`, 'success');
+                            } else {
+                                btn.textContent = 'Up to date';
+                                showNotification('All responses already synced', 'info');
+                            }
+                            
+                            // Reload events to update response count
+                            setTimeout(() => loadEvents(), 1000);
+                        } else {
+                            btn.textContent = 'Error';
+                            showNotification(`Sync failed: ${d.error || 'Unknown error'}`, 'error');
+                        }
+                        
+                        // Reset button after delay
+                        setTimeout(() => { 
+                            btn.textContent = originalText; 
+                            btn.disabled = false; 
+                        }, 3000);
+                        
                     } catch (e) {
-                        btn.textContent = 'Error';
-                        setTimeout(() => { btn.textContent = 'Sync'; btn.disabled = false; }, 2000);
+                        console.error('[SYNC] Error:', e);
+                        btn.textContent = 'Failed';
+                        showNotification(`Sync error: ${e.message}`, 'error');
+                        setTimeout(() => { 
+                            btn.textContent = originalText; 
+                            btn.disabled = false; 
+                        }, 3000);
+                    }
+                });
+            });
+
+            // Copy event URL buttons (with enhanced clipboard)
+            list.querySelectorAll('.btn-copy-event-url').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const url = btn.dataset.copyUrl;
+                    if (url) {
+                        const originalText = btn.textContent;
+                        const success = await copyToClipboard(url, 'Form link copied!');
+                        if (success) {
+                            btn.textContent = 'Copied!';
+                            setTimeout(() => { btn.textContent = originalText; }, 1500);
+                        }
+                    }
+                });
+            });
+
+            // Open event URL buttons (with popup blocker detection)
+            list.querySelectorAll('.btn-open-event-url').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const url = btn.dataset.openUrl;
+                    if (url) {
+                        safeWindowOpen(url);
                     }
                 });
             });
@@ -1977,19 +2230,20 @@ class SmartCalendar {
         document.getElementById('btn-copy-form-url')
             ?.addEventListener('click', () => {
                 if (_currentFormUrl) {
-                    navigator.clipboard.writeText(_currentFormUrl)
-                        .then(() => {
-                            const btn = document.getElementById('btn-copy-form-url');
-                            btn.textContent = 'Copied!';
-                            setTimeout(() => btn.textContent = 'Copy Link', 1500);
-                        });
+                    copyToClipboard(_currentFormUrl, 'Form link copied!');
+                } else {
+                    showNotification('No form URL available', 'error');
                 }
             });
 
         // Open form in new tab
         document.getElementById('btn-open-form-url')
             ?.addEventListener('click', () => {
-                if (_currentFormUrl) window.open(_currentFormUrl, '_blank');
+                if (_currentFormUrl) {
+                    safeWindowOpen(_currentFormUrl);
+                } else {
+                    showNotification('No form URL available', 'error');
+                }
             });
     });
 

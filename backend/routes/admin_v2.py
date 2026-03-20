@@ -220,7 +220,7 @@ def _call_google_apps_script(url, payload, timeout=90):
 @admin_bp.route('/login', methods=['POST'])
 @log_endpoint_access
 def login():
-    """Admin login endpoint with enhanced validation"""
+    """Admin login endpoint"""
     try:
         data = request.get_json()
         if not data:
@@ -240,10 +240,11 @@ def login():
         logger.error(f"Error in admin login: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'message': 'Server error'}), 500
 
+
 @admin_bp.route('/upload_csv', methods=['POST'])
 @log_endpoint_access
 def upload_csv():
-    """Handle CSV file upload with comprehensive validation"""
+    """Handle CSV file upload and database insertion"""
     try:
         if 'file' not in request.files:
             return jsonify({'error': 'No file part'}), 400
@@ -275,10 +276,11 @@ def upload_csv():
         logger.error(f"Upload error: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
+
 @admin_bp.route('/fetch_google_link', methods=['POST'])
 @log_endpoint_access
 def fetch_google_link():
-    """Fetch data from a public Google Sheets CSV export link with validation"""
+    """Fetch data from a public Google Sheets CSV export link"""
     try:
         data = request.get_json()
         if not data:
@@ -314,6 +316,36 @@ def fetch_google_link():
     except Exception as e:
         logger.error(f"Google fetch error: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
+
+
+@admin_bp.route('/events', methods=['GET'])
+@log_endpoint_access
+def get_events():
+    """Get list of real feedback events from the database"""
+    try:
+        db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT e.*, 
+                   (SELECT COUNT(*) FROM dashboard_data d WHERE d.alumni_speaker_name = e.speaker_name) as responses
+            FROM events e 
+            ORDER BY e.created_at DESC
+        """)
+        rows = cursor.fetchall()
+        
+        events = [dict(row) for row in rows]
+        conn.close()
+        
+        logger.info(f"Retrieved {len(events)} events")
+        return jsonify({'success': True, 'events': events}), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching events: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @admin_bp.route('/create-event-and-form', methods=['POST'])
 @log_endpoint_access
@@ -431,11 +463,14 @@ def create_event_and_form():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-# Legacy endpoint (kept for backward compatibility but marked as deprecated)
+# Legacy endpoints (kept for backward compatibility but marked as deprecated)
 @admin_bp.route('/create-event', methods=['POST'])
 @log_endpoint_access
 def create_event():
-    """Create a new feedback event in the database"""
+    """
+    DEPRECATED: Use /create-event-and-form instead
+    Legacy endpoint - creates event without form
+    """
     try:
         data = request.get_json() or {}
         speaker_name = data.get('speaker_name')
@@ -446,62 +481,38 @@ def create_event():
             
         db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
         conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
         
-        cursor.execute(
-            "INSERT INTO events (speaker_name, venue_date, status) VALUES (?, ?, ?)",
-            (speaker_name, venue_date, 'pending')
-        )
-        event_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        
-        return jsonify({
-            'success': True,
-            'event_id': event_id,
-            'speaker_name': speaker_name,
-            'venue_date': venue_date
-        }), 200
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO events (speaker_name, venue_date, status) VALUES (?, ?, ?)",
+                (speaker_name, venue_date, 'pending')
+            )
+            event_id = cursor.lastrowid
+            conn.commit()
+            
+            logger.info(f"Created legacy event #{event_id}")
+            return jsonify({
+                'success': True,
+                'event_id': event_id,
+                'speaker_name': speaker_name,
+                'venue_date': venue_date
+            }), 200
+        finally:
+            conn.close()
+            
     except Exception as e:
-        logger.error(f"Error creating event: {str(e)}")
+        logger.error(f"Error creating event: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@admin_bp.route('/events', methods=['GET'])
-def get_events():
-    """Get list of real feedback events from the database"""
-    try:
-        db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT e.*, 
-                   (SELECT COUNT(*) FROM dashboard_data d WHERE d.alumni_speaker_name = e.speaker_name) as responses
-            FROM events e 
-            ORDER BY e.created_at DESC
-        """)
-        rows = cursor.fetchall()
-        
-        events = []
-        for row in rows:
-            events.append(dict(row))
-            
-        conn.close()
-        return jsonify({'success': True, 'events': events}), 200
-    except Exception as e:
-        logger.error(f"Error fetching events: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
 @admin_bp.route('/generate-form', methods=['POST'])
 @log_endpoint_access
 def generate_form():
     """
     DEPRECATED: Use /create-event-and-form instead
-    Legacy endpoint - generates form for existing event with enhanced error handling
+    Legacy endpoint - generates form for existing event
     """
-    conn = None
-    
     try:
         data = request.get_json() or {}
         event_id = data.get('event_id')
@@ -519,62 +530,57 @@ def generate_form():
         db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM events WHERE id = ?", (event_id,))
-        event = cursor.fetchone()
         
-        if not event:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM events WHERE id = ?", (event_id,))
+            event = cursor.fetchone()
+            
+            if not event:
+                return jsonify({'success': False, 'error': 'Event not found'}), 404
+            
+            # Call Google Apps Script
+            secret = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
+            webhook_url = request.host_url.rstrip('/') + '/api/v1/webhook/forms/submit'
+            
+            payload = {
+                'secret': secret,
+                'action': 'create_form',
+                'speaker_name': event['speaker_name'],
+                'venue_date': event['venue_date'],
+                'webhook_url': webhook_url,
+                'event_id': event_id
+            }
+            
+            success, result, error = _call_google_apps_script(apps_script_url, payload, timeout=90)
+            
+            if not success:
+                return jsonify({'success': False, 'error': error}), 500
+            
+            form_url = result.get('form_url')
+            form_id = result.get('form_id')
+            form_edit_url = result.get('form_edit_url')
+            
+            if not form_url:
+                logger.error(f"Google Script succeeded but returned no URL. Full response: {result}")
+                return jsonify({'success': False, 'error': 'Google Script did not return a Form URL'}), 500
+            
+            cursor.execute(
+                "UPDATE events SET form_url = ?, form_id = ?, form_edit_url = ?, status = ? WHERE id = ?",
+                (form_url, form_id, form_edit_url, 'active', event_id)
+            )
+            conn.commit()
+            
+            logger.info(f"Generated form for event #{event_id}")
+            return jsonify({'success': True, 'form_url': form_url, 'form_id': form_id}), 200
+            
+        finally:
             conn.close()
-            return jsonify({'success': False, 'error': 'Event not found'}), 404
-        
-        # Call Google Apps Script
-        secret = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
-        webhook_url = request.host_url.rstrip('/') + '/api/v1/webhook/forms/submit'
-        
-        payload = {
-            'secret': secret,
-            'action': 'create_form',
-            'speaker_name': event['speaker_name'],
-            'venue_date': event['venue_date'],
-            'webhook_url': webhook_url,
-            'event_id': event_id
-        }
-        
-        success, result, error = _call_google_apps_script(apps_script_url, payload, timeout=90)
-        
-        if not success:
-            conn.close()
-            return jsonify({'success': False, 'error': error}), 500
-        
-        form_url = result.get('form_url')
-        form_id = result.get('form_id')
-        form_edit_url = result.get('form_edit_url')
-        
-        if not form_url:
-            logger.error(f"Google Script succeeded but returned no URL. Full response: {result}")
-            conn.close()
-            return jsonify({'success': False, 'error': 'Google Script did not return a Form URL'}), 500
-        
-        cursor.execute(
-            "UPDATE events SET form_url = ?, form_id = ?, form_edit_url = ?, status = ? WHERE id = ?",
-            (form_url, form_id, form_edit_url, 'active', event_id)
-        )
-        conn.commit()
-        conn.close()
-        
-        logger.info(f"Generated form for event #{event_id}")
-        return jsonify({'success': True, 'form_url': form_url, 'form_id': form_id}), 200
-        
+            
     except Exception as e:
         logger.error(f"Error generating form: {str(e)}", exc_info=True)
-        
-        if conn:
-            try:
-                conn.close()
-            except:
-                pass
-        
         return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @admin_bp.route('/sync-responses', methods=['POST'])
 @log_endpoint_access
@@ -635,7 +641,7 @@ def sync_responses():
             name = (resp.get('name_of_student') or '').strip().lower()
             roll_no = (resp.get('roll_no_original') or '').strip().upper()
             
-            # Enhanced duplicate check: form_id + roll_no + venue_date
+            # Enhanced duplicate check: timestamp + roll_no + form_id
             # This prevents issues with name variations and timezone issues
             cursor.execute("""
                 SELECT id FROM dashboard_data 
