@@ -1,23 +1,31 @@
-# Use official Python 3.11 image
-FROM python:3.11-slim
+FROM python:3.9-slim
 
-# Set working directory to /app
 WORKDIR /app
 
-# Copy the requirements file into the container
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
 COPY requirements.txt .
 
-# Install dependencies
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Download required NLTK data using python -c
-RUN python -c "import nltk; nltk.download('punkt_tab'); nltk.download('stopwords')"
-
-# Copy the rest of the application code
+# Copy application code
 COPY . .
 
-# Expose port (Hugging Face Spaces uses 7860 by default)
+# Create logs directory and data directory
+RUN mkdir -p logs data
+
+# Expose port (HF Spaces uses 7860)
 EXPOSE 7860
 
-# Command to run the application using Gunicorn (or you can use python app.py)
-CMD ["gunicorn", "-b", "0.0.0.0:7860", "app:app"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:7860/api/v1/health')" || exit 1
+
+# Run application
+CMD ["python", "app.py"]
