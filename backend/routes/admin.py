@@ -192,52 +192,104 @@ def fetch_google_link():
 @admin_bp.route('/create-event', methods=['POST'])
 @log_endpoint_access
 def create_event():
-    """Stub to satisfy the frontend's event creation request"""
-    import time
-    data = request.get_json() or {}
-    return jsonify({
-        'success': True, 
-        'event_id': int(time.time()),
-        'speaker_name': data.get('speaker_name', ''),
-        'venue_date': data.get('venue_date', '')
-    }), 200
+    """Create a new feedback event in the database"""
+    try:
+        data = request.get_json() or {}
+        speaker_name = data.get('speaker_name')
+        venue_date = data.get('venue_date')
+        
+        if not speaker_name or not venue_date:
+            return jsonify({'success': False, 'error': 'Speaker name and venue date are required'}), 400
+            
+        db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "INSERT INTO events (speaker_name, venue_date, status) VALUES (?, ?, ?)",
+            (speaker_name, venue_date, 'pending')
+        )
+        event_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'event_id': event_id,
+            'speaker_name': speaker_name,
+            'venue_date': venue_date
+        }), 200
+    except Exception as e:
+        logger.error(f"Error creating event: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @admin_bp.route('/events', methods=['GET'])
 def get_events():
-    """Get list of feedback events (stub)"""
-    return jsonify({'success': True, 'events': []}), 200
+    """Get list of real feedback events from the database"""
+    try:
+        db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT e.*, 
+                   (SELECT COUNT(*) FROM dashboard_data d WHERE d.alumni_speaker_name = e.speaker_name) as responses
+            FROM events e 
+            ORDER BY e.created_at DESC
+        """)
+        rows = cursor.fetchall()
+        
+        events = []
+        for row in rows:
+            events.append(dict(row))
+            
+        conn.close()
+        return jsonify({'success': True, 'events': events}), 200
+    except Exception as e:
+        logger.error(f"Error fetching events: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @admin_bp.route('/generate-form', methods=['POST'])
 def generate_form():
-    """Call Google Apps Script to generate a form"""
+    """Call Google Apps Script to generate a form and save it to the database"""
     try:
         import urllib.request
         import json
         data = request.get_json() or {}
+        event_id = data.get('event_id')
         
+        if not event_id:
+            return jsonify({'success': False, 'error': 'event_id is required'}), 400
+            
+        # Get event details from DB
+        db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM events WHERE id = ?", (event_id,))
+        event = cursor.fetchone()
+        
+        if not event:
+            conn.close()
+            return jsonify({'success': False, 'error': 'Event not found'}), 404
+            
         apps_script_url = os.getenv('APPS_SCRIPT_URL')
         if not apps_script_url:
+            conn.close()
             return jsonify({
                 'success': False, 
-                'error': 'APPS_SCRIPT_URL is not configured in environment variables. Please add your script URL to HF Secrets.'
+                'error': 'APPS_SCRIPT_URL is not configured'
             }), 400
             
         secret = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
-        
         webhook_url = request.host_url.rstrip('/') + '/api/v1/webhook/forms/submit'
-        
-        event_id = data.get('event_id')
-        if not event_id:
-            event_id = int(datetime.utcnow().timestamp())
-            
-        speaker_name = data.get('speaker_name', f'Speaker {event_id}')
-        venue_date = data.get('venue_date', datetime.utcnow().strftime('%Y-%m-%d'))
         
         payload = {
             'secret': secret,
             'action': 'create_form',
-            'speaker_name': speaker_name,
-            'venue_date': venue_date,
+            'speaker_name': event['speaker_name'],
+            'venue_date': event['venue_date'],
             'webhook_url': webhook_url,
             'event_id': event_id
         }
@@ -255,14 +307,26 @@ def generate_form():
                 response_data = json.loads(response.read().decode('utf-8'))
                 
                 if response_data.get('success'):
+                    # Success! Update event in DB
+                    form_url = response_data.get('form_url')
+                    form_id = response_data.get('form_id')
+                    form_edit_url = response_data.get('form_edit_url')
+                    
+                    cursor.execute(
+                        "UPDATE events SET form_url = ?, form_id = ?, form_edit_url = ?, status = ? WHERE id = ?",
+                        (form_url, form_id, form_edit_url, 'active', event_id)
+                    )
+                    conn.commit()
+                    conn.close()
+                    
                     return jsonify(response_data), 200
                 else:
-                    err_msg = response_data.get('error', 'Google Apps Script returned an error.')
-                    logger.error(f"Apps Script creation failed: {err_msg}")
+                    conn.close()
+                    err_msg = response_data.get('error', 'Google Script error')
                     return jsonify({'success': False, 'error': err_msg}), 400
         except Exception as api_err:
-            logger.error(f"HTTP Request failed: {str(api_err)}")
-            return jsonify({'success': False, 'error': f"Failed to connect to Google Script: {str(api_err)}"}), 500
+            conn.close()
+            return jsonify({'success': False, 'error': f"Connection error: {str(api_err)}"}), 500
             
     except Exception as e:
         logger.error(f"Error generating form: {str(e)}")

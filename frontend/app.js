@@ -1775,7 +1775,12 @@ class SmartCalendar {
             if (!fmData.success) throw new Error(fmData.error || 'Failed to generate form');
 
             _currentFormUrl = fmData.form_url;
-            document.getElementById('fb-form-url-text').textContent = fmData.form_url;
+            console.log("New Form URL:", _currentFormUrl);
+            
+            const urlEl = document.getElementById('fb-form-url-text');
+            urlEl.textContent = _currentFormUrl || 'Error: URL not returned';
+            urlEl.style.color = '#ffffff'; // Make it pop on dark background
+            
             document.getElementById('fb-result').style.display = 'block';
 
             btn.textContent = 'Generate Another Form';

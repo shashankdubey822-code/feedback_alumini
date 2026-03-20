@@ -69,6 +69,19 @@ def _initialize_database(app, logger):
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    speaker_name TEXT NOT NULL,
+                    venue_date TEXT NOT NULL,
+                    form_id TEXT,
+                    form_url TEXT,
+                    form_edit_url TEXT,
+                    status TEXT DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
             conn.commit()
             logger.info("Database initialized successfully")
         else:
