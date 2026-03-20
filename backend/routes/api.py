@@ -292,8 +292,8 @@ def get_consolidated_analytics(app, filters=None, search=None):
                 avg_rating = 0
             else:
                 name = s.get('speaker_name') or s.get('speaker') or s.get('name') or 'Unknown'
-                count = s.get('sessions') or s.get('count') or 1
-                avg_rating = s.get('avg_rating') or 0
+                count = s.get('session_count') or s.get('sessions') or s.get('count') or 1
+                avg_rating = s.get('average_rating') or s.get('avg_rating') or 0
                 
             speaker_list.append({
                 'name': name,
