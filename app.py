@@ -25,8 +25,10 @@ def _initialize_database(app, logger):
         import sqlite3
         db_path = app.config.get('DATABASE_PATH', 'database/dashboard.db')
 
-        # Create database directory if it doesn't exist
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        # Create database directory if it doesn't exist (and if there is a directory specified)
+        db_dir = os.path.dirname(db_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
 
         # Connect to database
         conn = sqlite3.connect(db_path)
