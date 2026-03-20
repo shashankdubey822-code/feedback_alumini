@@ -349,6 +349,7 @@ body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    min-width: 0;
 }
 
 /* ── Top Bar ── */
@@ -964,6 +965,7 @@ body {
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     background: var(--bg-card);
+    width: 100%;
 }
 #data-table {
     width: 100%;
