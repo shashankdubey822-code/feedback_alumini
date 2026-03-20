@@ -22,12 +22,19 @@ from backend.routes.admin import admin_bp
 def create_app(config=None):
     """Application factory for Flask app"""
 
-    # Create Flask app
-    app = Flask(__name__)
+    # Key: tell Flask where the frontend is
+    frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'frontend')
+
+    # Create Flask app with frontend/ as its template+static folder
+    app = Flask(
+        __name__,
+        static_folder=frontend_dir,
+        static_url_path='/static'
+    )
 
     # Load configuration
     if config is None:
-        app.config.from_object(get_config())
+        app.config.from_object(get_config()())
     else:
         app.config.from_object(config)
 
@@ -50,37 +57,43 @@ def create_app(config=None):
     app.register_blueprint(webhook_bp)
     app.register_blueprint(admin_bp)
 
-    # Serve static frontend files
+    # ─── Serve the single-page frontend ──────────────────────
     @app.route('/')
     def serve_index():
-        """Serve main index.html"""
-        frontend_path = os.path.join(os.path.dirname(__file__), 'frontend')
-        if os.path.exists(frontend_path):
-            return send_from_directory(frontend_path, 'index.html')
+        """Serve main index.html from the frontend directory"""
+        if os.path.exists(os.path.join(frontend_dir, 'index.html')):
+            return send_from_directory(frontend_dir, 'index.html')
         return jsonify({'message': 'Alumni Feedback System API v1.0.0'}), 200
 
-    @app.route('/static/<path:path>')
-    def serve_static(path):
-        """Serve static files (CSS, JS, etc.) from the frontend directory"""
-        frontend_path = os.path.join(os.path.dirname(__file__), 'frontend')
-        return send_from_directory(frontend_path, path)
+    # NOTE: /static/<path> is handled automatically by Flask since we set
+    # static_folder=frontend_dir and static_url_path='/static'.
+    # Flask will serve frontend/style.css at /static/style.css, etc.
 
-    # Legacy routes for Premium frontend compatibility
+    # ─── Legacy bridge routes for Premium frontend ────────────
     @app.route('/api/data', methods=['GET'])
     def get_legacy_data():
-        """Bridge route to serve the consolidated analytics object expected by app.js"""
-        from backend.routes.api import get_consolidated_analytics
-        return jsonify(get_consolidated_analytics(app)), 200
+        """Unified analytics payload for the Premium frontend (app.js)"""
+        try:
+            from backend.routes.api import get_consolidated_analytics
+            return jsonify(get_consolidated_analytics(app)), 200
+        except Exception as e:
+            logger.error(f"Error in /api/data: {str(e)}")
+            return jsonify({'error': str(e)}), 500
 
     @app.route('/api/filter', methods=['POST'])
     def get_legacy_filter():
-        """Bridge route for filtering expected by app.js"""
-        from backend.routes.api import get_consolidated_analytics
-        filters = request.get_json().get('filters', {})
-        search = request.get_json().get('search', '')
-        return jsonify(get_consolidated_analytics(app, filters=filters, search=search)), 200
+        """Filtered analytics payload for the Premium frontend"""
+        try:
+            from backend.routes.api import get_consolidated_analytics
+            body = request.get_json() or {}
+            filters = body.get('filters', {})
+            search = body.get('search', '')
+            return jsonify(get_consolidated_analytics(app, filters=filters, search=search)), 200
+        except Exception as e:
+            logger.error(f"Error in /api/filter: {str(e)}")
+            return jsonify({'error': str(e)}), 500
 
-    # Error handlers
+    # ─── Error handlers ───────────────────────────────────────
     @app.errorhandler(404)
     def not_found(error):
         return jsonify({'error': 'Resource not found'}), 404
@@ -97,82 +110,21 @@ def create_app(config=None):
     @app.before_request
     def log_request():
         """Log incoming requests"""
-        from flask import request
-        logger.debug(f"{request.method} {request.path} from {request.remote_addr}")
+        from flask import request as req
+        logger.debug(f"{req.method} {req.path} from {req.remote_addr}")
 
     @app.after_request
     def log_response(response):
         """Log response"""
-        from flask import request
-        logger.info(f"{request.method} {request.path} - {response.status_code}")
+        from flask import request as req
+        logger.info(f"{req.method} {req.path} - {response.status_code}")
         return response
-
-    # CLI commands for database management
-    @app.cli.command('init-db')
-    def init_db():
-        """Initialize the database"""
-        logger.info("Initializing database...")
-        try:
-            import sqlite3
-            db_path = app.config.get('DATABASE_PATH', 'database/dashboard.db')
-            os.makedirs(os.path.dirname(db_path), exist_ok=True)
-
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-
-            # Check if table exists
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='dashboard_data'"
-            )
-
-            if not cursor.fetchone():
-                logger.info("Creating dashboard_data table...")
-                # Create table if it doesn't exist
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS dashboard_data (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        timestamp_original TEXT,
-                        timestamp_normalized TEXT,
-                        name_of_student TEXT,
-                        name_normalized TEXT,
-                        department_original TEXT,
-                        department_cleaned TEXT,
-                        roll_no_original TEXT,
-                        roll_no_cleaned TEXT,
-                        date_of_lecture TEXT,
-                        alumni_speaker_name TEXT,
-                        session_help_understanding TEXT,
-                        session_rating INTEGER,
-                        session_technical_clarity INTEGER,
-                        aspect_most_valuable TEXT,
-                        improvements_suggestions TEXT,
-                        future_topics TEXT,
-                        form_source TEXT,
-                        data_quality_score REAL,
-                        is_duplicate_flag INTEGER DEFAULT 0,
-                        record_status TEXT,
-                        cleaned_at TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                conn.commit()
-                logger.info("Database initialized successfully")
-            else:
-                logger.info("Database already exists")
-
-            conn.close()
-
-        except Exception as e:
-            logger.error(f"Error initializing database: {str(e)}")
-            return 1
-
-        return 0
 
     logger.info("Application initialized successfully")
     return app
 
 
-# Application entry point for Hugging Face Spaces
+# ─── Entry point for Hugging Face Spaces ─────────────────────
 if __name__ == '__main__':
     app = create_app()
 

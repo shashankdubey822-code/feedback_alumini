@@ -63,7 +63,6 @@ def get_records():
         from flask import current_app
         services = get_services(current_app)
 
-        # Get filters from query parameters
         department = request.args.get('department', None)
         start_date = request.args.get('start_date', None)
         end_date = request.args.get('end_date', None)
@@ -74,8 +73,6 @@ def get_records():
         elif start_date and end_date:
             records = services['analytics'].get_records_by_date_range(start_date, end_date)
         else:
-            # Get all records
-            from backend.models.schemas import FeedbackRecord
             conn = services['analytics'].get_connection()
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM dashboard_data ORDER BY timestamp_normalized DESC LIMIT ?', (limit,))
@@ -209,127 +206,181 @@ def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
 
 
+# ════════════════════════════════════════════════════════════════════
+#  CONSOLIDATED ANALYTICS  —  used by /api/data and /api/filter
+#  This bridges the modular backend to the Premium frontend (app.js)
+# ════════════════════════════════════════════════════════════════════
+
 def get_consolidated_analytics(app, filters=None, search=None):
     """
-    Consolidate data from all services into the format expected by the Premium frontend.
-    This function bridges the modular backend services with the 'Premium' UI.
+    Build the full data payload expected by the Premium frontend SPA.
+    KPIService.get_all_kpis() returns a Dict, NOT a list.
     """
-    services = get_services(app)
     db_path = app.config.get('DATABASE_PATH', 'database/dashboard.db')
-    
-    # 1. Basic Stats & KPIs
-    kpi_service = services['kpi']
-    kpis = kpi_service.get_all_kpis()
-    
-    # Format KPIs for frontend
+
+    # ── 1. KPIs ─────────────────────────────────────────────────────
+    try:
+        kpi_service = KPIService(db_path)
+        kpi_dict = kpi_service.get_all_kpis()   # returns Dict[str, float]
+    except Exception:
+        kpi_dict = {}
+
+    LABEL_MAP = {
+        'engagement_rate':         'Engagement Rate',
+        'satisfaction_score':      'Satisfaction Score',
+        'completion_rate':         'Completion Rate',
+        'department_coverage':     'Dept Coverage',
+        'submission_velocity_7d':  'Submissions / Day (7d)',
+        'submission_velocity_30d': 'Submissions / Day (30d)',
+    }
+    UNIT_MAP = {
+        'engagement_rate':     '%',
+        'satisfaction_score':  '%',
+        'completion_rate':     '%',
+        'department_coverage': '%',
+    }
     formatted_kpis = []
-    for k in kpis:
+    for key, val in kpi_dict.items():
+        unit = UNIT_MAP.get(key, '')
         formatted_kpis.append({
-            'label': k.get('name', k.get('label', 'KPI')),
-            'value': k.get('value', 0),
-            'sub': k.get('change_label', '')
+            'label': LABEL_MAP.get(key, key.replace('_', ' ').title()),
+            'value': f"{val}{unit}" if val is not None else 'N/A',
+            'sub':   ''
         })
 
-    # 2. Charts
-    chart_service = services['charts']
-    raw_charts = chart_service.get_all_chart_data()
-    
-    # Transform raw charts into Premium format if needed
-    formatted_charts = []
-    # (Simplified transformation for now, would ideally match Chart.js schema)
-    for chart_type, data in raw_charts.items():
-        if chart_type == 'rating_distribution':
-            formatted_charts.append({
-                'title': 'Session Ratings',
-                'type': 'doughnut',
-                'labels': [d['label'] for d in data],
-                'data': [d['value'] for d in data]
-            })
-        elif chart_type == 'department_ratings':
-            formatted_charts.append({
-                'title': 'Department Ratings',
-                'type': 'bar',
-                'labels': [d['department'] for d in data],
-                'data': [d['average_rating'] for d in data],
-                'yLabel': 'Avg Rating'
-            })
+    # ── 2. Charts ────────────────────────────────────────────────────
+    try:
+        chart_service = ChartService(db_path)
+        raw_charts = chart_service.get_all_chart_data()
+    except Exception:
+        raw_charts = {}
 
-    # 3. Speakers
-    speaker_service = services['speakers']
-    speakers = speaker_service.get_all_speakers()
-    
-    # 4. Table Data & Meta
+    formatted_charts = []
+    rd = raw_charts.get('rating_distribution', [])
+    if rd:
+        formatted_charts.append({
+            'title':  'Session Rating Distribution',
+            'type':   'doughnut',
+            'labels': [d.get('label', '') for d in rd],
+            'data':   [d.get('value', 0)  for d in rd],
+        })
+    dr = raw_charts.get('department_ratings', [])
+    if dr:
+        formatted_charts.append({
+            'title':  'Avg Rating by Department',
+            'type':   'bar',
+            'labels': [d.get('department', '')      for d in dr],
+            'data':   [d.get('average_rating', 0)   for d in dr],
+            'yLabel': 'Avg Rating',
+            'xLabel': 'Department',
+        })
+
+    # ── 3. Speakers ──────────────────────────────────────────────────
+    try:
+        speaker_service = SpeakerService(db_path)
+        raw_speakers = speaker_service.get_all_speakers()
+    except Exception:
+        raw_speakers = []
+
+    speaker_stats_payload = []
+    if raw_speakers:
+        first = raw_speakers[0]
+        if isinstance(first, str):
+            speaker_stats_payload = [{'speaker': s, 'sessions': 1} for s in raw_speakers[:10]]
+        elif isinstance(first, dict):
+            speaker_stats_payload = [
+                {
+                    'speaker':  s.get('speaker', s.get('name', '')),
+                    'sessions': s.get('sessions', s.get('count', 1))
+                }
+                for s in raw_speakers[:10]
+            ]
+
+    # ── 4. Table data & meta ─────────────────────────────────────────
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    
-    # Get columns
+
+    # Get column names
     cursor.execute("PRAGMA table_info(dashboard_data)")
-    cols_info = cursor.fetchall()
-    columns = [c['name'] for c in cols_info]
-    
-    # Simple query for all data
+    columns = [row['name'] for row in cursor.fetchall()]
+
+    # Build filtered query (whitelist columns to prevent injection)
     query = "SELECT * FROM dashboard_data"
     where_clauses = []
     params = []
-    
+
     if filters:
         for col, val in filters.items():
-            if val:
-                where_clauses.append(f"{col} = ?")
+            if val is not None and col in columns:
+                where_clauses.append(f"`{col}` = ?")
                 params.append(val)
-    
-    if search:
-        search_clauses = [f"{col} LIKE ?" for col in columns]
+
+    if search and columns:
+        search_clauses = [f"`{col}` LIKE ?" for col in columns]
         where_clauses.append(f"({' OR '.join(search_clauses)})")
         params.extend([f"%{search}%"] * len(columns))
-        
+
     if where_clauses:
         query += " WHERE " + " AND ".join(where_clauses)
-        
     query += " ORDER BY id DESC LIMIT 1000"
-    
+
     cursor.execute(query, params)
-    rows = cursor.fetchall()
-    table_data = [dict(r) for r in rows]
-    conn.close()
+    table_data = [dict(row) for row in cursor.fetchall()]
 
-    # 5. Filters
+    # Build filter panel options
     formatted_filters = []
-    # Identify categorical columns (e.g., Department)
-    target_filter_cols = ['department_cleaned', 'alumni_speaker_name', 'session_rating']
-    for col in target_filter_cols:
+    for col in ['department_cleaned', 'alumni_speaker_name']:
         if col in columns:
-            cursor.execute(f"SELECT DISTINCT {col} FROM dashboard_data WHERE {col} IS NOT NULL AND {col} != ''")
-            options = [{'value': str(r[0]), 'count': 0} for r in cursor.fetchall()]
-            formatted_filters.append({
-                'column': col,
-                'type': 'categorical' if col != 'session_rating' else 'numeric',
-                'options': options
-            })
+            cursor.execute(
+                f"SELECT DISTINCT `{col}`, COUNT(*) as cnt "
+                f"FROM dashboard_data "
+                f"WHERE `{col}` IS NOT NULL AND `{col}` != '' "
+                f"GROUP BY `{col}` ORDER BY cnt DESC"
+            )
+            opts = [{'value': str(r[0]), 'count': r[1]} for r in cursor.fetchall()]
+            if opts:
+                formatted_filters.append({'column': col, 'type': 'categorical', 'options': opts})
 
-    # 6. NLP / Sentiment (Stub for now, can be populated via NLPService)
-    # nlp_service = services['nlp']
-    
     conn.close()
 
-    # Construct final object
+    # ── 5. Total Responses KPI ───────────────────────────────────────
+    total_count = len(table_data)
+    formatted_kpis.insert(0, {
+        'label': 'Total Responses',
+        'value': str(total_count),
+        'sub':   'All-time records'
+    })
+
+    # ── 6. Column type detection ─────────────────────────────────────
+    num_keywords  = {'rating', 'score', 'count', 'num', 'total', 'age', 'year'}
+    date_keywords = {'date', 'time', 'timestamp'}
+    col_types = {}
+    for col in columns:
+        cl = col.lower()
+        if any(k in cl for k in date_keywords):
+            col_types[col] = 'date'
+        elif any(k in cl for k in num_keywords):
+            col_types[col] = 'numeric'
+        else:
+            col_types[col] = 'text'
+
     return {
-        'kpis': formatted_kpis,
-        'filters': formatted_filters,
-        'aiInsights': [
-            {'type': 'trend', 'icon': '📈', 'text': 'Data synchronized successfully.'},
-            {'type': 'success', 'icon': '🎯', 'text': f'Found {len(table_data)} feedback records in database.'}
+        'kpis':         formatted_kpis,
+        'filters':      formatted_filters,
+        'aiInsights':   [
+            {'type': 'trend',   'icon': '📈', 'text': 'Dashboard data synchronized.'},
+            {'type': 'success', 'icon': '🎯', 'text': f'Found {total_count} feedback records.'}
         ],
-        'charts': formatted_charts,
-        'timeTrends': [],
-        'sentiment': [],
-        'keywords': [],
-        'speakerStats': [{'speaker': s, 'sessions': 1} for s in speakers[:5]],
-        'tableData': table_data,
+        'charts':       formatted_charts,
+        'timeTrends':   [],
+        'sentiment':    [],
+        'keywords':     [],
+        'speakerStats': speaker_stats_payload,
+        'tableData':    table_data,
         'meta': {
-            'columns': columns,
-            'columnTypes': {c: 'text' for c in columns}, # Simplified
-            'filename': 'Hugging Face Database'
+            'columns':     columns,
+            'columnTypes': col_types,
+            'filename':    'Hugging Face Database'
         }
     }

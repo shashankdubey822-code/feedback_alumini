@@ -90,7 +90,7 @@ def fetch_google_link():
 @admin_bp.route('/events', methods=['GET'])
 def get_events():
     """Get list of feedback events (stub)"""
-    return jsonify([]), 200
+    return jsonify({'success': True, 'events': []}), 200
 
 @admin_bp.route('/generate_form', methods=['POST'])
 def generate_form():
