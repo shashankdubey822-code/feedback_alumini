@@ -284,17 +284,28 @@ def get_consolidated_analytics(app, filters=None, search=None):
 
     speaker_stats_payload = []
     if raw_speakers:
-        first = raw_speakers[0]
-        if isinstance(first, str):
-            speaker_stats_payload = [{'speaker': s, 'sessions': 1} for s in raw_speakers[:10]]
-        elif isinstance(first, dict):
-            speaker_stats_payload = [
-                {
-                    'speaker':  s.get('speaker', s.get('name', '')),
-                    'sessions': s.get('sessions', s.get('count', 1))
-                }
-                for s in raw_speakers[:10]
-            ]
+        speaker_list = []
+        for s in raw_speakers[:10]:
+            if isinstance(s, str):
+                name = s
+                count = 1
+                avg_rating = 0
+            else:
+                name = s.get('speaker_name') or s.get('speaker') or s.get('name') or 'Unknown'
+                count = s.get('sessions') or s.get('count') or 1
+                avg_rating = s.get('avg_rating') or 0
+                
+            speaker_list.append({
+                'name': name,
+                'count': count,
+                'sentiment': 0.0,
+                'ratings': {'Rating': round(float(avg_rating), 1)} if avg_rating else {}
+            })
+            
+        speaker_stats_payload = [{
+            'column': 'Alumni Speaker Name',
+            'speakers': speaker_list
+        }]
 
     # ── 4. Table data & meta ─────────────────────────────────────────
     conn = sqlite3.connect(db_path)
