@@ -42,6 +42,44 @@ document.addEventListener('DOMContentLoaded', () => {
     loadInitialData();
 });
 
+// ========== TOAST NOTIFICATIONS ==========
+function showNotification(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-size: 14px;
+        z-index: 10000;
+        animation: slideIn 0.3s ease-out;
+        max-width: 400px;
+        word-wrap: break-word;
+        font-family: Inter, sans-serif;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    `;
+
+    if (type === 'error') {
+        toast.style.background = '#ef4444';
+        toast.style.color = '#fff';
+    } else if (type === 'success') {
+        toast.style.background = '#10b981';
+        toast.style.color = '#fff';
+    } else {
+        toast.style.background = '#6366f1';
+        toast.style.color = '#fff';
+    }
+
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
 // ========== DATA LOADING ==========
 async function loadInitialData() {
     try {
@@ -121,13 +159,13 @@ function setupUploadHandlers() {
 
 async function handleFile(file) {
     if (!file.name.match(/\.(csv|tsv|txt)$/i)) {
-        alert('Please upload a CSV, TSV, or TXT file.');
+        showNotification('Please upload a CSV, TSV, or TXT file.', 'error');
         return;
     }
     
     const token = localStorage.getItem('adminToken');
     if (!token) {
-        alert('Admin session expired');
+        showNotification('Admin session expired', 'error');
         return;
     }
 
@@ -160,7 +198,7 @@ async function handleFile(file) {
         }, 800);
 
     } catch (err) {
-        alert('Error: ' + err.message);
+        showNotification('Error: ' + err.message, 'error');
         hideProgress();
     }
 }
@@ -303,13 +341,13 @@ function setupAdminAuth() {
         btnGoogleFetch.addEventListener('click', async () => {
             const url = document.getElementById('google-link-input').value.trim();
             if (!url) {
-                alert('Please enter a valid Google Sheets link');
+                showNotification('Please enter a valid Google Sheets link', 'error');
                 return;
             }
 
             const token = localStorage.getItem('adminToken');
             if (!token) {
-                alert('Admin session expired');
+                showNotification('Admin session expired', 'error');
                 return;
             }
 
@@ -337,7 +375,7 @@ function setupAdminAuth() {
                     loadInitialData();
                 }, 1000);
             } catch (err) {
-                alert('Error: ' + err.message);
+                showNotification('Error: ' + err.message, 'error');
                 hideProgress();
             }
         });
@@ -1217,7 +1255,7 @@ function updateShowingCount() {
 // ========== DOWNLOAD ==========
 function downloadFilteredCSV() {
     if (!state.tableData || state.tableData.length === 0) {
-        alert('No data to download.');
+        showNotification('No data to download.', 'error');
         return;
     }
 
