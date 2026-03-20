@@ -285,7 +285,7 @@ def get_consolidated_analytics(app, filters=None, search=None):
     speaker_stats_payload = []
     if raw_speakers:
         speaker_list = []
-        for s in raw_speakers[:10]:
+        for s in raw_speakers[:]:
             if isinstance(s, str):
                 name = s
                 count = 1
