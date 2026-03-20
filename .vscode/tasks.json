@@ -21,10 +21,7 @@
       "label": "HF: Check Space Status",
       "type": "shell",
       "command": "python",
-      "args": [
-        "-c",
-        "from huggingface_hub import model_info; import os; print('Connecting to HF Space...'); print('Space ID: vrfefavr/Feedback_DashBoard')"
-      ],
+      "args": ["hf_helper.py", "info"],
       "presentation": {
         "reveal": "always",
         "panel": "new"
@@ -34,8 +31,8 @@
     {
       "label": "HF: Login to Hugging Face",
       "type": "shell",
-      "command": "huggingface-cli",
-      "args": ["login"],
+      "command": "python",
+      "args": ["hf_helper.py", "auth"],
       "presentation": {
         "reveal": "always",
         "panel": "new",
@@ -46,8 +43,19 @@
     {
       "label": "HF: Validate Credentials",
       "type": "shell",
-      "command": "huggingface-cli",
-      "args": ["whoami"],
+      "command": "python",
+      "args": ["hf_helper.py", "auth"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "HF: List Space Files",
+      "type": "shell",
+      "command": "python",
+      "args": ["hf_helper.py", "files"],
       "presentation": {
         "reveal": "always",
         "panel": "new"
@@ -77,10 +85,10 @@
       "problemMatcher": []
     },
     {
-      "label": "Git: Commit & Push to HF",
+      "label": "Git: Quick Push",
       "type": "shell",
-      "command": "bash",
-      "args": ["-c", "git status && echo '\\n--- Ready to push? Run: git push huggingface main ---\\n'"],
+      "command": "python",
+      "args": ["hf_helper.py", "push"],
       "presentation": {
         "reveal": "always",
         "panel": "new"
