@@ -307,11 +307,16 @@ def generate_form():
                 response_data = json.loads(response.read().decode('utf-8'))
                 
                 if response_data.get('success'):
-                    # Success! Update event in DB
-                    form_url = response_data.get('form_url')
-                    form_id = response_data.get('form_id')
-                    form_edit_url = response_data.get('form_edit_url')
+                    # The Google Apps Script nests the result inside a 'data' key
+                    result = response_data.get('data', {})
+                    form_url = result.get('form_url')
+                    form_id = result.get('form_id')
+                    form_edit_url = result.get('form_edit_url')
                     
+                    if not form_url:
+                        logger.error(f"Google Script succeeded but returned no URL. Full response: {response_data}")
+                        return jsonify({'success': False, 'error': 'Google Script did not return a Form URL'}), 500
+
                     cursor.execute(
                         "UPDATE events SET form_url = ?, form_id = ?, form_edit_url = ?, status = ? WHERE id = ?",
                         (form_url, form_id, form_edit_url, 'active', event_id)
@@ -319,7 +324,8 @@ def generate_form():
                     conn.commit()
                     conn.close()
                     
-                    return jsonify(response_data), 200
+                    # Also return the nested data directly to the frontend
+                    return jsonify({'success': True, 'form_url': form_url, 'form_id': form_id}), 200
                 else:
                     conn.close()
                     err_msg = response_data.get('error', 'Google Script error')
