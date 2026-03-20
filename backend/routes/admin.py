@@ -6,6 +6,7 @@ from flask import Blueprint, request, jsonify, current_app
 import os
 import sqlite3
 import pandas as pd
+import re
 from datetime import datetime
 from ..utils.logger import get_logger, log_endpoint_access
 
@@ -15,6 +16,105 @@ admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
 
 # Simple hardcoded password for now (could be an environment variable)
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
+
+
+def _canonicalize_column(name):
+    """Convert an input column to a canonical key for flexible matching."""
+    return re.sub(r'[^a-z0-9]+', '', str(name).strip().lower())
+
+
+def _normalize_dataframe_for_dashboard(df, source='csv_upload'):
+    """Map raw CSV columns into dashboard_data schema columns."""
+    column_map = {
+        'timestamp': 'timestamp_original',
+        'timestamporiginal': 'timestamp_original',
+        'timestampnormalized': 'timestamp_normalized',
+        'nameofstudent': 'name_of_student',
+        'namenormalized': 'name_normalized',
+        'department': 'department_original',
+        'departmentoriginal': 'department_original',
+        'departmentcleaned': 'department_cleaned',
+        'rollno': 'roll_no_original',
+        'rollnooriginal': 'roll_no_original',
+        'rollnocleaned': 'roll_no_cleaned',
+        'dateofthelecture': 'date_of_lecture',
+        'alumnispeakername': 'alumni_speaker_name',
+        'didthesessionhelpyougainabetterunderstandingofindustrytrendsorcareerpaths': 'session_help_understanding',
+        'sessionhelpunderstanding': 'session_help_understanding',
+        'whataspectofthesessiondidyoufindmostvaluable': 'aspect_most_valuable',
+        'aspectmostvaluable': 'aspect_most_valuable',
+        'howwouldyouratethesessionoverall1poor2fair3good4verygood5excellent': 'session_rating',
+        'sessionrating': 'session_rating',
+        'sessiontechnicalclarity': 'session_technical_clarity',
+        'whatimprovementsorsuggestionswouldyourecommendforfuturealumnisessions': 'improvements_suggestions',
+        'improvementssuggestions': 'improvements_suggestions',
+        'anyspecifictopicsorareasyoudlikefuturealumnispeakerstocover': 'future_topics',
+        'futuretopics': 'future_topics',
+        'formsource': 'form_source',
+        'dataqualityscore': 'data_quality_score',
+        'isduplicateflag': 'is_duplicate_flag',
+        'recordstatus': 'record_status',
+        'cleanedat': 'cleaned_at',
+    }
+
+    rename_map = {}
+    for col in df.columns:
+        canonical_key = _canonicalize_column(col)
+        target_col = column_map.get(canonical_key)
+        if target_col:
+            rename_map[col] = target_col
+
+    normalized_df = df.rename(columns=rename_map).copy()
+
+    if 'timestamp_original' in normalized_df.columns and 'timestamp_normalized' not in normalized_df.columns:
+        parsed = pd.to_datetime(normalized_df['timestamp_original'], errors='coerce')
+        normalized_df['timestamp_normalized'] = parsed.dt.strftime('%Y-%m-%d %H:%M:%S')
+
+    if 'name_of_student' in normalized_df.columns and 'name_normalized' not in normalized_df.columns:
+        normalized_df['name_normalized'] = normalized_df['name_of_student'].astype(str).str.strip()
+
+    if 'department_original' in normalized_df.columns and 'department_cleaned' not in normalized_df.columns:
+        normalized_df['department_cleaned'] = normalized_df['department_original'].astype(str).str.strip()
+
+    if 'roll_no_original' in normalized_df.columns:
+        normalized_df['roll_no_original'] = normalized_df['roll_no_original'].astype(str).str.upper().str.strip()
+        if 'roll_no_cleaned' not in normalized_df.columns:
+            normalized_df['roll_no_cleaned'] = normalized_df['roll_no_original']
+
+    if 'session_rating' in normalized_df.columns:
+        normalized_df['session_rating'] = pd.to_numeric(normalized_df['session_rating'], errors='coerce')
+
+    if 'form_source' not in normalized_df.columns:
+        normalized_df['form_source'] = source
+
+    if 'record_status' not in normalized_df.columns:
+        normalized_df['record_status'] = 'active'
+
+    if 'cleaned_at' not in normalized_df.columns:
+        normalized_df['cleaned_at'] = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+
+    return normalized_df
+
+
+def _append_dashboard_rows(df, db_path, source='csv_upload'):
+    """Normalize and append rows with strict dashboard_data schema alignment."""
+    normalized_df = _normalize_dataframe_for_dashboard(df, source=source)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        cursor = conn.cursor()
+        cursor.execute('PRAGMA table_info(dashboard_data)')
+        table_columns = [row[1] for row in cursor.fetchall()]
+        insert_columns = [col for col in table_columns if col != 'id']
+
+        for col in insert_columns:
+            if col not in normalized_df.columns:
+                normalized_df[col] = None
+
+        aligned_df = normalized_df[insert_columns]
+        aligned_df.to_sql('dashboard_data', conn, if_exists='append', index=False)
+    finally:
+        conn.close()
 
 @admin_bp.route('/login', methods=['POST'])
 @log_endpoint_access
@@ -45,17 +145,7 @@ def upload_csv():
             db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
             df = pd.read_csv(file)
 
-            # Data cleaning and normalization
-            # Convert roll_no to uppercase for consistency
-            if 'roll_no' in df.columns:
-                df['roll_no'] = df['roll_no'].astype(str).str.upper()
-            if 'roll_no_original' in df.columns:
-                df['roll_no_original'] = df['roll_no_original'].astype(str).str.upper()
-
-            conn = sqlite3.connect(db_path)
-            # Replace or append? For this use case, let's append but check for duplicates if possible
-            df.to_sql('dashboard_data', conn, if_exists='append', index=False)
-            conn.close()
+            _append_dashboard_rows(df, db_path, source='file_upload')
 
             return jsonify({'success': True, 'message': f'Uploaded {len(df)} rows'}), 200
         except Exception as e:
@@ -83,16 +173,7 @@ def fetch_google_link():
         db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
         df = pd.read_csv(url)
 
-        # Data cleaning and normalization
-        # Convert roll_no to uppercase for consistency
-        if 'roll_no' in df.columns:
-            df['roll_no'] = df['roll_no'].astype(str).str.upper()
-        if 'roll_no_original' in df.columns:
-            df['roll_no_original'] = df['roll_no_original'].astype(str).str.upper()
-
-        conn = sqlite3.connect(db_path)
-        df.to_sql('dashboard_data', conn, if_exists='append', index=False)
-        conn.close()
+        _append_dashboard_rows(df, db_path, source='google_sheet')
 
         return jsonify({'success': True, 'message': f'Fetched {len(df)} rows from Google Sheets'}), 200
     except Exception as e:
