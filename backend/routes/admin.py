@@ -194,7 +194,7 @@ def get_events():
     """Get list of feedback events (stub)"""
     return jsonify({'success': True, 'events': []}), 200
 
-@admin_bp.route('/generate_form', methods=['POST'])
+@admin_bp.route('/generate-form', methods=['POST'])
 def generate_form():
     """Generate a Google Form (stub)"""
     return jsonify({'success': True, 'form_url': 'https://forms.google.com/test'}), 200
