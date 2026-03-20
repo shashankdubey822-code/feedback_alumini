@@ -84,6 +84,15 @@ def _normalize_dataframe_for_dashboard(df, source='csv_upload'):
     if 'session_rating' in normalized_df.columns:
         normalized_df['session_rating'] = pd.to_numeric(normalized_df['session_rating'], errors='coerce')
 
+    if 'session_technical_clarity' in normalized_df.columns:
+        normalized_df['session_technical_clarity'] = pd.to_numeric(normalized_df['session_technical_clarity'], errors='coerce')
+
+    if 'data_quality_score' in normalized_df.columns:
+        normalized_df['data_quality_score'] = pd.to_numeric(normalized_df['data_quality_score'], errors='coerce')
+
+    if 'is_duplicate_flag' in normalized_df.columns:
+        normalized_df['is_duplicate_flag'] = pd.to_numeric(normalized_df['is_duplicate_flag'], errors='coerce').fillna(0).astype(int)
+
     if 'form_source' not in normalized_df.columns:
         normalized_df['form_source'] = source
 
