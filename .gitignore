@@ -7,3 +7,12 @@ __pycache__/
 .DS_Store
 .env
 dashboard.db
+
+# Data folder structure (tracked), but ignore actual data files
+data/uploads/*.csv
+data/backups/*.db
+data/backups/*.sql
+data/exports/*.json
+# Keep .gitkeep files to maintain folder structure
+!data/**/.gitkeep
+!data/README.md
