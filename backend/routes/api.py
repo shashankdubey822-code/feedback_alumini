@@ -10,6 +10,8 @@ from ..services.speaker_service import SpeakerService
 from ..services.kpi_service import KPIService
 from ..services.time_trend_service import TimeTrendService
 from ..utils.logger import get_logger, log_endpoint_access
+import sqlite3
+import os
 
 logger = get_logger(__name__)
 
@@ -205,3 +207,129 @@ def not_found(error):
 def internal_error(error):
     """Handle 500 errors"""
     return jsonify({'error': 'Internal server error'}), 500
+
+
+def get_consolidated_analytics(app, filters=None, search=None):
+    """
+    Consolidate data from all services into the format expected by the Premium frontend.
+    This function bridges the modular backend services with the 'Premium' UI.
+    """
+    services = get_services(app)
+    db_path = app.config.get('DATABASE_PATH', 'database/dashboard.db')
+    
+    # 1. Basic Stats & KPIs
+    kpi_service = services['kpi']
+    kpis = kpi_service.get_all_kpis()
+    
+    # Format KPIs for frontend
+    formatted_kpis = []
+    for k in kpis:
+        formatted_kpis.append({
+            'label': k.get('name', k.get('label', 'KPI')),
+            'value': k.get('value', 0),
+            'sub': k.get('change_label', '')
+        })
+
+    # 2. Charts
+    chart_service = services['charts']
+    raw_charts = chart_service.get_all_chart_data()
+    
+    # Transform raw charts into Premium format if needed
+    formatted_charts = []
+    # (Simplified transformation for now, would ideally match Chart.js schema)
+    for chart_type, data in raw_charts.items():
+        if chart_type == 'rating_distribution':
+            formatted_charts.append({
+                'title': 'Session Ratings',
+                'type': 'doughnut',
+                'labels': [d['label'] for d in data],
+                'data': [d['value'] for d in data]
+            })
+        elif chart_type == 'department_ratings':
+            formatted_charts.append({
+                'title': 'Department Ratings',
+                'type': 'bar',
+                'labels': [d['department'] for d in data],
+                'data': [d['average_rating'] for d in data],
+                'yLabel': 'Avg Rating'
+            })
+
+    # 3. Speakers
+    speaker_service = services['speakers']
+    speakers = speaker_service.get_all_speakers()
+    
+    # 4. Table Data & Meta
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # Get columns
+    cursor.execute("PRAGMA table_info(dashboard_data)")
+    cols_info = cursor.fetchall()
+    columns = [c['name'] for c in cols_info]
+    
+    # Simple query for all data
+    query = "SELECT * FROM dashboard_data"
+    where_clauses = []
+    params = []
+    
+    if filters:
+        for col, val in filters.items():
+            if val:
+                where_clauses.append(f"{col} = ?")
+                params.append(val)
+    
+    if search:
+        search_clauses = [f"{col} LIKE ?" for col in columns]
+        where_clauses.append(f"({' OR '.join(search_clauses)})")
+        params.extend([f"%{search}%"] * len(columns))
+        
+    if where_clauses:
+        query += " WHERE " + " AND ".join(where_clauses)
+        
+    query += " ORDER BY id DESC LIMIT 1000"
+    
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    table_data = [dict(r) for r in rows]
+    conn.close()
+
+    # 5. Filters
+    formatted_filters = []
+    # Identify categorical columns (e.g., Department)
+    target_filter_cols = ['department_cleaned', 'alumni_speaker_name', 'session_rating']
+    for col in target_filter_cols:
+        if col in columns:
+            cursor.execute(f"SELECT DISTINCT {col} FROM dashboard_data WHERE {col} IS NOT NULL AND {col} != ''")
+            options = [{'value': str(r[0]), 'count': 0} for r in cursor.fetchall()]
+            formatted_filters.append({
+                'column': col,
+                'type': 'categorical' if col != 'session_rating' else 'numeric',
+                'options': options
+            })
+
+    # 6. NLP / Sentiment (Stub for now, can be populated via NLPService)
+    # nlp_service = services['nlp']
+    
+    conn.close()
+
+    # Construct final object
+    return {
+        'kpis': formatted_kpis,
+        'filters': formatted_filters,
+        'aiInsights': [
+            {'type': 'trend', 'icon': '📈', 'text': 'Data synchronized successfully.'},
+            {'type': 'success', 'icon': '🎯', 'text': f'Found {len(table_data)} feedback records in database.'}
+        ],
+        'charts': formatted_charts,
+        'timeTrends': [],
+        'sentiment': [],
+        'keywords': [],
+        'speakerStats': [{'speaker': s, 'sessions': 1} for s in speakers[:5]],
+        'tableData': table_data,
+        'meta': {
+            'columns': columns,
+            'columnTypes': {c: 'text' for c in columns}, # Simplified
+            'filename': 'Hugging Face Database'
+        }
+    }

@@ -5,7 +5,7 @@ Main Flask application entry point with blueprint registration
 
 import os
 import sys
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 
 # Add backend to path
@@ -16,6 +16,7 @@ from backend.utils.logger import setup_logger
 from backend.routes.api import api_bp
 from backend.routes.webhook import webhook_bp
 from backend.routes.health import health_bp
+from backend.routes.admin import admin_bp
 
 
 def create_app(config=None):
@@ -47,6 +48,7 @@ def create_app(config=None):
     app.register_blueprint(health_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(webhook_bp)
+    app.register_blueprint(admin_bp)
 
     # Serve static frontend files
     @app.route('/')
@@ -59,9 +61,24 @@ def create_app(config=None):
 
     @app.route('/static/<path:path>')
     def serve_static(path):
-        """Serve static files (CSS, JS, etc.)"""
+        """Serve static files (CSS, JS, etc.) from the frontend directory"""
         frontend_path = os.path.join(os.path.dirname(__file__), 'frontend')
         return send_from_directory(frontend_path, path)
+
+    # Legacy routes for Premium frontend compatibility
+    @app.route('/api/data', methods=['GET'])
+    def get_legacy_data():
+        """Bridge route to serve the consolidated analytics object expected by app.js"""
+        from backend.routes.api import get_consolidated_analytics
+        return jsonify(get_consolidated_analytics(app)), 200
+
+    @app.route('/api/filter', methods=['POST'])
+    def get_legacy_filter():
+        """Bridge route for filtering expected by app.js"""
+        from backend.routes.api import get_consolidated_analytics
+        filters = request.get_json().get('filters', {})
+        search = request.get_json().get('search', '')
+        return jsonify(get_consolidated_analytics(app, filters=filters, search=search)), 200
 
     # Error handlers
     @app.errorhandler(404)
