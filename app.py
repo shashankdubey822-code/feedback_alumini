@@ -19,6 +19,64 @@ from backend.routes.health import health_bp
 from backend.routes.admin import admin_bp
 
 
+def _initialize_database(app, logger):
+    """Initialize database on application startup"""
+    try:
+        import sqlite3
+        db_path = app.config.get('DATABASE_PATH', 'database/dashboard.db')
+
+        # Create database directory if it doesn't exist
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+        # Connect to database
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Check if table exists
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='dashboard_data'"
+        )
+
+        if not cursor.fetchone():
+            logger.info("Creating dashboard_data table...")
+            # Create table if it doesn't exist
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS dashboard_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp_original TEXT,
+                    timestamp_normalized TEXT,
+                    name_of_student TEXT,
+                    name_normalized TEXT,
+                    department_original TEXT,
+                    department_cleaned TEXT,
+                    roll_no_original TEXT,
+                    roll_no_cleaned TEXT,
+                    date_of_lecture TEXT,
+                    alumni_speaker_name TEXT,
+                    session_help_understanding TEXT,
+                    session_rating INTEGER,
+                    session_technical_clarity INTEGER,
+                    aspect_most_valuable TEXT,
+                    improvements_suggestions TEXT,
+                    future_topics TEXT,
+                    form_source TEXT,
+                    data_quality_score REAL,
+                    is_duplicate_flag INTEGER DEFAULT 0,
+                    record_status TEXT,
+                    cleaned_at TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            conn.commit()
+            logger.info("Database initialized successfully")
+        else:
+            logger.info("Database already exists")
+
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error initializing database: {str(e)}")
+
+
 def create_app(config=None):
     """Application factory for Flask app"""
 
@@ -41,6 +99,9 @@ def create_app(config=None):
     # Setup logging
     logger = setup_logger(app)
     logger.info(f"Application starting in {app.config.get('FLASK_ENV', 'development')} mode")
+
+    # Initialize database on startup
+    _initialize_database(app, logger)
 
     # Enable CORS
     CORS(app, resources={

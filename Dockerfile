@@ -17,8 +17,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create logs directory and data directory
-RUN mkdir -p logs data
+# Create logs, data, and database directories
+RUN mkdir -p logs data database
 
 # Expose port (HF Spaces uses 7860)
 EXPOSE 7860
