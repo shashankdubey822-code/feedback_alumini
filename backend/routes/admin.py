@@ -251,7 +251,7 @@ def generate_form():
         )
         
         try:
-            with urllib.request.urlopen(req, timeout=15) as response:
+            with urllib.request.urlopen(req, timeout=60) as response:
                 response_data = json.loads(response.read().decode('utf-8'))
                 
                 if response_data.get('success'):
