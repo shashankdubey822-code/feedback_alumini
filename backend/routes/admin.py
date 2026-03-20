@@ -35,23 +35,28 @@ def upload_csv():
     """Handle CSV file upload and database insertion"""
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
-        
+
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
-        
+
     if file:
         try:
             db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
             df = pd.read_csv(file)
-            
-            # Basic data cleaning/normalization could go here
-            
+
+            # Data cleaning and normalization
+            # Convert roll_no to uppercase for consistency
+            if 'roll_no' in df.columns:
+                df['roll_no'] = df['roll_no'].astype(str).str.upper()
+            if 'roll_no_original' in df.columns:
+                df['roll_no_original'] = df['roll_no_original'].astype(str).str.upper()
+
             conn = sqlite3.connect(db_path)
             # Replace or append? For this use case, let's append but check for duplicates if possible
             df.to_sql('dashboard_data', conn, if_exists='append', index=False)
             conn.close()
-            
+
             return jsonify({'success': True, 'message': f'Uploaded {len(df)} rows'}), 200
         except Exception as e:
             logger.error(f"Upload error: {str(e)}")
@@ -63,10 +68,10 @@ def fetch_google_link():
     """Fetch data from a public Google Sheets CSV export link"""
     data = request.get_json()
     url = data.get('url')
-    
+
     if not url:
         return jsonify({'error': 'No URL provided'}), 400
-        
+
     try:
         # Convert Google Sheets URL to CSV export URL if needed
         if 'docs.google.com/spreadsheets' in url and '/export' not in url:
@@ -74,14 +79,21 @@ def fetch_google_link():
                 url = url.split('/edit')[0] + '/export?format=csv'
             else:
                 url = url.rstrip('/') + '/export?format=csv'
-        
+
         db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
         df = pd.read_csv(url)
-        
+
+        # Data cleaning and normalization
+        # Convert roll_no to uppercase for consistency
+        if 'roll_no' in df.columns:
+            df['roll_no'] = df['roll_no'].astype(str).str.upper()
+        if 'roll_no_original' in df.columns:
+            df['roll_no_original'] = df['roll_no_original'].astype(str).str.upper()
+
         conn = sqlite3.connect(db_path)
         df.to_sql('dashboard_data', conn, if_exists='append', index=False)
         conn.close()
-        
+
         return jsonify({'success': True, 'message': f'Fetched {len(df)} rows from Google Sheets'}), 200
     except Exception as e:
         logger.error(f"Google fetch error: {str(e)}")

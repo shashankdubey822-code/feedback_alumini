@@ -732,6 +732,10 @@ function _sanitizeData(data) {
           .replace(/javascript:/gi, "")
           .substring(0, 5000); // Limit length
       }
+      // Convert roll_no to uppercase (real-time normalization)
+      if (key.toLowerCase().includes("roll") && typeof value === "string") {
+        value = value.toUpperCase();
+      }
       sanitized[key] = value;
     }
   }

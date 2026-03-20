@@ -28,6 +28,11 @@ def store_webhook_submission(db_path: str, payload: dict) -> int:
         form_id = payload.get('form_id', 'WEBHOOK_FORM')
         responses = payload.get('responses', {})
 
+        # Normalize roll_no to uppercase
+        roll_no = responses.get('roll_no_original', '')
+        if roll_no and isinstance(roll_no, str):
+            roll_no = roll_no.upper()
+
         # Map webhook field names to database columns
         insert_query = '''
             INSERT INTO dashboard_data (
@@ -52,7 +57,7 @@ def store_webhook_submission(db_path: str, payload: dict) -> int:
             timestamp,
             responses.get('name_of_student', ''),
             responses.get('department_original', ''),
-            responses.get('roll_no_original', ''),
+            roll_no,  # Already converted to uppercase
             responses.get('date_of_lecture', ''),
             responses.get('alumni_speaker_name', ''),
             responses.get('session_help_understanding', ''),
