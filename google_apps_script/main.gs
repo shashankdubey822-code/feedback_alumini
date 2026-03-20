@@ -28,6 +28,7 @@ function doPost(e) {
     const action = (payload.action || "").toLowerCase();
     switch (action) {
       case "create_form": return _handleCreateForm(payload);
+      case "get_responses": return _handleGetResponses(payload);
       case "ping": return _json(true, "Alive", { timestamp: new Date().toISOString() });
       default: return _json(false, "Unknown action", null, 404);
     }
@@ -47,17 +48,13 @@ function _handleCreateForm(payload) {
   if (!speaker || !date) return _json(false, "Speaker and date required", null, 400);
 
   const form = FormApp.create(`Feedback: ${speaker}`);
-  form.setDescription(`Session Date: ${date}\nSpeaker: ${speaker}\n\nYour feedback helps us improve our alumni sessions.`);
+  form.setDescription(`Session: ${date} | Speaker: ${speaker}\nJoin us in improving future sessions!`);
   form.setCollectEmail(false);
   form.setAllowResponseEdits(false);
   form.setLimitOneResponsePerUser(false);
 
-  // Section 1: Attendance Password
-  form.addSectionHeaderItem().setTitle("Step 1: Verification");
-  form.addTextItem().setTitle("Access Password").setRequired(true).setHelpText("Enter the password provided by the coordinator.");
-
-  // Section 2: Personal Details
-  form.addPageBreakItem().setTitle("Step 2: Your Information");
+  // Section 1: Personal Details
+  form.addSectionHeaderItem().setTitle("Step 1: Your Information");
   form.addTextItem().setTitle("Your Full Name").setRequired(true);
   form.addMultipleChoiceItem().setTitle("Department / School").setChoiceValues(CONFIG.DEPARTMENT_OPTIONS).setRequired(true);
   form.addTextItem().setTitle("Roll Number / Student ID").setRequired(true).setHelpText("Example: 2024CS001");
@@ -131,14 +128,7 @@ function onFormSubmitTrigger(e) {
       else if (q.includes("valuable")) answers.aspect_most_valuable = a;
       else if (q.includes("improved")) answers.improvements_suggestions = a;
       else if (q.includes("topics")) answers.future_topics = a;
-      else if (q.includes("Password")) answers.submitted_password = a;
     });
-
-    // Verify Password if needed
-    if (answers.submitted_password && answers.submitted_password !== CONFIG.FORM_PASSWORD) {
-       console.warn("Invalid form password submission rejected.");
-       return;
-    }
 
     const payload = {
       form_id: formId,
@@ -166,6 +156,43 @@ function onFormSubmitTrigger(e) {
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+function _handleGetResponses(payload) {
+  const formId = payload.form_id;
+  if (!formId) return _json(false, "form_id required", null, 400);
+
+  try {
+    const form = FormApp.openById(formId);
+    const responses = form.getResponses();
+    const result = [];
+
+    responses.forEach(resp => {
+      const answers = {
+        timestamp: resp.getTimestamp().toISOString()
+      };
+      
+      resp.getItemResponses().forEach(ir => {
+        const q = ir.getItem().getTitle();
+        const a = ir.getResponse();
+        
+        if (q.includes("Full Name")) answers.name_of_student = a;
+        else if (q.includes("Department")) answers.department_original = a;
+        else if (q.includes("Roll Number")) answers.roll_no_original = a;
+        else if (q.includes("helpful")) answers.session_help_understanding = a;
+        else if (q.includes("technical")) answers.session_technical_clarity = a;
+        else if (q.includes("rating")) answers.session_rating = a;
+        else if (q.includes("valuable")) answers.aspect_most_valuable = a;
+        else if (q.includes("improved")) answers.improvements_suggestions = a;
+        else if (q.includes("topics")) answers.future_topics = a;
+      });
+      result.push(answers);
+    });
+
+    return _json(true, "Responses fetched", result);
+  } catch (err) {
+    return _json(false, "Could not access form", err.message, 404);
+  }
+}
 
 function _json(success, message, data, code = 200) {
   return ContentService.createTextOutput(JSON.stringify({

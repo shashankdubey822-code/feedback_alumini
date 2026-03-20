@@ -34,16 +34,16 @@ def _initialize_database(app, logger):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
-        # Check if table exists
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='dashboard_data'"
-        )
-
-        if not cursor.fetchone():
-            logger.info("Creating dashboard_data table...")
-            # Create table if it doesn't exist
+        # Check if table exists and has correct columns
+        cursor.execute("PRAGMA table_info(dashboard_data)")
+        columns = [row[1] for row in cursor.fetchall()]
+        
+        # If table doesn't exist or is missing critical modern columns, recreate it
+        if not columns or 'form_source' not in columns:
+            logger.info("Initializing/Repairing dashboard_data table...")
+            cursor.execute("DROP TABLE IF EXISTS dashboard_data")
             cursor.execute('''
-                CREATE TABLE IF NOT EXISTS dashboard_data (
+                CREATE TABLE dashboard_data (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp_original TEXT,
                     timestamp_normalized TEXT,
@@ -69,9 +69,14 @@ def _initialize_database(app, logger):
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
-            
+        
+        # Ensure events table exists
+        cursor.execute("PRAGMA table_info(events)")
+        event_cols = [row[1] for row in cursor.fetchall()]
+        if not event_cols:
+            logger.info("Creating events table...")
             cursor.execute('''
-                CREATE TABLE IF NOT EXISTS events (
+                CREATE TABLE events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     speaker_name TEXT NOT NULL,
                     venue_date TEXT NOT NULL,
@@ -82,12 +87,10 @@ def _initialize_database(app, logger):
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
-            conn.commit()
-            logger.info("Database initialized successfully")
-        else:
-            logger.info("Database already exists")
-
+        
+        conn.commit()
         conn.close()
+        logger.info("Database schema verified and ready")
     except Exception as e:
         logger.error(f"Error initializing database: {str(e)}")
 

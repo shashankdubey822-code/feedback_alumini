@@ -337,3 +337,91 @@ def generate_form():
     except Exception as e:
         logger.error(f"Error generating form: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@admin_bp.route('/sync-responses', methods=['POST'])
+def sync_responses():
+    """Manually trigger a sync for a specific event's responses from Google Forms"""
+    try:
+        import urllib.request
+        import json
+        data = request.get_json() or {}
+        event_id = data.get('event_id')
+        
+        if not event_id:
+            return jsonify({'success': False, 'error': 'event_id is required'}), 400
+            
+        db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT * FROM events WHERE id = ?", (event_id,))
+        event = cursor.fetchone()
+        
+        if not event or not event['form_id']:
+            conn.close()
+            return jsonify({'success': False, 'error': 'Form not yet generated for this event'}), 400
+            
+        apps_script_url = os.getenv('APPS_SCRIPT_URL')
+        secret = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
+        
+        payload = {
+            'secret': secret,
+            'action': 'get_responses',
+            'form_id': event['form_id']
+        }
+        
+        req = urllib.request.Request(
+            apps_script_url, 
+            data=json.dumps(payload).encode('utf-8'),
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+        )
+        
+        with urllib.request.urlopen(req, timeout=30) as response:
+            resp_data = json.loads(response.read().decode('utf-8'))
+            if not resp_data.get('success'):
+                conn.close()
+                return jsonify({'success': False, 'error': resp_data.get('message', 'Google Script error')}), 500
+                
+            responses = resp_data.get('data', [])
+            count = 0
+            for resp in responses:
+                # Check for duplicates using timestamp + name
+                cursor.execute(
+                    "SELECT id FROM dashboard_data WHERE timestamp_original = ? AND name_of_student = ?",
+                    (resp.get('timestamp'), resp.get('name_of_student'))
+                )
+                if not cursor.fetchone():
+                    cursor.execute('''
+                        INSERT INTO dashboard_data (
+                            timestamp_original, name_of_student, department_original, roll_no_original,
+                            date_of_lecture, alumni_speaker_name, session_help_understanding,
+                            session_rating, session_technical_clarity, aspect_most_valuable,
+                            improvements_suggestions, future_topics, form_source, record_status
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        resp.get('timestamp'),
+                        resp.get('name_of_student', ''),
+                        resp.get('department_original', ''),
+                        resp.get('roll_no_original', ''),
+                        event['venue_date'],
+                        event['speaker_name'],
+                        resp.get('session_help_understanding', ''),
+                        resp.get('session_rating'),
+                        resp.get('session_technical_clarity'),
+                        resp.get('aspect_most_valuable', ''),
+                        resp.get('improvements_suggestions', ''),
+                        resp.get('future_topics', ''),
+                        event['form_id'],
+                        'SYNCED'
+                    ))
+                    count += 1
+            
+            conn.commit()
+            conn.close()
+            return jsonify({'success': True, 'synced': count, 'total': len(responses)}), 200
+            
+    except Exception as e:
+        logger.error(f"Error syncing responses: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
