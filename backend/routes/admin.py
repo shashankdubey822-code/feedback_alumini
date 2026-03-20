@@ -189,6 +189,19 @@ def fetch_google_link():
         logger.error(f"Google fetch error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@admin_bp.route('/create-event', methods=['POST'])
+@log_endpoint_access
+def create_event():
+    """Stub to satisfy the frontend's event creation request"""
+    import time
+    data = request.get_json() or {}
+    return jsonify({
+        'success': True, 
+        'event_id': int(time.time()),
+        'speaker_name': data.get('speaker_name', ''),
+        'venue_date': data.get('venue_date', '')
+    }), 200
+
 @admin_bp.route('/events', methods=['GET'])
 def get_events():
     """Get list of feedback events (stub)"""

@@ -198,6 +198,7 @@ if __name__ == '__main__':
     logger = app.logger
     logger.info(f"Starting server on port {port}")
 
+    # Trigger HF Space rebuild for Google Form fix
     app.run(
         host='0.0.0.0',
         port=port,
