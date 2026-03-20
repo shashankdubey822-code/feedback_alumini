@@ -204,6 +204,7 @@ def create_app(config=None):
 
 
 # ─── Entry point for Hugging Face Spaces ─────────────────────
+# Build Trigger: 2026-03-21 03:00:18
 if __name__ == '__main__':
     app = create_app()
 
