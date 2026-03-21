@@ -418,17 +418,39 @@ function hideProgress() {
     document.getElementById('upload-progress').classList.add('hidden');
 }
 
-// ========== SCREEN SWITCHING ==========
+// ========== NAVIGATION ==========
+function showSection(sectionId) {
+    // Hide all dashboard sections
+    document.querySelectorAll('.dashboard-section').forEach(sec => {
+        sec.classList.remove('active');
+    });
+    
+    // Show target section
+    const target = document.getElementById(sectionId);
+    if (target) {
+        target.classList.add('active');
+        // Ensure scroll to top
+        window.scrollTo(0, 0);
+    }
+
+    // Update sidebar active state
+    document.querySelectorAll('.sidebar .nav-item').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.section === sectionId);
+    });
+
+    // SCOPING: If leaving overview, reset filters to show global data in other sections
+    if (sectionId !== 'overview-section' && Object.keys(state.activeFilters || {}).length > 0) {
+        clearAllFilters();
+    }
+}
+
 function switchToDashboard() {
-    document.getElementById('upload-screen').classList.remove('active');
-    document.getElementById('dashboard-screen').classList.add('active');
-    document.getElementById('file-badge').textContent = state.fileName;
+    showSection('overview-section');
+    document.getElementById('file-badge').textContent = state.fileName || 'No file loaded';
 }
 
 function switchToUpload() {
-    document.getElementById('dashboard-screen').classList.remove('active');
-    document.getElementById('upload-screen').classList.add('active');
-    hideProgress();
+    showSection('upload-section');
     document.getElementById('file-input').value = '';
     document.getElementById('google-link-input').value = '';
     destroyCharts();

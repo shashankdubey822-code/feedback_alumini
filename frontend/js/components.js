@@ -89,12 +89,19 @@ function renderFilters(filters) {
         let html = `<div class="filter-label">${esc(truncate(f.column, 22))} <span class="filter-type-badge ${badgeClass}">${typeLabel}</span></div>`;
 
         if (f.type === 'categorical' && f.options) {
-            html += `<select class="filter-select" data-column="${escAttr(f.column)}" data-type="categorical">`;
-            html += `<option value="">All (${f.options.length})</option>`;
+            html += `<div class="filter-multiselect" data-column="${escAttr(f.column)}" data-type="categorical">`;
+            html += `<div class="multiselect-options">`;
             f.options.forEach(opt => {
-                html += `<option value="${escAttr(opt.value)}">${esc(truncate(opt.value, 28))} (${opt.count})</option>`;
+                const checked = (state.activeFilters[f.column] || []).includes(opt.value);
+                html += `
+                    <label class="multiselect-item">
+                        <input type="checkbox" value="${escAttr(opt.value)}" ${checked ? 'checked' : ''}>
+                        <span class="multiselect-text">${esc(truncate(opt.value, 28))}</span>
+                        <span class="multiselect-count">${opt.count}</span>
+                    </label>
+                `;
             });
-            html += `</select>`;
+            html += `</div></div>`;
         } else if (f.type === 'date' && f.options) {
             html += `<div class="filter-date-range">`;
             html += `<div class="calendar-input-wrap"><input type="text" class="filter-input calendar-trigger" data-column="${escAttr(f.column)}" data-type="date-from" data-dates='${JSON.stringify(f.options)}' placeholder="From..." readonly><svg class="calendar-input-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>`;
@@ -115,6 +122,11 @@ function renderFilters(filters) {
         el.addEventListener('input', debounce(applyFilters, 400));
     });
 
+    // Add listeners for checkboxes in multiselect
+    container.querySelectorAll('.filter-multiselect input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', applyFilters);
+    });
+
     // Initialize smart calendars for date filters
     container.querySelectorAll('.calendar-trigger').forEach(el => {
         new SmartCalendar(el, JSON.parse(el.dataset.dates || '[]'), () => applyFilters());
@@ -125,7 +137,8 @@ async function applyFilters() {
     const globalSearch = document.getElementById('global-search').value.trim();
     const filters = {};
 
-    document.querySelectorAll('#filters-grid [data-column]').forEach(el => {
+    // Standard inputs
+    document.querySelectorAll('#filters-grid .filter-input[data-column]').forEach(el => {
         const col = el.dataset.column;
         const dtype = el.dataset.type;
         const val = el.value.trim();
@@ -142,6 +155,16 @@ async function applyFilters() {
         }
     });
 
+    // Multi-selects (categorical)
+    document.querySelectorAll('#filters-grid .filter-multiselect').forEach(div => {
+        const col = div.dataset.column;
+        const selected = Array.from(div.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+        if (selected.length > 0) {
+            filters[col] = selected;
+        }
+    });
+
+    state.activeFilters = filters; // Keep track of current state
     try {
         const response = await fetch(`${API_BASE}/api/filter`, {
             method: 'POST',
@@ -177,8 +200,11 @@ async function applyFilters() {
 }
 
 function clearAllFilters() {
-    document.querySelectorAll('#filters-grid .filter-input, #filters-grid .filter-select').forEach(el => {
+    document.querySelectorAll('#filters-grid .filter-input').forEach(el => {
         el.value = '';
+    });
+    document.querySelectorAll('#filters-grid .filter-multiselect input[type="checkbox"]').forEach(cb => {
+        cb.checked = false;
     });
     document.getElementById('global-search').value = '';
     applyFilters();

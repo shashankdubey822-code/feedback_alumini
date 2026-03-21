@@ -289,14 +289,8 @@ def get_consolidated_analytics(app, filters=None, search=None):
         'completion_rate':     '%',
         'department_coverage': '%',
     }
+    # (KPIs will be finalized after table_data aggregation)
     formatted_kpis = []
-    for key, val in kpi_dict.items():
-        unit = UNIT_MAP.get(key, '')
-        formatted_kpis.append({
-            'label': LABEL_MAP.get(key, key.replace('_', ' ').title()),
-            'value': f"{val}{unit}" if val is not None else 'N/A',
-            'sub':   ''
-        })
 
     # ── 1b. Time Trends ──────────────────────────────────────────────
     try:
@@ -357,8 +351,13 @@ def get_consolidated_analytics(app, filters=None, search=None):
     if filters:
         for col, val in filters.items():
             if val is not None and col in columns:
-                where_clauses.append(f"`{col}` = ?")
-                params.append(val)
+                if isinstance(val, list):
+                    placeholders = ', '.join(['?'] * len(val))
+                    where_clauses.append(f"`{col}` IN ({placeholders})")
+                    params.extend(val)
+                else:
+                    where_clauses.append(f"`{col}` = ?")
+                    params.append(val)
 
     if search and columns:
         search_clauses = [f"`{col}` LIKE ?" for col in columns]
@@ -427,15 +426,28 @@ def get_consolidated_analytics(app, filters=None, search=None):
     speaker_tracker = {} # name -> {count, total_rating, total_sentiment}
     time_tracker    = {} # date -> count
 
+    total_rating_sum = 0.0
+    total_rating_count = 0
+
     for row in table_data:
+        # KPI calculations (vitals)
+        try:
+            r_val = float(row.get('session_rating') or 0)
+            if r_val > 0:
+                total_rating_sum += r_val
+                total_rating_count += 1
+        except: pass
+
         # Speaker Tracking
         sp_name = row.get('alumni_speaker_name')
         if sp_name:
             if sp_name not in speaker_tracker:
                 speaker_tracker[sp_name] = {'count': 0, 'total_rating': 0, 'total_sentiment': 0}
             speaker_tracker[sp_name]['count'] += 1
-            speaker_tracker[sp_name]['total_rating'] += float(row.get('session_rating') or 0)
-            speaker_tracker[sp_name]['total_sentiment'] += float(row.get('dl_sentiment_score') or 0)
+            try:
+                speaker_tracker[sp_name]['total_rating'] += float(row.get('session_rating') or 0)
+                speaker_tracker[sp_name]['total_sentiment'] += float(row.get('dl_sentiment_score') or 0)
+            except: pass
 
         # Time Tracking
         raw_ts = row.get('timestamp_normalized') or row.get('timestamp_original')
@@ -669,7 +681,8 @@ def get_consolidated_analytics(app, filters=None, search=None):
     # Speaker Insight
     if speaker_list:
         top_speaker = speaker_list[0]
-        if top_speaker['ratings'].get('Rating', 0) >= 4.5:
+        ts_ratings = top_speaker.get('ratings', {})
+        if ts_ratings.get('Rating', 0) >= 4.5:
              ai_insights.append({'type': 'success', 'icon': '🌟', 'text': f'Top Performer: {top_speaker["name"]} achieved a perfect rating from most attendees.'})
 
     # Participation Insight
@@ -681,15 +694,27 @@ def get_consolidated_analytics(app, filters=None, search=None):
     # Finalize Time Trends
     sorted_dates = sorted(time_tracker.keys())
     formatted_trends = []
-    if sorted_dates:
-        formatted_trends.append({
-            'responseCount': {
-                'labels': sorted_dates,
-                'data': [time_tracker[d] for d in sorted_dates],
-                'xLabel': 'Date',
-                'yLabel': 'Responses'
-            }
-        })
+    # Finalize KPIs using the aggregated vitals
+    avg_rating = 0.0
+    if total_rating_count > 0:
+        avg_rating = round(float(total_rating_sum) / total_rating_count, 1)
+    formatted_kpis.append({
+        'label': 'Total Responses',
+        'value': str(total_count),
+        'sub':   'Filtered results'
+    })
+    formatted_kpis.append({
+        'label': 'Average Rating',
+        'value': f"{avg_rating}/5",
+        'sub':   f'From {total_rating_count} ratings'
+    })
+    # Add sentiment KPI
+    pos_pct = round((sentiment_counts['POSITIVE'] / total_count * 100)) if total_count > 0 else 0
+    formatted_kpis.append({
+        'label': 'Positive Sentiment',
+        'value': f"{pos_pct}%",
+        'sub':   'Detailed feedback'
+    })
 
     return {
         'kpis':         formatted_kpis,

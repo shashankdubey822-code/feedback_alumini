@@ -162,6 +162,87 @@
     gap: 8px;
 }
 
+/* Multi-select Styles */
+.filter-multiselect {
+    margin-top: 4px;
+}
+.multiselect-options {
+    max-height: 140px;
+    overflow-y: auto;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.01);
+    padding: 6px;
+}
+.multiselect-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    font-size: 12px;
+}
+.multiselect-item:hover {
+    background: rgba(99, 102, 241, 0.08);
+}
+.multiselect-item input[type="checkbox"] {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.03);
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+}
+.multiselect-item input[type="checkbox"]:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+.multiselect-item input[type="checkbox"]:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 10px;
+    font-weight: 900;
+}
+.multiselect-text {
+    flex: 1;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.multiselect-count {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* Custom Scrollbar for Multiselect */
+.multiselect-options::-webkit-scrollbar {
+    width: 4px;
+}
+.multiselect-options::-webkit-scrollbar-track {
+    background: transparent;
+}
+.multiselect-options::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+.multiselect-options::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
 /* === CHARTS === */
 .charts-grid {
     display: grid;
