@@ -122,7 +122,10 @@ def _append_dashboard_rows(df, db_path, source='csv_upload'):
 
         for col in insert_columns:
             if col not in normalized_df.columns:
-                normalized_df[col] = None
+                if col == 'dl_processed':
+                    normalized_df[col] = 0
+                else:
+                    normalized_df[col] = None
 
         aligned_df = normalized_df[insert_columns]
         aligned_df.to_sql('dashboard_data', conn, if_exists='append', index=False)
