@@ -436,6 +436,7 @@ def get_consolidated_analytics(app, filters=None, search=None):
     actionable_stats = {'actionable': 0, 'non_actionable': 0}
     category_counts = {}
     future_keyword_freq = {}
+    session_understanding_counts = {}
     
     import json
 
@@ -477,6 +478,11 @@ def get_consolidated_analytics(app, filters=None, search=None):
                         if isinstance(word, str):
                             word = word.lower()
                             future_keyword_freq[word] = future_keyword_freq.get(word, 0) + 1
+                
+                # Session Help Understanding stats
+                shu = row.get('session_help_understanding')
+                if shu:
+                    session_understanding_counts[shu] = session_understanding_counts.get(shu, 0) + 1
                             
                     # Add back general keywords for original widget
                     gen_kws = kws.get('general_keywords', [])
@@ -560,7 +566,8 @@ def get_consolidated_analytics(app, filters=None, search=None):
     # Bundle the deep analysis payload
     deep_analysis = {
         'actionableStats': actionable_stats,
-        'categories': [{'name': k, 'value': v} for k, v in sorted(category_counts.items(), key=lambda x: x[1], reverse=True) if k != "Other"]
+        'categories': [{'name': k, 'value': v} for k, v in sorted(category_counts.items(), key=lambda x: x[1], reverse=True) if k != "Other"],
+        'helpUnderstanding': [{'name': k, 'value': v} for k, v in session_understanding_counts.items()]
     }
 
     return {

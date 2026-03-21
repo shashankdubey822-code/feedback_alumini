@@ -49,8 +49,8 @@ def start_dl_worker(logger_unused):
                         fut_text = str(row['future_topics'] or '').strip()
                         help_text = str(row['session_help_understanding'] or '').strip()
                         
-                        # Combine text for legacy general analysis
-                        text_parts = [t for t in [imp_text, val_text, help_text] if t and t.lower() != 'nan']
+                        # Combine text for legacy general analysis (restricted to Future Topics only)
+                        text_parts = [t for t in [fut_text] if t and t.lower() != 'nan']
                         full_text = ". ".join(text_parts)
                         
                         # Run the deep learning pipeline (overall)
