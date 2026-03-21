@@ -386,24 +386,36 @@ function renderKeywords(keywordsData) {
         card.className = 'keyword-card';
 
         const maxCount = Math.max(...kw.words.map(w => w.count));
-        const minCount = Math.min(...kw.words.map(w => w.count));
+        const cloudContainer = document.createElement('div');
+        cloudContainer.className = 'word-cloud';
 
-        let cloudHTML = '<div class="word-cloud">';
         kw.words.slice(0, 25).forEach((word, idx) => {
             const size = 11 + ((word.count - minCount) / (maxCount - minCount + 1)) * 14;
             const opacity = 0.5 + ((word.count - minCount) / (maxCount - minCount + 1)) * 0.5;
             const color = CHART_COLORS[idx % CHART_COLORS.length];
             const bgColor = color + '18';
             const isBigram = word.type === 'bigram';
-            const bigramClass = isBigram ? 'bigram-tag' : '';
-            cloudHTML += `<span class="word-tag ${bigramClass}" style="font-size: ${size}px; background: ${bgColor}; color: ${color}; opacity: ${opacity};" title="${word.count} occurrences${isBigram ? ' (phrase)' : ''}">${isBigram ? '⟨ ' : ''}${esc(word.text)}${isBigram ? ' ⟩' : ''}</span>`;
+            
+            const span = document.createElement('span');
+            span.className = `word-tag ${isBigram ? 'bigram-tag' : ''}`;
+            span.style.fontSize = `${size}px`;
+            span.style.background = bgColor;
+            span.style.color = color;
+            span.style.opacity = opacity;
+            span.title = `${word.count} occurrences${isBigram ? ' (phrase)' : ''} - Click to see students`;
+            span.style.cursor = 'pointer';
+            span.textContent = `${isBigram ? '⟨ ' : ''}${word.text}${isBigram ? ' ⟩' : ''}`;
+            
+            span.addEventListener('click', () => {
+                openDataModal('Trending Topics', word.text, word.count, kw.column, 'text', null);
+            });
+            cloudContainer.appendChild(span);
         });
-        cloudHTML += '</div>';
 
         card.innerHTML = `
             <div class="keyword-card-title">${esc(truncate(kw.column, 40))} — Keywords & Phrases</div>
-            ${cloudHTML}
         `;
+        card.appendChild(cloudContainer);
         container.appendChild(card);
     });
 }
@@ -812,11 +824,19 @@ function openDataModal(chartTitle, clickedLabel, clickedValue, column, columnTyp
             return numVal >= binBoundary.min && numVal < binBoundary.max;
         });
     } else if (column) {
-        // Categorical: exact match on the specific column only
-        const searchLabel = String(clickedLabel).toLowerCase().trim();
-        filteredRows = state.tableData.filter(row => {
-            return String(row[column] || '').toLowerCase().trim() === searchLabel;
-        });
+        if (columnType === 'text') {
+            // Text: substring inclusion on the specific column
+            const searchLabel = String(clickedLabel).toLowerCase().trim();
+            filteredRows = state.tableData.filter(row => {
+                return String(row[column] || '').toLowerCase().includes(searchLabel);
+            });
+        } else {
+            // Categorical: exact match on the specific column only
+            const searchLabel = String(clickedLabel).toLowerCase().trim();
+            filteredRows = state.tableData.filter(row => {
+                return String(row[column] || '').toLowerCase().trim() === searchLabel;
+            });
+        }
     } else {
         // Fallback (speaker charts, etc.): exact match across all columns
         const searchLabel = String(clickedLabel).toLowerCase().trim();

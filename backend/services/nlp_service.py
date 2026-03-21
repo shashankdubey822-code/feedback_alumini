@@ -202,8 +202,8 @@ class NLPService:
             for i in range(len(words) - 1):
                 phrases.append(f"{words[i]} {words[i+1]}")
             
-            # Add standalone Unigrams as fallback
-            phrases.extend(words)
+            # Remove standalone Unigrams to force goal-centric phrases
+            # phrases.extend(words)
 
             phrase_counts = Counter(phrases)
             
