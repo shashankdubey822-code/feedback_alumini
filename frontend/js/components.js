@@ -223,6 +223,14 @@ function renderDeepAnalysis(da) {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                onClick: (e, elements, chart) => {
+                    if (elements.length > 0) {
+                        const index = elements[0].index;
+                        const label = chart.data.labels[index];
+                        const count = chart.data.datasets[0].data[index];
+                        openDataModal('Actionability Filter', label, count, 'dl_processed', 'dl_actionability', null);
+                    }
+                },
                 plugins: {
                     legend: { position: 'bottom', labels: { color: '#8b8b9e' } }
                 }
@@ -255,6 +263,15 @@ function renderDeepAnalysis(da) {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                onClick: (e, elements, chart) => {
+                    if (elements.length > 0) {
+                        const index = elements[0].index;
+                        // Use full category names from raw array, not the truncated chart label!
+                        const fullLabel = cats[index].name;
+                        const count = cats[index].value;
+                        openDataModal('Suggestion Categories', fullLabel, count, 'dl_processed', 'dl_category', null);
+                    }
+                },
                 plugins: { legend: { display: false } },
                 scales: {
                     y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b8b9e' } },
@@ -386,6 +403,8 @@ function renderKeywords(keywordsData) {
         card.className = 'keyword-card';
 
         const maxCount = Math.max(...kw.words.map(w => w.count));
+        const minCount = Math.min(...kw.words.map(w => w.count));
+        
         const cloudContainer = document.createElement('div');
         cloudContainer.className = 'word-cloud';
 
@@ -829,6 +848,25 @@ function openDataModal(chartTitle, clickedLabel, clickedValue, column, columnTyp
             const searchLabel = String(clickedLabel).toLowerCase().trim();
             filteredRows = state.tableData.filter(row => {
                 return String(row[column] || '').toLowerCase().includes(searchLabel);
+            });
+        } else if (columnType === 'dl_category') {
+            const searchLabel = String(clickedLabel).toLowerCase().trim();
+            filteredRows = state.tableData.filter(row => {
+                if (!row['dl_processed']) return false;
+                try {
+                    const dl = JSON.parse(row['dl_processed']);
+                    if (!dl.categories) return false;
+                    return dl.categories.some(c => String(c).toLowerCase().trim() === searchLabel);
+                } catch(e) { return false; }
+            });
+        } else if (columnType === 'dl_actionability') {
+            const isActionable = clickedLabel === 'Actionable Suggestions';
+            filteredRows = state.tableData.filter(row => {
+                if (!row['dl_processed']) return false;
+                try {
+                    const dl = JSON.parse(row['dl_processed']);
+                    return !!dl.is_actionable === isActionable;
+                } catch(e) { return false; }
             });
         } else {
             // Categorical: exact match on the specific column only
