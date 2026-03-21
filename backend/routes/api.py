@@ -639,6 +639,45 @@ def get_consolidated_analytics(app, filters=None, search=None):
             'backgroundColors': ['#34d399', '#fbbf24', '#fb7185'] 
         })
 
+    # ── 8. Dynamic AI Insights Generation ─────────────────────────────
+    ai_insights = [
+        {'type': 'trend',   'icon': '📈', 'text': 'Dashboard data synchronized.'},
+        {'type': 'success', 'icon': '🎯', 'text': f'Found {total_count} feedback records.'}
+    ]
+    
+    # Sentiment Insight
+    total_sentiment = sum(sentiment_counts.values())
+    if total_sentiment > 0:
+        pos_pct = round((sentiment_counts['POSITIVE'] / total_sentiment) * 100)
+        if pos_pct >= 70:
+            ai_insights.append({'type': 'success', 'icon': '✨', 'text': f'Strong positive reception: {pos_pct}% of attendees enjoyed the session.'})
+        elif pos_pct < 40:
+            ai_insights.append({'type': 'warning', 'icon': '⚠️', 'text': f'Mixed reception: Only {pos_pct}% positive sentiment detected in detailed feedback.'})
+            
+    # Topic Insight
+    if sorted_fut_keywords:
+        top_topic = sorted_fut_keywords[0][0]
+        count = sorted_fut_keywords[0][1]
+        if count > 1:
+            ai_insights.append({'type': 'info', 'icon': '💡', 'text': f'Future Trend: "{top_topic.title()}" is the most requested topic for upcoming sessions.'})
+            
+    # Actionability Insight
+    act_count = actionable_stats['actionable']
+    if act_count > 0:
+        ai_insights.append({'type': 'warning', 'icon': '🛡️', 'text': f'Action required: {act_count} records contain specific, implementable improvement suggestions.'})
+        
+    # Speaker Insight
+    if speaker_list:
+        top_speaker = speaker_list[0]
+        if top_speaker['ratings'].get('Rating', 0) >= 4.5:
+             ai_insights.append({'type': 'success', 'icon': '🌟', 'text': f'Top Performer: {top_speaker["name"]} achieved a perfect rating from most attendees.'})
+
+    # Participation Insight
+    if category_counts:
+        top_cat = sorted(category_counts.items(), key=lambda x: x[1], reverse=True)[0]
+        if top_cat[1] > total_count * 0.3:
+            ai_insights.append({'type': 'info', 'icon': '🚀', 'text': f'Key Focus: Feedback is heavily centered on "{top_cat[0]}" related themes.'})
+
     # Finalize Time Trends
     sorted_dates = sorted(time_tracker.keys())
     formatted_trends = []
@@ -655,10 +694,7 @@ def get_consolidated_analytics(app, filters=None, search=None):
     return {
         'kpis':         formatted_kpis,
         'filters':      formatted_filters,
-        'aiInsights':   [
-            {'type': 'trend',   'icon': '📈', 'text': 'Dashboard data synchronized.'},
-            {'type': 'success', 'icon': '🎯', 'text': f'Found {total_count} feedback records.'}
-        ],
+        'aiInsights':   ai_insights,
         'charts':       formatted_charts,
         'timeTrends':   formatted_trends,
         'sentiment':    formatted_sentiment,
