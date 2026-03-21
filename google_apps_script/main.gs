@@ -10,10 +10,13 @@ const CONFIG = {
   WEBHOOK_SECRET: PropertiesService.getScriptProperties().getProperty("WEBHOOK_SECRET") || "webhook-secret-key",
   FORM_PASSWORD: PropertiesService.getScriptProperties().getProperty("FORM_PASSWORD") || "alumni2026",
   DEPARTMENT_OPTIONS: [
-    "Computer Science & Technology (SOE)", "Electronics and Communication (SOE)", "Mechanical Engineering (SOE)",
-    "Physics (School of Sciences)", "Chemistry (School of Sciences)", "Mathematics (School of Sciences)",
-    "Business (School of Management & Commerce)", "Commerce (School of Management & Commerce)", "Management (School of Management & Commerce)",
-    "BA LLB (School of Law)", "BBA LLB (School of Law)", "Education & Humanities"
+    "School of Education & Humanities",
+    "School of Engineering: Electronics and Communication",
+    "School of Engineering: Mechanical Engineering",
+    "School of Engineering: Computer Science & Technology",
+    "School of Management & Commerce",
+    "School of Engineering",
+    "School of Law"
   ]
 };
 
@@ -61,8 +64,11 @@ function _handleCreateForm(payload) {
 
   // Section 3: Feedback
   form.addPageBreakItem().setTitle("Step 3: Session Feedback");
-  form.addScaleItem().setTitle("How helpful was this session?").setBounds(1, 5).setLabels("Not Helpful", "Very Helpful").setRequired(true);
-  form.addScaleItem().setTitle("Clarity of technical explanations?").setBounds(1, 5).setLabels("Poor", "Excellent").setRequired(true);
+  form.addMultipleChoiceItem()
+    .setTitle("Did the session help you gain a better understanding of industry trends or career paths?")
+    .setChoiceValues(["Yes, significantly", "To some extent", "Not really"])
+    .setRequired(true);
+  
   form.addScaleItem().setTitle("Overall session rating?").setBounds(1, 5).setLabels("1 ⭐", "5 ⭐").setRequired(true);
 
   // Section 4: Qualitative

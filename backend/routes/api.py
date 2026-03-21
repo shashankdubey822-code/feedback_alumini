@@ -16,6 +16,7 @@ import os
 logger = get_logger(__name__)
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
+legacy_bp = Blueprint('legacy', __name__, url_prefix='/api')
 
 
 def get_services(app):
@@ -194,6 +195,30 @@ def get_all_trends():
         return jsonify({'error': str(e)}), 500
 
 
+@api_bp.route('/dl-status', methods=['GET'])
+@log_endpoint_access
+def get_dl_status():
+    """Get Deep Learning background processing status"""
+    try:
+        from flask import current_app
+        db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("PRAGMA table_info(dashboard_data)")
+        cols = [row[1] for row in cursor.fetchall()]
+        if 'dl_processed' not in cols:
+            return jsonify({'processing_count': 0}), 200
+
+        cursor.execute("SELECT COUNT(*) FROM dashboard_data WHERE dl_processed = 0")
+        count = cursor.fetchone()[0]
+        conn.close()
+        return jsonify({'processing_count': count}), 200
+    except Exception as e:
+        logger.error(f"Error getting DL status: {str(e)}")
+        return jsonify({'processing_count': 0, 'error': str(e)}), 500
+
+
 @api_bp.errorhandler(404)
 def not_found(error):
     """Handle 404 errors"""
@@ -210,6 +235,31 @@ def internal_error(error):
 #  CONSOLIDATED ANALYTICS  —  used by /api/data and /api/filter
 #  This bridges the modular backend to the Premium frontend (app.js)
 # ════════════════════════════════════════════════════════════════════
+
+@legacy_bp.route('/data', methods=['GET'])
+@log_endpoint_access
+def get_legacy_data():
+    """Unified analytics payload for the Premium frontend (app.js)"""
+    try:
+        from flask import current_app
+        return jsonify(get_consolidated_analytics(current_app)), 200
+    except Exception as e:
+        logger.error(f"Error in /api/data: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@legacy_bp.route('/filter', methods=['POST'])
+@log_endpoint_access
+def get_legacy_filter():
+    """Filtered analytics payload for the Premium frontend"""
+    try:
+        from flask import current_app
+        body = request.get_json() or {}
+        filters = body.get('filters', {})
+        search = body.get('search', '')
+        return jsonify(get_consolidated_analytics(current_app, filters=filters, search=search)), 200
+    except Exception as e:
+        logger.error(f"Error in /api/filter: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 def get_consolidated_analytics(app, filters=None, search=None):
     """
@@ -285,7 +335,7 @@ def get_consolidated_analytics(app, filters=None, search=None):
     speaker_stats_payload = []
     if raw_speakers:
         speaker_list = []
-        for s in raw_speakers[:10]:
+        for s in raw_speakers:
             if isinstance(s, str):
                 name = s
                 count = 1

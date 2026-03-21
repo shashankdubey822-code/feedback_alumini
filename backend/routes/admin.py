@@ -110,9 +110,10 @@ def _normalize_dataframe_for_dashboard(df, source='csv_upload'):
 
 def _append_dashboard_rows(df, db_path, source='csv_upload'):
     """Normalize and append rows with strict dashboard_data schema alignment."""
+    from backend.utils.db_helper import get_db_connection
     normalized_df = _normalize_dataframe_for_dashboard(df, source=source)
 
-    conn = sqlite3.connect(db_path)
+    conn = get_db_connection(db_path)
     try:
         cursor = conn.cursor()
         cursor.execute('PRAGMA table_info(dashboard_data)')
@@ -516,8 +517,9 @@ def generate_form():
             return jsonify({'success': False, 'error': error_msg}), 400
         
         # Get event details from DB
+        from backend.utils.db_helper import get_db_connection
         db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
-        conn = sqlite3.connect(db_path)
+        conn = get_db_connection(db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM events WHERE id = ?", (event_id,))
@@ -649,19 +651,35 @@ def sync_responses():
                 skipped += 1
                 continue
             
+            # Timestamp normalization for sync
+            try:
+                # Handle ISO format or other standard formats from Google Script
+                ts_norm = pd.to_datetime(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+            except:
+                ts_norm = timestamp
+
+            # Department cleaning
+            raw_dept = resp.get('department_original', '')
+            dept_cleaned = str(raw_dept).strip()
+
             try:
                 cursor.execute('''
                     INSERT INTO dashboard_data (
-                        timestamp_original, name_of_student, department_original, roll_no_original,
+                        timestamp_original, timestamp_normalized, name_of_student, 
+                        department_original, department_cleaned, roll_no_original, roll_no_cleaned,
                         date_of_lecture, alumni_speaker_name, session_help_understanding,
                         session_rating, session_technical_clarity, aspect_most_valuable,
-                        improvements_suggestions, future_topics, form_source, record_status
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        improvements_suggestions, future_topics, form_source, record_status,
+                        cleaned_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     timestamp,
+                    ts_norm,
                     resp.get('name_of_student', ''),
-                    resp.get('department_original', ''),
-                    roll_no,
+                    raw_dept,
+                    dept_cleaned,
+                    roll_no,  # Original (uppercased)
+                    roll_no,  # Cleaned (same as original)
                     event['venue_date'],
                     event['speaker_name'],
                     resp.get('session_help_understanding', ''),
@@ -671,7 +689,8 @@ def sync_responses():
                     resp.get('improvements_suggestions', ''),
                     resp.get('future_topics', ''),
                     event['form_id'],
-                    'SYNCED'
+                    'SYNCED',
+                    datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
                 ))
                 count += 1
             except sqlite3.IntegrityError as e:

@@ -6,6 +6,7 @@ from flask import Blueprint, request, jsonify
 import sqlite3
 from datetime import datetime
 from ..utils.logger import get_logger, log_endpoint_access
+from ..utils.db_helper import get_db_connection
 
 logger = get_logger(__name__)
 
@@ -20,7 +21,7 @@ def verify_webhook_secret(token: str, expected: str) -> bool:
 def store_webhook_submission(db_path: str, payload: dict) -> int:
     """Store webhook submission in database"""
     try:
-        conn = sqlite3.connect(db_path)
+        conn = get_db_connection(db_path)
         cursor = conn.cursor()
 
         # Extract form data from webhook payload
@@ -37,9 +38,12 @@ def store_webhook_submission(db_path: str, payload: dict) -> int:
         insert_query = '''
             INSERT INTO dashboard_data (
                 timestamp_original,
+                timestamp_normalized,
                 name_of_student,
                 department_original,
+                department_cleaned,
                 roll_no_original,
+                roll_no_cleaned,
                 date_of_lecture,
                 alumni_speaker_name,
                 session_help_understanding,
@@ -49,15 +53,31 @@ def store_webhook_submission(db_path: str, payload: dict) -> int:
                 improvements_suggestions,
                 future_topics,
                 form_source,
-                record_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                record_status,
+                cleaned_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         '''
+
+        # Normalize data for "Cleaned" columns
+        raw_dept = responses.get('department_original', '')
+        dept_cleaned = str(raw_dept).strip()
+        
+        # Roll Number normalization (already done for roll_no variable above)
+        
+        # Timestamp normalization
+        try:
+            timestamp_normalized = datetime.fromisoformat(timestamp.replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M:%S')
+        except:
+            timestamp_normalized = timestamp
 
         values = (
             timestamp,
+            timestamp_normalized,
             responses.get('name_of_student', ''),
-            responses.get('department_original', ''),
-            roll_no,  # Already converted to uppercase
+            raw_dept,
+            dept_cleaned,
+            roll_no,  # Original (uppercased)
+            roll_no,  # Cleaned (same as original for now)
             responses.get('date_of_lecture', ''),
             responses.get('alumni_speaker_name', ''),
             responses.get('session_help_understanding', ''),
@@ -67,7 +87,8 @@ def store_webhook_submission(db_path: str, payload: dict) -> int:
             responses.get('improvements_suggestions', ''),
             responses.get('future_topics', ''),
             form_id,
-            'WEBHOOK_RECEIVED'
+            'WEBHOOK_RECEIVED',
+            datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
         )
 
         cursor.execute(insert_query, values)

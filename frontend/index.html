@@ -850,6 +850,24 @@
 
     </div><!-- /dashboard-screen -->
 
-    <script src="/static/app.js"></script>
+    <!-- Deep Learning Processing Indicator -->
+    <div id="dl-processing-popup" style="position:fixed;bottom:-100px;left:20px;background:rgba(20,20,30,0.95);border:1px solid rgba(99,102,241,0.5);border-radius:12px;padding:16px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 10px 30px rgba(0,0,0,0.5);transition:bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);z-index:9999;backdrop-filter:blur(10px);">
+      <div class="dl-spinner" style="width:20px;height:20px;border:3px solid rgba(99,102,241,0.3);border-top-color:#6366f1;border-radius:50%;animation:spin 1s linear infinite;"></div>
+      <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:#f0f0f5;margin-bottom:2px;font-family:Inter;">Deep Learning Engine</div>
+        <div id="dl-processing-text" style="font-size:11px;color:#a5b4fc;font-family:Inter;">Checking AI models...</div>
+      </div>
+    </div>
+
+    <script src="/static/js/state.js"></script>
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/ui.js"></script>
+    <script src="/static/js/charts.js"></script>
+    <script src="/static/js/components.js"></script>
+    <script src="/static/js/admin.js"></script>
+    <script src="/static/js/main.js"></script>
+    <script src="/static/js/dl.js"></script>
   </body>
 </html>

@@ -6,6 +6,7 @@ import sqlite3
 import pandas as pd
 from typing import Dict, List, Tuple, Optional
 from collections import Counter
+from backend.utils.db_helper import get_db_connection
 
 
 class AnalyticsService:
@@ -16,7 +17,7 @@ class AnalyticsService:
 
     def get_connection(self):
         """Get database connection"""
-        conn = sqlite3.connect(self.db_path)
+        conn = get_db_connection(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
 

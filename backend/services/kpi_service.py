@@ -5,6 +5,7 @@ KPI Service - Key Performance Indicators calculation and tracking
 import sqlite3
 from typing import Dict, Optional
 from datetime import datetime, timedelta
+from backend.utils.db_helper import get_db_connection
 
 
 class KPIService:
@@ -15,7 +16,7 @@ class KPIService:
 
     def get_connection(self):
         """Get database connection"""
-        conn = sqlite3.connect(self.db_path)
+        conn = get_db_connection(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
 

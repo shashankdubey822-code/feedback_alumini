@@ -19,6 +19,10 @@ class Config:
     SQLALCHEMY_DATABASE_URI = f'sqlite:///{DATABASE_PATH}'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = False
+    
+    # SQLite timeout and connection settings
+    SQLITE_TIMEOUT = 30.0  # 30 seconds timeout for locked database
+    SQLITE_CHECK_SAME_THREAD = False  # Allow cross-thread access
 
     # CORS
     CORS_ORIGINS = os.getenv('CORS_ORIGINS', '*').split(',')

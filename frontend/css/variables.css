@@ -1,0 +1,61 @@
+/* ========================================
+   DataLens — Premium Dribbble-Inspired Design
+   Advanced Dark Theme with Sidebar Layout
+   ======================================== */
+
+:root {
+    /* Colors — Deep premium dark palette */
+    --bg-primary: #080a10;
+    --bg-secondary: #0e1018;
+    --bg-card: rgba(255, 255, 255, 0.03);
+    --bg-card-hover: rgba(255, 255, 255, 0.055);
+    --bg-glass: rgba(255, 255, 255, 0.025);
+    --bg-sidebar: #0b0d14;
+    --border: rgba(255, 255, 255, 0.055);
+    --border-active: rgba(99, 102, 241, 0.4);
+    --border-subtle: rgba(255, 255, 255, 0.03);
+
+    --text-primary: #eaeaf2;
+    --text-secondary: #8a8aa3;
+    --text-muted: #4d4d65;
+
+    --accent: #6366f1;
+    --accent-light: #818cf8;
+    --accent-glow: rgba(99, 102, 241, 0.18);
+    --purple: #a855f7;
+    --purple-glow: rgba(168, 85, 247, 0.15);
+    --cyan: #22d3ee;
+    --emerald: #34d399;
+    --amber: #fbbf24;
+    --rose: #fb7185;
+    --orange: #fb923c;
+
+    /* Layout */
+    --sidebar-width: 220px;
+    --sidebar-collapsed: 64px;
+    --topbar-height: 60px;
+
+    /* Radius */
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 18px;
+    --radius-xl: 24px;
+
+    /* Shadows */
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+    --shadow-glow: 0 0 40px var(--accent-glow);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+}
+

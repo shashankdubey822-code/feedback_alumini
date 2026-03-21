@@ -1,0 +1,178 @@
+/* === UPLOAD SCREEN — Immersive Hero === */
+.upload-container {
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 24px;
+    background:
+        radial-gradient(ellipse 60% 45% at 50% 0%, rgba(99, 102, 241, 0.12) 0%, transparent 100%),
+        radial-gradient(ellipse 35% 35% at 85% 85%, rgba(168, 85, 247, 0.08) 0%, transparent 100%),
+        radial-gradient(ellipse 25% 25% at 10% 70%, rgba(34, 211, 238, 0.04) 0%, transparent 100%),
+        var(--bg-primary);
+}
+
+.brand { text-align: center; margin-bottom: 48px; }
+.brand-icon {
+    margin-bottom: 20px;
+    filter: drop-shadow(0 6px 24px rgba(99, 102, 241, 0.35));
+    animation: floatPulse 4s ease-in-out infinite;
+}
+@keyframes floatPulse {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-10px) scale(1.02); }
+}
+.brand-title {
+    font-size: 56px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #818cf8 0%, #c084fc 50%, #818cf8 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -2px;
+    animation: shimmerGrad 4s linear infinite;
+}
+@keyframes shimmerGrad {
+    0% { background-position: 0% center; }
+    100% { background-position: 200% center; }
+}
+.brand-subtitle {
+    font-size: 17px;
+    color: var(--text-secondary);
+    margin-top: 10px;
+    font-weight: 400;
+    letter-spacing: -0.2px;
+}
+.brand-badges {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 20px;
+    flex-wrap: wrap;
+}
+.tech-badge {
+    padding: 6px 14px;
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.15);
+    border-radius: 50px;
+    font-size: 12px;
+    color: var(--accent-light);
+    font-weight: 600;
+    letter-spacing: -0.1px;
+}
+
+/* Drop Zone */
+.drop-zone {
+    width: 100%;
+    max-width: 600px;
+    border: 2px dashed rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-xl);
+    padding: 72px 48px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    background: var(--bg-glass);
+    backdrop-filter: blur(24px);
+    position: relative;
+}
+.drop-zone::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: var(--radius-xl);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), transparent 40%, transparent 60%, rgba(168, 85, 247, 0.1));
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+.drop-zone:hover::after,
+.drop-zone.dragover::after { opacity: 1; }
+.drop-zone:hover,
+.drop-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(99, 102, 241, 0.04);
+    box-shadow: var(--shadow-glow), 0 24px 48px rgba(0, 0, 0, 0.2);
+    transform: translateY(-4px);
+}
+
+.upload-icon {
+    color: var(--text-muted);
+    margin-bottom: 24px;
+    transition: all 0.4s ease;
+}
+.drop-zone:hover .upload-icon {
+    color: var(--accent-light);
+    transform: scale(1.1);
+}
+.drop-text {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+    letter-spacing: -0.3px;
+}
+.drop-subtext {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-bottom: 20px;
+}
+.browse-btn {
+    display: inline-block;
+    padding: 12px 36px;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    color: #fff;
+    border-radius: 50px;
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: none;
+    letter-spacing: -0.2px;
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+}
+.browse-btn:hover {
+    box-shadow: 0 8px 28px rgba(99, 102, 241, 0.45);
+    transform: translateY(-2px) scale(1.02);
+}
+.file-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 20px;
+}
+
+/* Upload Progress */
+.upload-progress {
+    width: 100%;
+    max-width: 600px;
+    margin-top: 32px;
+}
+.upload-progress.hidden { display: none; }
+.progress-bar {
+    height: 5px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 3px;
+    overflow: hidden;
+}
+.progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--purple), var(--cyan));
+    background-size: 200% 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+    animation: progressShimmer 2s linear infinite;
+}
+@keyframes progressShimmer {
+    0% { background-position: 0% center; }
+    100% { background-position: 200% center; }
+}
+.progress-text {
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 12px;
+}
+

@@ -13,86 +13,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from backend.config import get_config
 from backend.utils.logger import setup_logger
-from backend.routes.api import api_bp
+from backend.routes.api import api_bp, legacy_bp
 from backend.routes.webhook import webhook_bp
 from backend.routes.health import health_bp
 from backend.routes.admin import admin_bp
-
-
-def _initialize_database(app, logger):
-    """Initialize database on application startup"""
-    try:
-        import sqlite3
-        db_path = app.config.get('DATABASE_PATH', 'database/dashboard.db')
-
-        # Create database directory if it doesn't exist (and if there is a directory specified)
-        db_dir = os.path.dirname(db_path)
-        if db_dir:
-            os.makedirs(db_dir, exist_ok=True)
-
-        # Connect to database
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-
-        # Check if table exists and has correct columns
-        cursor.execute("PRAGMA table_info(dashboard_data)")
-        columns = [row[1] for row in cursor.fetchall()]
-        
-        # If table doesn't exist or is missing critical modern columns, recreate it
-        if not columns or 'form_source' not in columns:
-            logger.info("Initializing/Repairing dashboard_data table...")
-            cursor.execute("DROP TABLE IF EXISTS dashboard_data")
-            cursor.execute('''
-                CREATE TABLE dashboard_data (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp_original TEXT,
-                    timestamp_normalized TEXT,
-                    name_of_student TEXT,
-                    name_normalized TEXT,
-                    department_original TEXT,
-                    department_cleaned TEXT,
-                    roll_no_original TEXT,
-                    roll_no_cleaned TEXT,
-                    date_of_lecture TEXT,
-                    alumni_speaker_name TEXT,
-                    session_help_understanding TEXT,
-                    session_rating INTEGER,
-                    session_technical_clarity INTEGER,
-                    aspect_most_valuable TEXT,
-                    improvements_suggestions TEXT,
-                    future_topics TEXT,
-                    form_source TEXT,
-                    data_quality_score REAL,
-                    is_duplicate_flag INTEGER DEFAULT 0,
-                    record_status TEXT,
-                    cleaned_at TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-        
-        # Ensure events table exists
-        cursor.execute("PRAGMA table_info(events)")
-        event_cols = [row[1] for row in cursor.fetchall()]
-        if not event_cols:
-            logger.info("Creating events table...")
-            cursor.execute('''
-                CREATE TABLE events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    speaker_name TEXT NOT NULL,
-                    venue_date TEXT NOT NULL,
-                    form_id TEXT,
-                    form_url TEXT,
-                    form_edit_url TEXT,
-                    status TEXT DEFAULT 'pending',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-        
-        conn.commit()
-        conn.close()
-        logger.info("Database schema verified and ready")
-    except Exception as e:
-        logger.error(f"Error initializing database: {str(e)}")
+from backend.utils.db_helper import initialize_database
 
 
 def create_app(config=None):
@@ -119,7 +44,11 @@ def create_app(config=None):
     logger.info(f"Application starting in {app.config.get('FLASK_ENV', 'development')} mode")
 
     # Initialize database on startup
-    _initialize_database(app, logger)
+    initialize_database(app, logger)
+
+    # Start Deep Learning background thread
+    from backend.services.dl_worker import start_dl_worker
+    start_dl_worker(logger)
 
     # Enable CORS
     CORS(app, resources={
@@ -133,6 +62,7 @@ def create_app(config=None):
     # Register blueprints
     app.register_blueprint(health_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(legacy_bp)
     app.register_blueprint(webhook_bp)
     app.register_blueprint(admin_bp)
 
@@ -147,30 +77,6 @@ def create_app(config=None):
     # NOTE: /static/<path> is handled automatically by Flask since we set
     # static_folder=frontend_dir and static_url_path='/static'.
     # Flask will serve frontend/style.css at /static/style.css, etc.
-
-    # ─── Legacy bridge routes for Premium frontend ────────────
-    @app.route('/api/data', methods=['GET'])
-    def get_legacy_data():
-        """Unified analytics payload for the Premium frontend (app.js)"""
-        try:
-            from backend.routes.api import get_consolidated_analytics
-            return jsonify(get_consolidated_analytics(app)), 200
-        except Exception as e:
-            logger.error(f"Error in /api/data: {str(e)}")
-            return jsonify({'error': str(e)}), 500
-
-    @app.route('/api/filter', methods=['POST'])
-    def get_legacy_filter():
-        """Filtered analytics payload for the Premium frontend"""
-        try:
-            from backend.routes.api import get_consolidated_analytics
-            body = request.get_json() or {}
-            filters = body.get('filters', {})
-            search = body.get('search', '')
-            return jsonify(get_consolidated_analytics(app, filters=filters, search=search)), 200
-        except Exception as e:
-            logger.error(f"Error in /api/filter: {str(e)}")
-            return jsonify({'error': str(e)}), 500
 
     # ─── Error handlers ───────────────────────────────────────
     @app.errorhandler(404)

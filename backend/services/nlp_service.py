@@ -64,6 +64,13 @@ class NLPService:
     def __init__(self, min_word_length: int = 3, max_keywords: int = 10):
         self.min_word_length = min_word_length
         self.max_keywords = max_keywords
+        self.sentiment_model = None
+        try:
+            from transformers import pipeline
+            # Load the lightweight DistilBERT sentiment model
+            self.sentiment_model = pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
+        except ImportError:
+            pass # Transformers not installed yet, will fallback
 
     def is_non_answer(self, text: str) -> bool:
         """Detect if text is a non-answer (NA, No, None, etc.)"""
@@ -88,7 +95,7 @@ class NLPService:
         return False
 
     def analyze_sentiment(self, text: str) -> Dict[str, float]:
-        """Analyze sentiment of text using TextBlob"""
+        """Analyze sentiment of text using HuggingFace Transformers (with TextBlob fallback)"""
         if not text or self.is_non_answer(text):
             return {
                 'polarity': 0.0,
@@ -97,22 +104,38 @@ class NLPService:
             }
 
         try:
-            blob = TextBlob(text)
-            polarity = round(blob.sentiment.polarity, 3)
-
-            # Categorize sentiment
-            if polarity > 0.1:
-                label = 'POSITIVE'
-            elif polarity < -0.1:
-                label = 'NEGATIVE'
+            if self.sentiment_model:
+                # Truncate text to 512 tokens safely
+                result = self.sentiment_model(text[:512])[0]
+                label = result['label']
+                score = result['score']
+                
+                # Convert to -1 to 1 polarity
+                polarity = score if label == 'POSITIVE' else -score
+                
+                return {
+                    'polarity': round(polarity, 3),
+                    'subjectivity': round(score, 3), # Using confidence score as subjectivity proxy
+                    'label': label
+                }
             else:
-                label = 'NEUTRAL'
+                # Fallback to lexical approach if DL fails to load
+                blob = TextBlob(text)
+                polarity = round(blob.sentiment.polarity, 3)
 
-            return {
-                'polarity': polarity,
-                'subjectivity': round(blob.sentiment.subjectivity, 3),
-                'label': label
-            }
+                # Categorize sentiment
+                if polarity > 0.1:
+                    label = 'POSITIVE'
+                elif polarity < -0.1:
+                    label = 'NEGATIVE'
+                else:
+                    label = 'NEUTRAL'
+
+                return {
+                    'polarity': polarity,
+                    'subjectivity': round(blob.sentiment.subjectivity, 3),
+                    'label': label
+                }
         except Exception as e:
             return {
                 'polarity': 0.0,
