@@ -9,11 +9,11 @@ from ..services.nlp_service import NLPService
 from ..services.speaker_service import SpeakerService
 from ..services.kpi_service import KPIService
 from ..services.time_trend_service import TimeTrendService
-from ..utils.logger import get_logger, log_endpoint_access
+from ..utils.logger import get_section_logger, log_endpoint_access
 import sqlite3
 import os
 
-logger = get_logger(__name__)
+logger = get_section_logger('api')
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 legacy_bp = Blueprint('legacy', __name__, url_prefix='/api')
@@ -426,6 +426,39 @@ def get_consolidated_analytics(app, filters=None, search=None):
         else:
             col_types[col] = 'text'
 
+    # ── 7. Deep Learning Payload Aggregation ─────────────────────────
+    sentiment_counts = {'POSITIVE': 0, 'NEUTRAL': 0, 'NEGATIVE': 0}
+    keyword_freq = {}
+    import json
+
+    for row in table_data:
+        # Sentiment
+        label = str(row.get('dl_sentiment_label', '')).upper()
+        if label in sentiment_counts:
+            sentiment_counts[label] += 1
+            
+        # Keywords
+        kw_str = row.get('dl_keywords')
+        if kw_str:
+            try:
+                kws = json.loads(kw_str) 
+                for kw in kws:
+                    word = kw[0] if isinstance(kw, (list, tuple)) else kw
+                    if isinstance(word, str):
+                        word = word.lower()
+                        keyword_freq[word] = keyword_freq.get(word, 0) + 1
+            except Exception:
+                pass
+
+    formatted_sentiment = [
+        {'label': 'Positive', 'value': sentiment_counts['POSITIVE']},
+        {'label': 'Neutral', 'value': sentiment_counts['NEUTRAL']},
+        {'label': 'Negative', 'value': sentiment_counts['NEGATIVE']}
+    ]
+
+    sorted_keywords = sorted(keyword_freq.items(), key=lambda x: x[1], reverse=True)[:40]
+    formatted_keywords = [{'text': k, 'value': v} for k, v in sorted_keywords]
+
     return {
         'kpis':         formatted_kpis,
         'filters':      formatted_filters,
@@ -435,8 +468,8 @@ def get_consolidated_analytics(app, filters=None, search=None):
         ],
         'charts':       formatted_charts,
         'timeTrends':   [],
-        'sentiment':    [],
-        'keywords':     [],
+        'sentiment':    formatted_sentiment,
+        'keywords':     formatted_keywords,
         'speakerStats': speaker_stats_payload,
         'tableData':    table_data,
         'meta': {

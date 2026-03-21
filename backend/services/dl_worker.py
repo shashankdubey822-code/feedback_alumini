@@ -4,16 +4,18 @@ import sqlite3
 import json
 from backend.services.nlp_service import NLPService
 from backend.config import get_config
+from backend.utils.logger import get_section_logger
 
-def start_dl_worker(logger):
+def start_dl_worker(logger_unused):
     """Start the deep learning background worker thread"""
+    dl_logger = get_section_logger('dl_worker')
     config = get_config()()
     db_path = config.DATABASE_PATH
     
     def worker_loop():
-        logger.info("DL Worker Thread Started. Initializing AI Models...")
+        dl_logger.info("DL Worker Thread Started. Initializing AI Models...")
         nlp = NLPService()
-        logger.info("AI Models Initialized. Waiting for data in background...")
+        dl_logger.info("AI Models Initialized. Waiting for data in background...")
         
         while True:
             try:
@@ -39,7 +41,7 @@ def start_dl_worker(logger):
                 rows = cursor.fetchall()
                 
                 if rows:
-                    logger.info(f"DL Worker processing {len(rows)} new records...")
+                    dl_logger.info(f"DL Worker processing {len(rows)} new records...")
                     for row in rows:
                         # Combine text for comprehensive analysis
                         text_parts = []
@@ -61,11 +63,11 @@ def start_dl_worker(logger):
                         ''', (sentiment['polarity'], sentiment['label'], 
                               json.dumps(keywords), row['id']))
                     conn.commit()
-                    logger.info(f"DL Worker finished processing {len(rows)} records.")
+                    dl_logger.info(f"DL Worker finished processing {len(rows)} records.")
                 conn.close()
                 time.sleep(5) # Poll every 5 seconds
             except Exception as e:
-                logger.error(f"DL Worker Error: {e}")
+                dl_logger.error(f"DL Worker Error: {e}")
                 time.sleep(10)
     
     worker_thread = threading.Thread(target=worker_loop, daemon=True)

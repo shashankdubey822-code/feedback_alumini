@@ -17,6 +17,7 @@ from backend.routes.api import api_bp, legacy_bp
 from backend.routes.webhook import webhook_bp
 from backend.routes.health import health_bp
 from backend.routes.admin import admin_bp
+from backend.routes.diagnostics import diagnostics_bp
 from backend.utils.db_helper import initialize_database
 
 
@@ -65,6 +66,7 @@ def create_app(config=None):
     app.register_blueprint(legacy_bp)
     app.register_blueprint(webhook_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(diagnostics_bp)
 
     # ─── Serve the single-page frontend ──────────────────────
     @app.route('/')

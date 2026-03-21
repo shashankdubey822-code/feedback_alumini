@@ -5,10 +5,10 @@ Webhook Routes - Handle incoming webhooks from Google Forms
 from flask import Blueprint, request, jsonify
 import sqlite3
 from datetime import datetime
-from ..utils.logger import get_logger, log_endpoint_access
+from ..utils.logger import get_section_logger, log_endpoint_access
 from ..utils.db_helper import get_db_connection
 
-logger = get_logger(__name__)
+logger = get_section_logger('webhook')
 
 webhook_bp = Blueprint('webhook', __name__, url_prefix='/api/v1/webhook')
 

@@ -82,3 +82,38 @@ def log_endpoint_access(func):
             raise
 
     return wrapper
+
+
+def get_section_logger(section_name: str) -> logging.Logger:
+    """
+    Get a logger dedicated to a specific application section (nlp, db, api, etc).
+    Logs to a cleanly isolated file: logs/{section_name}_errors.log
+    """
+    logger = logging.getLogger(section_name)
+    logger.setLevel(logging.INFO)
+    
+    # Avoid attaching handlers multiple times on sequential calls
+    if not logger.handlers:
+        # Resolve project root dir
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        log_dir = os.path.join(project_root, 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        
+        log_file = os.path.join(log_dir, f"{section_name}_errors.log")
+        
+        formatter = logging.Formatter(
+            '[%(asctime)s] %(levelname)-8s | %(name)s | %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        
+        file_handler = RotatingFileHandler(log_file, maxBytes=10485760, backupCount=5)
+        file_handler.setFormatter(formatter)
+        
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        
+        logger.addHandler(file_handler)
+        logger.addHandler(console_handler)
+        logger.propagate = False
+        
+    return logger
