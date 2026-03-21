@@ -495,6 +495,9 @@ def get_consolidated_analytics(app, filters=None, search=None):
             except Exception:
                 pass
 
+    total_sentiment_processed = sum(sentiment_counts.values()) or 1
+    avg_polarity = (sentiment_counts['POSITIVE'] - sentiment_counts['NEGATIVE']) / total_sentiment_processed
+
     formatted_sentiment = []
     
     # 1. Legacy Overall Deep Learning Network

@@ -88,7 +88,8 @@ class NLPService:
 
         # Heuristic: very short + neutral sentiment
         if len(text) <= 5:
-            polarity = self.get_sentiment(text)
+            from textblob import TextBlob
+            polarity = TextBlob(text).sentiment.polarity
             if -0.2 <= polarity <= 0.2:
                 return True
 
