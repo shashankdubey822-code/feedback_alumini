@@ -63,7 +63,7 @@ def start_dl_worker(logger_unused):
                         val_sentiment = nlp.analyze_sentiment(val_text)['label'] if val_text and not nlp.is_non_answer(val_text) else 'NO_RESPONSE'
                         
                         # 2. Top Trending Topics Word Cloud
-                        fut_keywords = nlp.extract_keywords(fut_text)
+                        fut_keywords = nlp.extract_keyphrases(fut_text)
                         
                         # 3. Actionable vs Non-Actionable Filter
                         is_actionable = 1 if imp_text and not nlp.is_non_answer(imp_text) else 0

@@ -177,6 +177,41 @@ class NLPService:
         except Exception:
             return []
 
+    def extract_keyphrases(self, text: str, limit: int = None) -> List[str]:
+        """Extract goal-oriented meaningful phrases (bigrams/trigrams) from text to represent concepts"""
+        if not text or self.is_non_answer(text):
+            return []
+
+        limit = limit or self.max_keywords
+
+        try:
+            words = text.lower().split()
+            words = [
+                w.strip('.,!?"\'()-—')
+                for w in words
+                if w.strip('.,!?"\'()-—') and len(w.strip('.,!?"\'()-—')) >= 3
+            ]
+            words = [w for w in words if w not in self.STOP_WORDS]
+
+            if not words:
+                return []
+
+            phrases = []
+            
+            # Form Bigrams
+            for i in range(len(words) - 1):
+                phrases.append(f"{words[i]} {words[i+1]}")
+            
+            # Add standalone Unigrams as fallback
+            phrases.extend(words)
+
+            phrase_counts = Counter(phrases)
+            
+            # Return top phrases, favoring bigrams natively since they will naturally aggregate
+            return [phrase for phrase, _ in phrase_counts.most_common(limit)]
+        except Exception:
+            return []
+
     def extract_bigrams(self, texts: List[str], limit: int = 10) -> List[Tuple[str, str]]:
         """Extract common bigrams from multiple texts"""
         bigrams = []
