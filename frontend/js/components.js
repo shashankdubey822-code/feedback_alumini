@@ -7,7 +7,6 @@ function renderDashboard() {
     try { renderFilters(a.filters); } catch(e) { console.error("Error renderFilters:", e); }
     try { renderAIInsights(a.aiInsights); } catch(e) { console.error("Error renderAIInsights:", e); }
     try { renderCharts(a.charts); } catch(e) { console.error("Error renderCharts:", e); }
-    try { renderTimeTrends(a.timeTrends); } catch(e) { console.error("Error renderTimeTrends:", e); }
     try { renderDeepAnalysis(a.deepAnalysis); } catch(e) { console.error("Error renderDeepAnalysis:", e); }
     try { renderSentiment(a.sentiment); } catch(e) { console.error("Error renderSentiment:", e); }
     try { renderKeywords(a.keywords); } catch(e) { console.error("Error renderKeywords:", e); }
@@ -333,7 +332,6 @@ async function applyFilters() {
             renderKPIs(analytics.kpis);
             renderAIInsights(analytics.aiInsights);
             renderCharts(analytics.charts);
-            renderTimeTrends(analytics.timeTrends);
             renderSentiment(analytics.sentiment);
             renderKeywords(analytics.keywords);
             renderSpeakers(analytics.speakerStats);

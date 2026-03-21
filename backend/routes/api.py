@@ -8,7 +8,6 @@ from ..services.chart_service import ChartService
 from ..services.nlp_service import NLPService
 from ..services.speaker_service import SpeakerService
 from ..services.kpi_service import KPIService
-from ..services.time_trend_service import TimeTrendService
 from ..utils.logger import get_section_logger, log_endpoint_access
 import sqlite3
 import os
@@ -28,7 +27,6 @@ def get_services(app):
         'nlp': NLPService(),
         'speakers': SpeakerService(db_path),
         'kpi': KPIService(db_path),
-        'trends': TimeTrendService(db_path),
     }
 
 
@@ -291,13 +289,6 @@ def get_consolidated_analytics(app, filters=None, search=None):
     }
     # (KPIs will be finalized after table_data aggregation)
     formatted_kpis = []
-
-    # ── 1b. Time Trends ──────────────────────────────────────────────
-    try:
-        trend_service = TimeTrendService(db_path)
-        daily_trends = trend_service.get_daily_trend(days=30)
-    except Exception:
-        daily_trends = []
 
     # ── 2. Charts ────────────────────────────────────────────────────
     try:
@@ -721,7 +712,6 @@ def get_consolidated_analytics(app, filters=None, search=None):
         'filters':      formatted_filters,
         'aiInsights':   ai_insights,
         'charts':       formatted_charts,
-        'timeTrends':   formatted_trends,
         'sentiment':    formatted_sentiment,
         'keywords':     formatted_keywords,
         'deepAnalysis': deep_analysis,
