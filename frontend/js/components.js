@@ -852,9 +852,9 @@ function openDataModal(chartTitle, clickedLabel, clickedValue, column, columnTyp
         } else if (columnType === 'dl_category') {
             const searchLabel = String(clickedLabel).toLowerCase().trim();
             filteredRows = state.tableData.filter(row => {
-                if (!row['dl_processed']) return false;
+                if (!row['dl_keywords']) return false;
                 try {
-                    const dl = JSON.parse(row['dl_processed']);
+                    const dl = JSON.parse(row['dl_keywords']);
                     if (!dl.categories) return false;
                     return dl.categories.some(c => String(c).toLowerCase().trim() === searchLabel);
                 } catch(e) { return false; }
@@ -862,9 +862,9 @@ function openDataModal(chartTitle, clickedLabel, clickedValue, column, columnTyp
         } else if (columnType === 'dl_actionability') {
             const isActionable = clickedLabel === 'Actionable Suggestions';
             filteredRows = state.tableData.filter(row => {
-                if (!row['dl_processed']) return false;
+                if (!row['dl_keywords']) return false;
                 try {
-                    const dl = JSON.parse(row['dl_processed']);
+                    const dl = JSON.parse(row['dl_keywords']);
                     return !!dl.is_actionable === isActionable;
                 } catch(e) { return false; }
             });
