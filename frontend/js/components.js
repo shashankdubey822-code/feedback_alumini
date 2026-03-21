@@ -902,6 +902,10 @@ function openDataModal(chartTitle, clickedLabel, clickedValue, column, columnTyp
                     let keywordsToSearch = [];
                     if (column.includes('Future Topics')) {
                         keywordsToSearch = dl.future_keywords || [];
+                    } else if (column.includes('Valuable')) {
+                        keywordsToSearch = dl.val_keywords || [];
+                    } else if (column.includes('Improvement')) {
+                        keywordsToSearch = dl.imp_keywords || [];
                     } else {
                         keywordsToSearch = (dl.general_keywords || []).concat(dl.future_keywords || []);
                     }

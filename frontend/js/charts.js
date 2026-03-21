@@ -92,17 +92,7 @@ function renderTimeTrends(timeTrends) {
                         pointHoverRadius: 7,
                     }],
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'bottom', labels: { color: '#8b8b9e' } }
-                    },
-                    scales: {
-                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b8b9e' } },
-                        x: { grid: { display: false }, ticks: { color: '#8b8b9e' } }
-                    }
-                },
+                options: getChartOptions(chartType, trend.xLabel || 'Date', trend.yLabel || 'Responses', trend),
             });
             state.charts.push(chart);
             return;
