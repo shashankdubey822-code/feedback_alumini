@@ -320,6 +320,9 @@ def get_consolidated_analytics(app, filters=None, search=None):
             'type':   'doughnut',
             'labels': [d.get('label', '') for d in rd],
             'data':   [d.get('value', 0)  for d in rd],
+            'column': 'session_rating',
+            'columnType': 'numeric',
+            'binBoundaries': [{'exact': d.get('rating')} for d in rd]
         })
     dr = raw_charts.get('department_ratings', [])
     if dr:
@@ -330,6 +333,8 @@ def get_consolidated_analytics(app, filters=None, search=None):
             'data':   [d.get('average_rating', 0)   for d in dr],
             'yLabel': 'Avg Rating',
             'xLabel': 'Department',
+            'column': 'department_cleaned',
+            'columnType': 'text'
         })
 
     # (Removed redundant SpeakerService call - will aggregate from table_data loop below)

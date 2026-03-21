@@ -528,8 +528,8 @@ function renderSpeakers(speakerStats) {
                     },
                     options: getChartOptions('bar', 'Speaker Name', `Average ${truncate(ratingKeys[0], 20)}`, {
                         title: `Speaker Avg ${ratingKeys[0]}`,
-                        column: 'Speaker Name',
-                        labels,
+                        column: 'alumni_speaker_name',
+                        labels: ss.speakers.map(s => s.name),
                         data
                     }),
                 });
@@ -565,7 +565,7 @@ function renderSpeakers(speakerStats) {
                 },
                 options: getChartOptions('bar', 'Speaker Name', 'Sentiment Score (-1 to +1)', {
                     title: 'Speaker Sentiment',
-                    column: 'Speaker Name',
+                    column: 'alumni_speaker_name',
                     labels: ss.speakers.map(s => s.name),
                     data: ss.speakers.map(s => s.sentiment)
                 }),
