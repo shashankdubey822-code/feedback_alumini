@@ -64,7 +64,51 @@ function renderTimeTrends(timeTrends) {
         return;
     }
 
-    timeTrends.forEach(trend => {
+    timeTrends.forEach((trend, trendIdx) => {
+        // Support new simple format: { title, type, labels, data, xLabel, yLabel }
+        if (trend.labels && trend.data && trend.labels.length >= 2) {
+            const card = document.createElement('div');
+            card.className = 'chart-card';
+            card.innerHTML = `
+                <div class="chart-card-header"><div class="chart-card-title">${esc(trend.title || 'Trend Analysis')}</div></div>
+                <div class="chart-canvas-wrapper"><canvas></canvas></div>
+            `;
+            container.appendChild(card);
+
+            const chartType = trend.type || 'line';
+            const chart = new Chart(card.querySelector('canvas'), {
+                type: chartType,
+                data: {
+                    labels: trend.labels,
+                    datasets: [{
+                        label: trend.yLabel || 'Count',
+                        data: trend.data,
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#6366f1',
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#8b8b9e' } }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b8b9e' } },
+                        x: { grid: { display: false }, ticks: { color: '#8b8b9e' } }
+                    }
+                },
+            });
+            state.charts.push(chart);
+            return;
+        }
+
+        // Support legacy complex format
         if (trend.responseCount && trend.responseCount.labels.length >= 2) {
             const card = document.createElement('div');
             card.className = 'chart-card';

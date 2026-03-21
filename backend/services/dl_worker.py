@@ -62,8 +62,10 @@ def start_dl_worker(logger_unused):
                         imp_sentiment = nlp.analyze_sentiment(imp_text)['label'] if imp_text and not nlp.is_non_answer(imp_text) else 'NO_RESPONSE'
                         val_sentiment = nlp.analyze_sentiment(val_text)['label'] if val_text and not nlp.is_non_answer(val_text) else 'NO_RESPONSE'
                         
-                        # 2. Top Trending Topics Word Cloud
+                        # 2. Top Trending Topics Word Clouds
                         fut_keywords = nlp.extract_keyphrases(fut_text)
+                        imp_keywords = nlp.extract_keyphrases(imp_text)
+                        val_keywords = nlp.extract_keyphrases(val_text)
                         
                         # 3. Actionable vs Non-Actionable Filter
                         is_actionable = 1 if imp_text and not nlp.is_non_answer(imp_text) else 0
@@ -87,6 +89,8 @@ def start_dl_worker(logger_unused):
                             "improvements_sentiment": imp_sentiment,
                             "valuable_sentiment": val_sentiment,
                             "future_keywords": fut_keywords,
+                            "imp_keywords": imp_keywords,
+                            "val_keywords": val_keywords,
                             "is_actionable": is_actionable,
                             "category": category if is_actionable == 1 else "Non-Actionable",
                             "general_keywords": general_keywords

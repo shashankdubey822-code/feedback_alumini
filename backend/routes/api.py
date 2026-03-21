@@ -298,6 +298,13 @@ def get_consolidated_analytics(app, filters=None, search=None):
             'sub':   ''
         })
 
+    # ── 1b. Time Trends ──────────────────────────────────────────────
+    try:
+        trend_service = TimeTrendService(db_path)
+        daily_trends = trend_service.get_daily_trend(days=30)
+    except Exception:
+        daily_trends = []
+
     # ── 2. Charts ────────────────────────────────────────────────────
     try:
         chart_service = ChartService(db_path)
@@ -407,10 +414,13 @@ def get_consolidated_analytics(app, filters=None, search=None):
     actionable_stats = {'actionable': 0, 'non_actionable': 0}
     category_counts = {}
     future_keyword_freq = {}
+    val_keyword_freq = {}
+    imp_keyword_freq = {}
     session_understanding_counts = {}
     
     import json
     speaker_tracker = {} # name -> {count, total_rating, total_sentiment}
+    time_tracker    = {} # date -> count
 
     for row in table_data:
         # Speaker Tracking
@@ -421,6 +431,12 @@ def get_consolidated_analytics(app, filters=None, search=None):
             speaker_tracker[sp_name]['count'] += 1
             speaker_tracker[sp_name]['total_rating'] += float(row.get('session_rating') or 0)
             speaker_tracker[sp_name]['total_sentiment'] += float(row.get('dl_sentiment_score') or 0)
+
+        # Time Tracking
+        raw_ts = row.get('timestamp_normalized') or row.get('timestamp_original')
+        if raw_ts and len(str(raw_ts)) >= 10:
+            date_key = str(raw_ts)[:10] # YYYY-MM-DD
+            time_tracker[date_key] = time_tracker.get(date_key, 0) + 1
 
         # Sentiment (legacy)
         label = str(row.get('dl_sentiment_label', '')).upper()
@@ -464,6 +480,30 @@ def get_consolidated_analytics(app, filters=None, search=None):
                 shu = row.get('session_help_understanding')
                 if shu:
                     session_understanding_counts[shu] = session_understanding_counts.get(shu, 0) + 1
+                            
+                    # Future Topics Keywords (Specialized)
+                    fut_kws = kws.get('future_keywords', [])
+                    for k in fut_kws:
+                        word = k[0] if isinstance(k, (list, tuple)) else k
+                        if isinstance(word, str):
+                            word = word.lower()
+                            future_keyword_freq[word] = future_keyword_freq.get(word, 0) + 1
+                        
+                    # Valuable Aspects Keywords
+                    val_kws = kws.get('val_keywords', [])
+                    for k in val_kws:
+                        word = k[0] if isinstance(k, (list, tuple)) else k
+                        if isinstance(word, str):
+                            word = word.lower()
+                            val_keyword_freq[word] = val_keyword_freq.get(word, 0) + 1
+
+                    # Improvements Keywords
+                    imp_kws = kws.get('imp_keywords', [])
+                    for k in imp_kws:
+                        word = k[0] if isinstance(k, (list, tuple)) else k
+                        if isinstance(word, str):
+                            word = word.lower()
+                            imp_keyword_freq[word] = imp_keyword_freq.get(word, 0) + 1
                             
                     # Add back general keywords for original widget
                     gen_kws = kws.get('general_keywords', [])
@@ -530,18 +570,26 @@ def get_consolidated_analytics(app, filters=None, search=None):
 
     # 4. Keywords
     formatted_keywords = []
-    sorted_keywords = sorted(keyword_freq.items(), key=lambda x: x[1], reverse=True)[:40]
-    if sorted_keywords:
-        formatted_keywords.append({
-            'column': 'Deep Analysis: Overall Frequent Topics',
-            'words': [{'text': k, 'count': v, 'type': 'unigram' if len(k.split()) == 1 else 'bigram'} for k, v in sorted_keywords]
-        })
-        
+
     sorted_fut_keywords = sorted(future_keyword_freq.items(), key=lambda x: x[1], reverse=True)[:40]
     if sorted_fut_keywords:
         formatted_keywords.append({
             'column': 'Deep Analysis: Requested Future Topics',
             'words': [{'text': k, 'count': v, 'type': 'unigram' if len(k.split()) == 1 else 'bigram'} for k, v in sorted_fut_keywords]
+        })
+
+    sorted_val_keywords = sorted(val_keyword_freq.items(), key=lambda x: x[1], reverse=True)[:40]
+    if sorted_val_keywords:
+        formatted_keywords.append({
+            'column': 'Deep Analysis: Valuable Aspects',
+            'words': [{'text': k, 'count': v, 'type': 'unigram' if len(k.split()) == 1 else 'bigram'} for k, v in sorted_val_keywords]
+        })
+
+    sorted_imp_keywords = sorted(imp_keyword_freq.items(), key=lambda x: x[1], reverse=True)[:40]
+    if sorted_imp_keywords:
+        formatted_keywords.append({
+            'column': 'Deep Analysis: Improvement Suggestions',
+            'words': [{'text': k, 'count': v, 'type': 'unigram' if len(k.split()) == 1 else 'bigram'} for k, v in sorted_imp_keywords]
         })
     
     # Finalize Speaker Stats from tracker
@@ -586,6 +634,19 @@ def get_consolidated_analytics(app, filters=None, search=None):
             'backgroundColors': ['#34d399', '#fbbf24', '#fb7185'] 
         })
 
+    # Finalize Time Trends
+    sorted_dates = sorted(time_tracker.keys())
+    formatted_trends = []
+    if sorted_dates:
+        formatted_trends.append({
+            'responseCount': {
+                'labels': sorted_dates,
+                'data': [time_tracker[d] for d in sorted_dates],
+                'xLabel': 'Date',
+                'yLabel': 'Responses'
+            }
+        })
+
     return {
         'kpis':         formatted_kpis,
         'filters':      formatted_filters,
@@ -594,7 +655,7 @@ def get_consolidated_analytics(app, filters=None, search=None):
             {'type': 'success', 'icon': '🎯', 'text': f'Found {total_count} feedback records.'}
         ],
         'charts':       formatted_charts,
-        'timeTrends':   [],
+        'timeTrends':   formatted_trends,
         'sentiment':    formatted_sentiment,
         'keywords':     formatted_keywords,
         'deepAnalysis': deep_analysis,
