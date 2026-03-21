@@ -38,6 +38,18 @@ function RUN_ME_TO_AUTHORIZE() {
   }
 }
 
+/**
+ * TRIGGER CLEANUP: 
+ * Run this if you get the "Too many triggers" error!
+ * It will delete all existing form triggers to make room for new ones.
+ */
+function CLEANUP_ALL_TRIGGERS() {
+  Logger.log("Deleting all triggers to fix 'Too many triggers' error...");
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(t => ScriptApp.deleteTrigger(t));
+  Logger.log("✅ All triggers deleted. You can now generate a new form.");
+}
+
 // ─── ENTRY POINTS ────────────────────────────────────────────────────────────
 
 function doPost(e) {
@@ -119,6 +131,15 @@ function _handleCreateForm(payload) {
     speaker_name: speaker,
     venue_date: date
   }));
+
+  // ⚡ AUTOMATIC TRIGGER PRUNING (Personal accounts are limited to 20)
+  const allTriggers = ScriptApp.getProjectTriggers();
+  if (allTriggers.length > 18) {
+    Logger.log("⚠️ Pruning old triggers to make room (Auto-Cleanup)...");
+    for (let i = 0; i < 5; i++) {
+       if (allTriggers[i]) try { ScriptApp.deleteTrigger(allTriggers[i]); } catch(f) {}
+    }
+  }
 
   ScriptApp.newTrigger('onFormSubmitTrigger').forForm(form).onFormSubmit().create();
 
