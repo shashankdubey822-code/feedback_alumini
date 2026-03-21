@@ -441,7 +441,7 @@ function renderKeywords(keywordsData) {
             span.textContent = `${isBigram ? '⟨ ' : ''}${word.text}${isBigram ? ' ⟩' : ''}`;
             
             span.addEventListener('click', () => {
-                openDataModal('Trending Topics', word.text, word.count, kw.column, 'text', null);
+                openDataModal('Trending Topics', word.text, word.count, kw.column, 'dl_keyword', null);
             });
             cloudContainer.appendChild(span);
         });
@@ -891,6 +891,24 @@ function openDataModal(chartTitle, clickedLabel, clickedValue, column, columnTyp
                     }
                 } catch(e) { return false; }
                 return false;
+            });
+        } else if (columnType === 'dl_keyword') {
+            const searchLabel = String(clickedLabel).toLowerCase().trim();
+            filteredRows = state.tableData.filter(row => {
+                if (!row['dl_keywords']) return false;
+                try {
+                    const dl = JSON.parse(row['dl_keywords']);
+                    let keywordsToSearch = [];
+                    if (column.includes('Future Topics')) {
+                        keywordsToSearch = dl.future_keywords || [];
+                    } else {
+                        keywordsToSearch = (dl.general_keywords || []).concat(dl.future_keywords || []);
+                    }
+                    return keywordsToSearch.some(kwData => {
+                        const word = Array.isArray(kwData) ? kwData[0] : kwData;
+                        return String(word).toLowerCase().trim() === searchLabel;
+                    });
+                } catch(e) { return false; }
             });
         } else if (columnType === 'dl_actionability') {
             const isActionable = clickedLabel === 'Actionable Suggestions';
