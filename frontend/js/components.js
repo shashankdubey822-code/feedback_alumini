@@ -315,7 +315,7 @@ function renderSentiment(sentimentData) {
                     <canvas></canvas>
                 </div>
                 <div class="sentiment-stats">
-                    <div class="sentiment-stat-row">
+                    <div class="sentiment-stat-row clickable-sentiment" data-sentiment="POSITIVE" data-col="${esc(s.column)}">
                         <span class="sentiment-dot positive"></span>
                         <span style="color: var(--text-secondary); font-size: 12px; min-width: 60px;">Positive</span>
                         <div class="sentiment-bar-track">
@@ -323,7 +323,7 @@ function renderSentiment(sentimentData) {
                         </div>
                         <span class="sentiment-count">${s.positive}</span>
                     </div>
-                    <div class="sentiment-stat-row">
+                    <div class="sentiment-stat-row clickable-sentiment" data-sentiment="NEUTRAL" data-col="${esc(s.column)}">
                         <span class="sentiment-dot neutral"></span>
                         <span style="color: var(--text-secondary); font-size: 12px; min-width: 60px;">Neutral</span>
                         <div class="sentiment-bar-track">
@@ -331,7 +331,7 @@ function renderSentiment(sentimentData) {
                         </div>
                         <span class="sentiment-count">${s.neutral}</span>
                     </div>
-                    <div class="sentiment-stat-row">
+                    <div class="sentiment-stat-row clickable-sentiment" data-sentiment="NEGATIVE" data-col="${esc(s.column)}">
                         <span class="sentiment-dot negative"></span>
                         <span style="color: var(--text-secondary); font-size: 12px; min-width: 60px;">Negative</span>
                         <div class="sentiment-bar-track">
@@ -350,6 +350,21 @@ function renderSentiment(sentimentData) {
         container.appendChild(card);
 
         drawSentimentGauge(card.querySelector('.sentiment-gauge canvas'), polarity);
+        
+        card.querySelectorAll('.clickable-sentiment').forEach(row => {
+            row.style.cursor = 'pointer';
+            row.title = 'Click to view students';
+            
+            // Add slight hover effect via JS since CSS isn't easily modifiable right now
+            row.addEventListener('mouseenter', () => row.style.backgroundColor = 'rgba(255,255,255,0.05)');
+            row.addEventListener('mouseleave', () => row.style.backgroundColor = 'transparent');
+            
+            row.addEventListener('click', () => {
+                const sent = row.getAttribute('data-sentiment');
+                const colTitle = row.getAttribute('data-col');
+                openDataModal(colTitle, sent, s[sent.toLowerCase()], 'dl_processed', 'dl_sentiment', colTitle);
+            });
+        });
     });
 }
 
@@ -855,9 +870,27 @@ function openDataModal(chartTitle, clickedLabel, clickedValue, column, columnTyp
                 if (!row['dl_keywords']) return false;
                 try {
                     const dl = JSON.parse(row['dl_keywords']);
-                    if (!dl.categories) return false;
-                    return dl.categories.some(c => String(c).toLowerCase().trim() === searchLabel);
+                    if (!dl.category) return false;
+                    return String(dl.category).toLowerCase().trim() === searchLabel;
                 } catch(e) { return false; }
+            });
+        } else if (columnType === 'dl_sentiment') {
+            filteredRows = state.tableData.filter(row => {
+                const targetSent = String(clickedLabel).toUpperCase().trim();
+                if (binBoundary === 'Deep Analysis: Overall Extracted Sentiment') {
+                    return String(row['dl_sentiment_label'] || '').toUpperCase().trim() === targetSent;
+                }
+                if (!row['dl_keywords']) return false;
+                try {
+                    const dl = JSON.parse(row['dl_keywords']);
+                    if (binBoundary.includes('Suggestions') || binBoundary.includes('Improvements')) {
+                        return String(dl.improvements_sentiment || '').toUpperCase().trim() === targetSent;
+                    }
+                    if (binBoundary.includes('Valuable')) {
+                        return String(dl.valuable_sentiment || '').toUpperCase().trim() === targetSent;
+                    }
+                } catch(e) { return false; }
+                return false;
             });
         } else if (columnType === 'dl_actionability') {
             const isActionable = clickedLabel === 'Actionable Suggestions';
