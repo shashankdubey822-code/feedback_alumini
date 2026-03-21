@@ -92,7 +92,8 @@ function renderFilters(filters) {
             html += `<div class="filter-multiselect" data-column="${escAttr(f.column)}" data-type="categorical">`;
             html += `<div class="multiselect-options">`;
             f.options.forEach(opt => {
-                const checked = (state.activeFilters[f.column] || []).includes(opt.value);
+                const active = state.activeFilters || {};
+                const checked = (active[f.column] || []).includes(opt.value);
                 html += `
                     <label class="multiselect-item">
                         <input type="checkbox" value="${escAttr(opt.value)}" ${checked ? 'checked' : ''}>
@@ -130,6 +131,150 @@ function renderFilters(filters) {
     // Initialize smart calendars for date filters
     container.querySelectorAll('.calendar-trigger').forEach(el => {
         new SmartCalendar(el, JSON.parse(el.dataset.dates || '[]'), () => applyFilters());
+    });
+
+    // Update speaker suggestions for autocomplete in Form Manager
+    updateSpeakerSuggestions(filters);
+}
+
+function updateSpeakerSuggestions(filters) {
+    const speakerFilter = filters.find(f => f.column === 'alumni_speaker_name');
+    if (!speakerFilter || !speakerFilter.options) return;
+    
+    // Cache the full list for autocomplete (even when filtered)
+    state.allSpeakers = speakerFilter.options.map(o => o.value);
+}
+
+/**
+ * Advanced Fuzzy Scoring Algorithm
+ * Returns a score based on match quality (high score = better match)
+ */
+function fuzzyScore(query, target) {
+    const q = query.toLowerCase();
+    const t = target.toLowerCase();
+    if (t.includes(q)) return 100 + (t.startsWith(q) ? 50 : 0) - t.length; // Strong substring match
+    
+    let score = 0;
+    let tIdx = 0;
+    for (let qChar of q) {
+        const foundIdx = t.indexOf(qChar, tIdx);
+        if (foundIdx === -1) return 0; // Not a fuzzy match (chars must be in order)
+        score += 10 - (foundIdx - tIdx); // Closer chars = higher score
+        tIdx = foundIdx + 1;
+    }
+    return score;
+}
+
+/**
+ * Render custom autocomplete dropdown with fuzzy matching
+ */
+let selectedSuggestionIdx = -1;
+
+function renderSpeakerAutocomplete(query) {
+    const dropdown = document.getElementById('speaker-autocomplete-dropdown');
+    if (!dropdown) return;
+
+    if (!query || query.length < 1) {
+        dropdown.classList.remove('active');
+        return;
+    }
+
+    const matches = state.allSpeakers
+        .map(name => ({ name, score: fuzzyScore(query, name) }))
+        .filter(m => m.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 8);
+
+    if (matches.length === 0) {
+        dropdown.innerHTML = '<div class="no-suggestions">No speakers found</div>';
+        dropdown.classList.add('active');
+        return;
+    }
+
+    selectedSuggestionIdx = -1;
+    dropdown.innerHTML = '';
+    matches.forEach((m, idx) => {
+        const item = document.createElement('div');
+        item.className = 'autocomplete-item';
+        item.dataset.index = idx;
+        
+        // Highlight matching characters
+        let html = '';
+        let tIdx = 0;
+        const q = query.toLowerCase();
+        const t = m.name;
+        const tLower = t.toLowerCase();
+        
+        for (let qChar of q) {
+            const hit = tLower.indexOf(qChar, tIdx);
+            if (hit !== -1) {
+                html += esc(t.substring(tIdx, hit)) + `<span class="match-highlight">${esc(t[hit])}</span>`;
+                tIdx = hit + 1;
+            }
+        }
+        html += esc(t.substring(tIdx));
+        
+        item.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>${html}</span>
+        `;
+        
+        item.addEventListener('click', () => {
+            selectSpeaker(m.name);
+        });
+        dropdown.appendChild(item);
+    });
+    dropdown.classList.add('active');
+}
+
+function selectSpeaker(name) {
+    const input = document.getElementById('fb-speaker-name');
+    const dropdown = document.getElementById('speaker-autocomplete-dropdown');
+    if (input) input.value = name;
+    if (dropdown) dropdown.classList.remove('active');
+}
+
+function initSpeakerAutocomplete() {
+    const input = document.getElementById('fb-speaker-name');
+    const dropdown = document.getElementById('speaker-autocomplete-dropdown');
+    if (!input || !dropdown) return;
+
+    input.addEventListener('input', (e) => {
+        renderSpeakerAutocomplete(e.target.value);
+    });
+
+    input.addEventListener('keydown', (e) => {
+        const items = dropdown.querySelectorAll('.autocomplete-item');
+        if (!dropdown.classList.contains('active') || items.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selectedSuggestionIdx = (selectedSuggestionIdx + 1) % items.length;
+            updateSelection(items);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectedSuggestionIdx = (selectedSuggestionIdx - 1 + items.length) % items.length;
+            updateSelection(items);
+        } else if (e.key === 'Enter' && selectedSuggestionIdx !== -1) {
+            e.preventDefault();
+            items[selectedSuggestionIdx].click();
+        } else if (e.key === 'Escape') {
+            dropdown.classList.remove('active');
+        }
+    });
+
+    function updateSelection(items) {
+        items.forEach((item, idx) => {
+            item.classList.toggle('selected', idx === selectedSuggestionIdx);
+            if (idx === selectedSuggestionIdx) item.scrollIntoView({ block: 'nearest' });
+        });
+    }
+
+    // Close on click outside
+    document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.classList.remove('active');
+        }
     });
 }
 
@@ -1634,6 +1779,9 @@ class SmartCalendar {
                     showNotification('No form URL available', 'error');
                 }
             });
+
+        // Initialize advanced fuzzy autocomplete
+        initSpeakerAutocomplete();
     });
 
 })();

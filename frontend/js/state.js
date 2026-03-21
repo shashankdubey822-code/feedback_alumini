@@ -10,6 +10,8 @@ const state = {
     sortDirection: 'asc',
     tableData: [],
     charts: [],
+    activeFilters: {}, // Initialize to prevent rendering errors
+    allSpeakers: [],   // Cached list for autocomplete
 };
 
 const API_BASE = '';
