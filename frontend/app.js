@@ -319,6 +319,19 @@ function switchToDashboardFromLoading() {
     document.getElementById('loading-screen').classList.remove('active');
     document.getElementById('dashboard-screen').classList.add('active');
     document.getElementById('file-badge').textContent = state.fileName;
+    
+    // Default to overview section
+    showSection('overview-section');
+}
+
+function showSection(sectionId) {
+    document.querySelectorAll('.dashboard-section').forEach(s => s.classList.remove('active'));
+    document.getElementById(sectionId).classList.add('active');
+    
+    document.querySelectorAll('.sidebar .nav-item').forEach(btn => {
+        if (btn.dataset.section === sectionId) btn.classList.add('active');
+        else btn.classList.remove('active');
+    });
 }
 
 // ========== FILE UPLOAD ==========
@@ -385,9 +398,7 @@ async function handleFile(file) {
         showProgress('Done!', 100);
 
         setTimeout(() => {
-            document.getElementById('upload-screen').classList.remove('active');
-            document.getElementById('loading-screen').classList.add('active');
-            loadInitialData();
+            loadInitialData(); // This will call showSection('overview-section') via switchToDashboardFromLoading
         }, 800);
 
     } catch (err) {
@@ -425,16 +436,10 @@ function switchToUpload() {
 
 // ========== SIDEBAR NAVIGATION ==========
 function setupSidebarNav() {
-    document.querySelectorAll('.sidebar-nav .nav-item').forEach((btn) => {
+    document.querySelectorAll('.sidebar .nav-item').forEach((btn) => {
         btn.addEventListener('click', () => {
             const targetId = btn.dataset.section;
-
-            document.querySelectorAll('.sidebar-nav .nav-item').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-
-            document.querySelectorAll('.dashboard-section').forEach(s => s.classList.remove('active'));
-            document.getElementById(targetId).classList.add('active');
-
+            if (targetId) showSection(targetId);
             document.getElementById('sidebar').classList.remove('open');
         });
     });
@@ -534,15 +539,6 @@ function setupAdminAuth() {
         });
     }
 
-    const btnBackToDashboard = document.getElementById('btn-back-to-dashboard');
-    if (btnBackToDashboard) {
-        btnBackToDashboard.addEventListener('click', () => {
-            document.getElementById('upload-screen').classList.remove('active');
-            document.getElementById('loading-screen').classList.add('active');
-            document.getElementById('dashboard-screen').classList.remove('active');
-            loadInitialData();
-        });
-    }
 
     const btnGoogleFetch = document.getElementById('btn-google-fetch');
     if (btnGoogleFetch) {
@@ -578,8 +574,6 @@ function setupAdminAuth() {
 
                 showProgress('Data loaded successfully!', 100);
                 setTimeout(() => {
-                    document.getElementById('upload-screen').classList.remove('active');
-                    document.getElementById('loading-screen').classList.add('active');
                     loadInitialData();
                 }, 1000);
             } catch (err) {
@@ -595,13 +589,7 @@ function showAdminPanel() {
         document.getElementById('admin-login-modal').classList.remove('hidden');
         return;
     }
-    document.getElementById('loading-screen').classList.remove('active');
-    document.getElementById('dashboard-screen').classList.remove('active');
-    document.getElementById('upload-screen').classList.add('active');
-    hideProgress();
-    document.getElementById('file-input').value = '';
-    const googleInput = document.getElementById('google-link-input');
-    if (googleInput) googleInput.value = '';
+    showSection('upload-section');
 }
 
 // ========== RENDER DASHBOARD ==========
@@ -2178,35 +2166,8 @@ class SmartCalendar {
             newBtn.addEventListener('click', openFeedbackModal);
         }
 
-        // "Upload Data" sidebar button
-        const btnUploadData = document.getElementById('btn-upload-data');
-        if (btnUploadData) {
-            btnUploadData.addEventListener('click', () => {
-                if (!getToken()) {
-                    document.getElementById('admin-login-modal').classList.remove('hidden');
-                    const origSubmit = document.getElementById('btn-admin-submit');
-                    const handler = () => {
-                        setTimeout(() => {
-                            if (getToken()) switchToUpload();
-                            origSubmit.removeEventListener('click', handler);
-                        }, 300);
-                    };
-                    origSubmit.addEventListener('click', handler);
-                } else {
-                    switchToUpload();
-                }
-            });
-        }
+        // "Upload Data" button is now handled by the generic setupSidebarNav selector
 
-        // Go Back button on upload screen
-        const btnBackToDashboard = document.getElementById('btn-back-to-dashboard');
-        if (btnBackToDashboard) {
-            btnBackToDashboard.addEventListener('click', () => {
-                document.getElementById('upload-screen').classList.remove('active');
-                document.getElementById('dashboard-screen').classList.add('active');
-                loadInitialData();
-            });
-        }
 
         // Close button
         document.getElementById('feedback-modal-close')
