@@ -66,6 +66,13 @@ function doPost(e) {
 // ─── ACTION HANDLERS ─────────────────────────────────────────────────────────
 
 function _handleCreateForm(payload) {
+  // ⚡ MANUAL RUN DETECTION: If user clicks "Run" in editor, payload is undefined.
+  if (!payload || typeof payload !== 'object') {
+    Logger.log("⚠️ NOTICE: You clicked 'Run' in the editor. This function only works when called from the Dashboard.");
+    Logger.log("To authorize, please run the 'RUN_ME_TO_AUTHORIZE' function instead.");
+    return _json(false, "Manual execution ignored. Use the Dashboard to generate forms.", null, 400);
+  }
+
   const speaker = payload.speaker_name;
   const date = payload.venue_date;
   const eventId = payload.event_id;
@@ -117,6 +124,7 @@ function _handleCreateForm(payload) {
   // Automatic Trigger Attachment
   ScriptApp.newTrigger('onFormSubmitTrigger').forForm(form).onFormSubmit().create();
 
+  console.log(`[SUCCESS] Form created for ${speaker} (ID: ${formId})`);
   return _json(true, "Form Generated Successfully", { 
     form_id: formId, 
     form_url: form.getPublishedUrl() 
