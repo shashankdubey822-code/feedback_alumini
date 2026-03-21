@@ -1540,90 +1540,54 @@ class SmartCalendar {
                 const card = document.createElement('div');
                 card.style.cssText = 'background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px;';
                 const hasForm = !!ev.form_url;
+                
+                let isExpired = ev.status === 'closed';
+                let timeRemainingStr = '';
+                
+                if (hasForm && !isExpired && ev.created_at) {
+                     // Normalize sqlite timestamp missing "T" or timezone
+                     let dateStr = ev.created_at;
+                     if (!dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
+                     if (!dateStr.endsWith('Z')) dateStr += 'Z';
+                     
+                     const createdDate = new Date(dateStr);
+                     const expiryDate = new Date(createdDate.getTime() + 24 * 60 * 60 * 1000);
+                     const now = new Date();
+                     const diff = expiryDate - now;
+                     if (diff <= 0) {
+                         isExpired = true;
+                     } else {
+                         const h = Math.floor(diff / (1000 * 60 * 60)).toString().padStart(2, '0');
+                         const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)).toString().padStart(2, '0');
+                         const s = Math.floor((diff % (1000 * 60)) / 1000).toString().padStart(2, '0');
+                         timeRemainingStr = `<span class="form-timer" data-expiry="${expiryDate.getTime()}" style="color:#fca5a5;font-family:monospace;font-size:12px;background:rgba(239,68,68,0.1);padding:4px 8px;border-radius:6px;border:1px solid rgba(239,68,68,0.2);">⏱ ${h}h ${m}m ${s}s</span>`;
+                     }
+                }
+
                 card.innerHTML = `
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
                         <div>
                             <div style="font-size:13px;font-weight:600;color:#f0f0f5;">${esc(ev.speaker_name)}</div>
                             <div style="font-size:11px;color:#8b8b9e;margin-top:2px;">${esc(ev.venue_date)} &nbsp;·&nbsp; ${ev.responses} response${ev.responses !== 1 ? 's' : ''}</div>
                         </div>
-                        <span style="font-size:10px;padding:3px 8px;border-radius:12px;font-weight:600;${hasForm ? 'background:rgba(34,211,102,0.1);color:#34d399;border:1px solid rgba(34,211,102,0.2);' : 'background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.2);'}">
-                            ${hasForm ? 'Form Ready' : 'No Form'}
+                        <span style="font-size:10px;padding:3px 8px;border-radius:12px;font-weight:600;${hasForm ? (isExpired ? 'background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.2);' : 'background:rgba(34,211,102,0.1);color:#34d399;border:1px solid rgba(34,211,102,0.2);') : 'background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.2);'}">
+                            ${hasForm ? (isExpired ? 'Expired' : 'Active') : 'No Form'}
                         </span>
                     </div>
                     ${hasForm ? `
-                    <div style="display:flex;gap:6px;margin-top:8px;">
+                    <div style="display:flex;gap:6px;margin-top:8px;align-items:center;">
                         <button data-copy-url="${ev.form_url}" class="btn-copy-event-url"
                             style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Copy</button>
                         <button data-open-url="${ev.form_url}" class="btn-open-event-url"
                             style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Open</button>
-                        <button data-form="${ev.form_id}" class="btn-toggle-form"
-                            style="flex:1;padding:6px;border-radius:6px;background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Toggle</button>
-                        <button data-event-id="${ev.id}" class="btn-sync-responses"
-                            style="flex:1;padding:6px;border-radius:6px;background:rgba(168,85,247,0.15);color:#c084fc;border:1px solid rgba(168,85,247,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Sync</button>
+                        ${!isExpired ? `<button data-form="${ev.form_id}" class="btn-close-form"
+                            style="flex:1;padding:6px;border-radius:6px;background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Close Form</button>` : ''}
+                        ${timeRemainingStr}
                     </div>` : `
                     <button data-event-id="${ev.id}" class="btn-generate-existing"
                         style="width:100%;margin-top:8px;padding:6px;border-radius:6px;background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.2);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Generate Form</button>`}
                 `;
                 list.appendChild(card);
-            });
-
-            // Sync response buttons (enhanced with better feedback)
-            list.querySelectorAll('.btn-sync-responses').forEach(btn => {
-                btn.addEventListener('click', async () => {
-                    const id = btn.dataset.eventId;
-                    
-                    // Prevent double-click
-                    if (btn.disabled) return;
-                    
-                    const originalText = btn.textContent;
-                    btn.textContent = 'Syncing...';
-                    btn.disabled = true;
-                    
-                    try {
-                        const r = await safeFetch(`${API_BASE}/api/admin/sync-responses`, {
-                            method: 'POST',
-                            headers: authHeaders(),
-                            body: JSON.stringify({ event_id: parseInt(id) })
-                        });
-                        const d = await r.json();
-                        
-                        if (d.success) {
-                            // Show detailed sync info
-                            const synced = d.synced || 0;
-                            const skipped = d.skipped || 0;
-                            const total = d.total || 0;
-                            
-                            if (synced > 0) {
-                                btn.textContent = `✓ ${synced} new`;
-                                showNotification(`Synced ${synced} responses (${skipped} duplicates skipped)`, 'success');
-                            } else {
-                                btn.textContent = 'Up to date';
-                                showNotification('All responses already synced', 'info');
-                            }
-                            
-                            // Reload events to update response count
-                            setTimeout(() => loadEvents(), 1000);
-                        } else {
-                            btn.textContent = 'Error';
-                            showNotification(`Sync failed: ${d.error || 'Unknown error'}`, 'error');
-                        }
-                        
-                        // Reset button after delay
-                        setTimeout(() => { 
-                            btn.textContent = originalText; 
-                            btn.disabled = false; 
-                        }, 3000);
-                        
-                    } catch (e) {
-                        console.error('[SYNC] Error:', e);
-                        btn.textContent = 'Failed';
-                        showNotification(`Sync error: ${e.message}`, 'error');
-                        setTimeout(() => { 
-                            btn.textContent = originalText; 
-                            btn.disabled = false; 
-                        }, 3000);
-                    }
-                });
             });
 
             // Copy event URL buttons (with enhanced clipboard)
@@ -1641,7 +1605,7 @@ class SmartCalendar {
                 });
             });
 
-            // Open event URL buttons (with popup blocker detection)
+            // Open event URL buttons
             list.querySelectorAll('.btn-open-event-url').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const url = btn.dataset.openUrl;
@@ -1651,24 +1615,29 @@ class SmartCalendar {
                 });
             });
 
-            // Toggle form status buttons
-            list.querySelectorAll('.btn-toggle-form').forEach(btn => {
+            // Close form status buttons
+            list.querySelectorAll('.btn-close-form').forEach(btn => {
                 btn.addEventListener('click', async () => {
+                    if(!confirm("Are you sure you want to close this form immediately? No further responses will be accepted.")) return;
                     const formId = btn.dataset.form;
                     if (!formId) return;
                     btn.textContent = '...';
                     btn.disabled = true;
                     try {
-                        const r = await fetch(`${API_BASE}/api/admin/toggle-form`, {
+                        const r = await fetch(`${API_BASE}/api/admin/close-form`, {
                             method: 'POST', headers: authHeaders(),
                             body: JSON.stringify({ form_id: formId })
                         });
                         const d = await r.json();
-                        btn.textContent = d.success ? (d.accepting_responses ? 'Opened!' : 'Closed!') : 'Error';
-                        setTimeout(() => { btn.textContent = 'Toggle'; btn.disabled = false; }, 2000);
+                        btn.textContent = d.message ? 'Closed!' : 'Error';
+                        if (d.status === 'closed') {
+                            setTimeout(() => loadEvents(), 1500);
+                        } else {
+                            setTimeout(() => { btn.textContent = 'Close Form'; btn.disabled = false; }, 2000);
+                        }
                     } catch (e) {
                         btn.textContent = 'Error';
-                        setTimeout(() => { btn.textContent = 'Toggle'; btn.disabled = false; }, 2000);
+                        setTimeout(() => { btn.textContent = 'Close Form'; btn.disabled = false; }, 2000);
                     }
                 });
             });
@@ -1782,5 +1751,45 @@ class SmartCalendar {
         initSpeakerAutocomplete();
     });
 
-})();
+    // ── Global Form Timer Updater ────────────────────────────
+    setInterval(() => {
+        const timers = document.querySelectorAll('.form-timer');
+        let needsReload = false;
+        
+        timers.forEach(timer => {
+            const expiry = parseInt(timer.dataset.expiry, 10);
+            if (!expiry) return;
+            
+            const diff = expiry - Date.now();
+            if (diff <= 0) {
+                timer.textContent = 'Expired';
+                timer.classList.remove('form-timer');
+                needsReload = true;
+            } else {
+                const h = Math.floor(diff / (1000 * 60 * 60)).toString().padStart(2, '0');
+                const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)).toString().padStart(2, '0');
+                const s = Math.floor((diff % (1000 * 60)) / 1000).toString().padStart(2, '0');
+                timer.textContent = `⏱ ${h}h ${m}m ${s}s`;
+            }
+        });
+        
+        if (needsReload) {
+            // Give it a moment to avoid hammering
+            setTimeout(() => loadEvents(), 2000);
+        }
+    }, 1000);
 
+    // ── Global Dashboard Auto-Polling ────────────────────────
+    // Polling every 30 seconds to fetch new webhook data live
+    setInterval(() => {
+        // Only refresh if the admin is logged in and theoretically looking at the dashboard
+        if (getToken() && typeof loadInitialData === 'function') {
+            // Optional: check if dashboard is currently active section
+            const activeSection = document.querySelector('.sidebar-item.active');
+            if (activeSection && activeSection.dataset.section === 'dashboard') {
+                loadInitialData(true); // pass true if you have a silent fetch flag, else normal
+            }
+        }
+    }, 30000);
+
+})();

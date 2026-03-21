@@ -501,6 +501,57 @@ def get_events():
         logger.error(f"Error fetching events: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+@admin_bp.route('/close-form', methods=['POST'])
+@log_endpoint_access
+def close_form():
+    """Explicitly close a form and mark it as expired."""
+    try:
+        data = request.json
+        form_id = data.get('form_id')
+
+        if not form_id:
+            return jsonify({'error': 'Form ID is required'}), 400
+
+        db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Update the status to 'closed'
+        cursor.execute("UPDATE events SET status = 'closed' WHERE form_id = ?", (form_id,))
+        if cursor.rowcount == 0:
+            conn.close()
+            return jsonify({'error': 'Form not found'}), 404
+
+        conn.commit()
+        conn.close()
+
+        logger.info(f"Form '{form_id}' successfully closed by admin.")
+        return jsonify({'message': 'Form closed successfully', 'status': 'closed'})
+
+    except Exception as e:
+        logger.error(f"Error closing form: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+def get_form_status(form_id, db_path):
+    """Helper function to get the status of a form."""
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT status FROM events WHERE form_id = ?", (form_id,))
+        result = cursor.fetchone()
+        conn.close()
+        if result:
+            return result[0]
+        return None
+    except Exception as e:
+        logger.error(f"Error getting form status: {str(e)}")
+        if conn:
+            conn.close()
+        return None
+
 @admin_bp.route('/generate-form', methods=['POST'])
 @log_endpoint_access
 def generate_form():

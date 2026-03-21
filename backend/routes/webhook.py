@@ -29,6 +29,37 @@ def store_webhook_submission(db_path: str, payload: dict) -> int:
         form_id = payload.get('form_id', 'WEBHOOK_FORM')
         responses = payload.get('responses', {})
 
+        # Enforce 24-Hour Expiry & Closed Status
+        cursor.execute("SELECT created_at, status FROM events WHERE form_id = ?", (form_id,))
+        event = cursor.fetchone()
+        
+        if event:
+            created_at_str, status = event
+            if status == 'closed':
+                logger.warning(f"Rejected webhook for closed form: {form_id}")
+                raise ValueError("Form is closed and no longer accepting responses.")
+            
+            try:
+                # Handle standard SQLite CURRENT_TIMESTAMP format
+                if "T" in created_at_str:
+                    created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                else:
+                    created_at = datetime.strptime(created_at_str, "%Y-%m-%d %H:%M:%S")
+                
+                age_hours = (datetime.utcnow() - created_at).total_seconds() / 3600
+                if age_hours > 24:
+                    logger.warning(f"Rejected webhook for expired form: {form_id} (Age: {age_hours:.1f}h)")
+                    
+                    # Auto-close it in the database since we caught it expired
+                    cursor.execute("UPDATE events SET status = 'closed' WHERE form_id = ?", (form_id,))
+                    conn.commit()
+                    
+                    raise ValueError("Form has expired (24-hour limit exceeded).")
+            except Exception as e:
+                if isinstance(e, ValueError) and "Form has expired" in str(e):
+                    raise
+                logger.warning(f"Could not parse created_at for expiry check: {created_at_str}. Error: {e}")
+
         # Normalize roll_no to uppercase
         roll_no = responses.get('roll_no_original', '')
         if roll_no and isinstance(roll_no, str):
