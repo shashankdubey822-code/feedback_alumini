@@ -325,37 +325,8 @@ def get_consolidated_analytics(app, filters=None, search=None):
             'xLabel': 'Department',
         })
 
-    # ── 3. Speakers ──────────────────────────────────────────────────
-    try:
-        speaker_service = SpeakerService(db_path)
-        raw_speakers = speaker_service.get_all_speakers()
-    except Exception:
-        raw_speakers = []
-
+    # (Removed redundant SpeakerService call - will aggregate from table_data loop below)
     speaker_stats_payload = []
-    if raw_speakers:
-        speaker_list = []
-        for s in raw_speakers:
-            if isinstance(s, str):
-                name = s
-                count = 1
-                avg_rating = 0
-            else:
-                name = s.get('speaker_name') or s.get('speaker') or s.get('name') or 'Unknown'
-                count = s.get('session_count') or s.get('sessions') or s.get('count') or 1
-                avg_rating = s.get('average_rating') or s.get('avg_rating') or 0
-                
-            speaker_list.append({
-                'name': name,
-                'count': count,
-                'sentiment': 0.0,
-                'ratings': {'Rating': round(float(avg_rating), 1)} if avg_rating else {}
-            })
-            
-        speaker_stats_payload = [{
-            'column': 'Alumni Speaker Name',
-            'speakers': speaker_list
-        }]
 
     # ── 4. Table data & meta ─────────────────────────────────────────
     conn = sqlite3.connect(db_path)
@@ -439,8 +410,18 @@ def get_consolidated_analytics(app, filters=None, search=None):
     session_understanding_counts = {}
     
     import json
+    speaker_tracker = {} # name -> {count, total_rating, total_sentiment}
 
     for row in table_data:
+        # Speaker Tracking
+        sp_name = row.get('alumni_speaker_name')
+        if sp_name:
+            if sp_name not in speaker_tracker:
+                speaker_tracker[sp_name] = {'count': 0, 'total_rating': 0, 'total_sentiment': 0}
+            speaker_tracker[sp_name]['count'] += 1
+            speaker_tracker[sp_name]['total_rating'] += float(row.get('session_rating') or 0)
+            speaker_tracker[sp_name]['total_sentiment'] += float(row.get('dl_sentiment_score') or 0)
+
         # Sentiment (legacy)
         label = str(row.get('dl_sentiment_label', '')).upper()
         if label in sentiment_counts:
@@ -563,12 +544,47 @@ def get_consolidated_analytics(app, filters=None, search=None):
             'words': [{'text': k, 'count': v, 'type': 'unigram' if len(k.split()) == 1 else 'bigram'} for k, v in sorted_fut_keywords]
         })
     
+    # Finalize Speaker Stats from tracker
+    speaker_list = []
+    for name, stats in speaker_tracker.items():
+        avg_rating = stats['total_rating'] / stats['count'] if stats['count'] > 0 else 0
+        avg_sentiment = stats['total_sentiment'] / stats['count'] if stats['count'] > 0 else 0
+        speaker_list.append({
+            'name': name,
+            'count': stats['count'],
+            'sentiment': round(avg_sentiment, 2),
+            'ratings': {'Rating': round(avg_rating, 1)}
+        })
+    
+    # Sort speakers by response count
+    speaker_list.sort(key=lambda x: x['count'], reverse=True)
+
+    speaker_stats_payload = [{
+        'column': 'alumni_speaker_name',
+        'speakers': speaker_list
+    }]
+
     # Bundle the deep analysis payload
     deep_analysis = {
         'actionableStats': actionable_stats,
-        'categories': [{'name': k, 'value': v} for k, v in sorted(category_counts.items(), key=lambda x: x[1], reverse=True) if k != "Other"],
-        'helpUnderstanding': [{'name': k, 'value': v} for k, v in session_understanding_counts.items()]
+        'categories': [{'name': k, 'value': v} for k, v in sorted(category_counts.items(), key=lambda x: x[1], reverse=True) if k != "Other"]
     }
+
+    # Add Session Impact to main charts
+    if session_understanding_counts:
+        # Semantic order: Positive -> Neutral -> Negative
+        order = {"Yes, significantly": 0, "To some extent": 1, "Not really": 2}
+        sorted_shu = sorted(session_understanding_counts.items(), key=lambda x: order.get(x[0], 99))
+        
+        formatted_charts.append({
+            'title': 'Session Impact (Understanding Level)',
+            'type': 'bar',
+            'labels': [k for k, v in sorted_shu],
+            'data': [v for k, v in sorted_shu],
+            'column': 'session_help_understanding',
+            'columnType': 'text',
+            'backgroundColors': ['#34d399', '#fbbf24', '#fb7185'] 
+        })
 
     return {
         'kpis':         formatted_kpis,

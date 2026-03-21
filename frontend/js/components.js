@@ -281,57 +281,10 @@ function renderDeepAnalysis(da) {
         });
         state.charts.push(catChart);
     }
-
-    const helpStats = da.helpUnderstanding || [];
-    if (helpStats.length > 0 && container) {
-        const helpCard = document.createElement('div');
-        helpCard.className = 'chart-card';
-        helpCard.innerHTML = `
-            <div class="chart-card-header"><div class="chart-card-title">Session Impact (Understanding Level)</div></div>
-            <div class="chart-canvas-wrapper"><canvas></canvas></div>
-        `;
-        container.appendChild(helpCard);
-        
-        const colorMap = {
-            'Yes, significantly': '#34d399',
-            'To some extent': '#fbbf24',
-            'Not really': '#fb7185'
-        };
-
-        const helpChart = new Chart(helpCard.querySelector('canvas'), {
-            type: 'bar',
-            data: {
-                labels: helpStats.map(h => truncate(h.name, 22)),
-                datasets: [{
-                    label: 'Responses',
-                    data: helpStats.map(h => h.value),
-                    backgroundColor: helpStats.map(h => colorMap[h.name] || 'rgba(99, 102, 241, 0.6)'),
-                    borderRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                onClick: (e, elements, chart) => {
-                    if (elements.length > 0) {
-                        const index = elements[0].index;
-                        const fullLabel = helpStats[index].name;
-                        const count = helpStats[index].value;
-                        openDataModal('Session Impact', fullLabel, count, 'session_help_understanding', 'text', null);
-                    }
-                },
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b8b9e' } },
-                    x: { grid: { display: false }, ticks: { color: '#8b8b9e' } }
-                }
-            }
-        });
-        state.charts.push(helpChart);
-    }
 }
 
 
+// ========== KPI CARDS ==========
 // ========== SENTIMENT (AI-FILTERED) ==========
 function renderSentiment(sentimentData) {
     const container = document.getElementById('sentiment-grid');

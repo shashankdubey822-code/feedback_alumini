@@ -20,6 +20,16 @@ try:
 except LookupError:
     nltk.download('stopwords', quiet=True)
 
+try:
+    nltk.data.find('corpora/brown')
+except LookupError:
+    nltk.download('brown', quiet=True)
+
+try:
+    nltk.data.find('corpora/wordnet')
+except LookupError:
+    nltk.download('wordnet', quiet=True)
+
 from nltk.corpus import stopwords
 
 
@@ -55,10 +65,12 @@ class NLPService:
     # Stopwords and filters
     STOP_WORDS = set(stopwords.words('english'))
     STOP_WORDS.update([
-        'na', 'n/a', 'nil', 'none', 'nothing', 'no', 'nope', 'ok', 'yes',
-        '-', '.', 'the', 'and', 'was', 'for', 'all', 'more', 'would',
-        'about', 'also', 'make', 'like', 'good', 'really', 'everything',
-        'every', 'lot', 'much', 'get', 'got', 'well', 'can', 'one',
+            'na', 'n/a', 'pls', 'please', 'ok', 'okay', 'good', 'great', 'nice', 'thanks',
+            'thank', 'no', 'yes', 'feedback', 'session', 'v', 'b', 'c', 'v', 'n',
+            'related', 'domain', 'area', 'topics', 'field', 'like', 'aspect', 'subjects', 'about',
+            'more', 'would',
+            'also', 'make', 'like', 'good', 'really', 'everything',
+            'every', 'lot', 'much', 'get', 'got', 'well', 'can', 'one',
     ])
 
     def __init__(self, min_word_length: int = 3, max_keywords: int = 10):
@@ -178,38 +190,58 @@ class NLPService:
             return []
 
     def extract_keyphrases(self, text: str, limit: int = None) -> List[str]:
-        """Extract goal-oriented meaningful phrases (bigrams/trigrams) from text to represent concepts"""
+        """Extract goal-oriented meaningful concepts from text, focusing on core topics"""
         if not text or self.is_non_answer(text):
             return []
 
         limit = limit or self.max_keywords
 
         try:
-            words = text.lower().split()
-            words = [
-                w.strip('.,!?"\'()-—')
-                for w in words
-                if w.strip('.,!?"\'()-—') and len(w.strip('.,!?"\'()-—')) >= 3
-            ]
-            words = [w for w in words if w not in self.STOP_WORDS]
-
-            if not words:
-                return []
-
+            # Use TextBlob's noun phrases for smarter "concept" extraction
+            blob = TextBlob(text)
             phrases = []
             
-            # Form Bigrams
-            for i in range(len(words) - 1):
-                phrases.append(f"{words[i]} {words[i+1]}")
+            # Custom filter for phrases to strip noise
+            for np in blob.noun_phrases:
+                words = np.lower().split()
+                # Remove stopwords and noise specific to this feedback context
+                filtered = [str(w).strip('.,!?"\'()-—') for w in words if str(w) not in self.STOP_WORDS and len(str(w)) >= 3]
+                
+                if filtered:
+                    # Lemmatize words to simplify phrases (e.g., 'building' -> 'build')
+                    # This creates the "simple data" requested by the user
+                    simplified = []
+                    for w in filtered:
+                        try:
+                            # Use WordNet lemmatizer via TextBlob
+                            lemma = TextBlob(w).words[0].lemmatize()
+                            simplified.append(lemma)
+                        except Exception:
+                            simplified.append(w)
+                    phrases.append(" ".join(simplified))
             
-            # Remove standalone Unigrams to force goal-centric phrases
-            # but allow them if the user ONLY entered 1 word!
-            if not phrases and words:
-                phrases.extend(words)
+            # Fallback to adjacent word bigrams if noun_phrases are missing/empty
+            if not phrases:
+                words = text.lower().split()
+                words = [
+                    w.strip('.,!?"\'()-—')
+                    for w in words
+                    if w.strip('.,!?"\'()-—') and len(w.strip('.,!?"\'()-—')) >= 3
+                ]
+                words = [w for w in words if w not in self.STOP_WORDS]
+
+                if not words:
+                    return []
+
+                # Form Bigrams
+                for i in range(len(words) - 1):
+                    phrases.append(f"{words[i]} {words[i+1]}")
+                
+                # If no bigrams, use unigrams
+                if not phrases and words:
+                    phrases.extend(words)
 
             phrase_counts = Counter(phrases)
-            
-            # Return top phrases, favoring bigrams natively since they will naturally aggregate
             return [phrase for phrase, _ in phrase_counts.most_common(limit)]
         except Exception:
             return []

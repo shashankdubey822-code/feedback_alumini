@@ -39,9 +39,9 @@ function renderCharts(charts) {
                 datasets: [{
                     label: chart.yLabel || 'Count',
                     data: chart.data,
-                    backgroundColor: chart.type === 'doughnut'
+                    backgroundColor: chart.backgroundColors || (chart.type === 'doughnut'
                         ? chart.labels.map((_, i) => CHART_COLORS[i % CHART_COLORS.length])
-                        : 'rgba(99, 102, 241, 0.6)',
+                        : 'rgba(99, 102, 241, 0.6)'),
                     borderColor: chart.type === 'doughnut' ? 'transparent' : '#6366f1',
                     borderWidth: chart.type === 'doughnut' ? 0 : 1,
                     borderRadius: chart.type === 'bar' ? 6 : 0,
