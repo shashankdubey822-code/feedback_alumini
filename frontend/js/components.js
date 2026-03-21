@@ -1592,8 +1592,7 @@ class SmartCalendar {
         const btnBackToDashboard = document.getElementById('btn-back-to-dashboard');
         if (btnBackToDashboard) {
             btnBackToDashboard.addEventListener('click', () => {
-                document.getElementById('upload-screen').classList.remove('active');
-                document.getElementById('dashboard-screen').classList.add('active');
+                switchToDashboard();
                 loadInitialData();
             });
         }

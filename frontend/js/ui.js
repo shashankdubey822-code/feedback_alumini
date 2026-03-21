@@ -1,17 +1,46 @@
 // ========== SCREEN SWITCHING ==========
+function showSection(sectionId) {
+    // Hide all dashboard sections
+    document.querySelectorAll('.dashboard-section').forEach(sec => {
+        sec.classList.remove('active');
+    });
+    
+    // Show target section
+    const target = document.getElementById(sectionId);
+    if (target) {
+        target.classList.add('active');
+        // Ensure scroll to top
+        window.scrollTo(0, 0);
+    }
+
+    // Update sidebar active state
+    document.querySelectorAll('.sidebar .nav-item, .sidebar-nav .nav-item').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.section === sectionId);
+    });
+
+    // SCOPING: If leaving overview, reset filters to show global data in other sections
+    const activeFilters = (window.state && state.activeFilters) ? state.activeFilters : {};
+    if (sectionId !== 'overview-section' && Object.keys(activeFilters).length > 0) {
+        if (typeof clearAllFilters === 'function') clearAllFilters();
+    }
+}
+
 function switchToDashboard() {
-    document.getElementById('upload-screen').classList.remove('active');
-    document.getElementById('dashboard-screen').classList.add('active');
-    document.getElementById('file-badge').textContent = state.fileName;
+    showSection('overview-section');
+    if (window.state && state.fileName) {
+        const badge = document.getElementById('file-badge');
+        if (badge) badge.textContent = state.fileName;
+    }
 }
 
 function switchToUpload() {
-    document.getElementById('dashboard-screen').classList.remove('active');
-    document.getElementById('upload-screen').classList.add('active');
-    hideProgress();
-    document.getElementById('file-input').value = '';
-    document.getElementById('google-link-input').value = '';
-    destroyCharts();
+    showSection('upload-section');
+    if (typeof hideProgress === 'function') hideProgress();
+    const fileInput = document.getElementById('file-input');
+    const linkInput = document.getElementById('google-link-input');
+    if (fileInput) fileInput.value = '';
+    if (linkInput) linkInput.value = '';
+    if (typeof destroyCharts === 'function') destroyCharts();
 }
 
 
@@ -20,13 +49,7 @@ function setupSidebarNav() {
     document.querySelectorAll('.sidebar-nav .nav-item').forEach((btn) => {
         btn.addEventListener('click', () => {
             const targetId = btn.dataset.section;
-
-            document.querySelectorAll('.sidebar-nav .nav-item').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-
-            document.querySelectorAll('.dashboard-section').forEach(s => s.classList.remove('active'));
-            document.getElementById(targetId).classList.add('active');
-
+            if (targetId) showSection(targetId);
             document.getElementById('sidebar').classList.remove('open');
         });
     });
