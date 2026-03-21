@@ -1,14 +1,14 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════╗
- * ║   Alumni Feedback System — Advanced Google Apps Script v3.4     ║
- * ║  PRO-GRADE | Exact CSV Mapping | Error-Resilient | Self-Auth    ║
+ * ║   Alumni Feedback System — Advanced Google Apps Script v3.5     ║
+ * ║  PRO-GRADE | 100% CSV SYNC | Error-Resilient | Self-Auth        ║
  * ╚══════════════════════════════════════════════════════════════════╝
  */
 
 const CONFIG = {
   SECRET_KEY: PropertiesService.getScriptProperties().getProperty("SECRET_KEY") || "datalens2026",
   WEBHOOK_SECRET: PropertiesService.getScriptProperties().getProperty("WEBHOOK_SECRET") || "webhook-secret-key",
-  VERSION: "v3.4-Advanced",
+  VERSION: "v3.5-Final-Sync",
   DEPARTMENT_OPTIONS: [
     "School of Education & Humanities",
     "School of Engineering",
@@ -29,8 +29,8 @@ function RUN_ME_TO_AUTHORIZE() {
   try {
     const props = PropertiesService.getScriptProperties();
     props.setProperty("AUTH_CHECK", new Date().toISOString());
-    FormApp.getActiveForm(); // Triggers Form permission
-    ScriptApp.getProjectTriggers(); // Triggers ScriptApp permission
+    FormApp.getActiveForm(); 
+    ScriptApp.getProjectTriggers(); 
     Logger.log("✅ AUTHORIZATION SUCCESSFUL. You can now use the dashboard.");
   } catch (e) {
     Logger.log("⚠️ INFO: " + e.message);
@@ -59,6 +59,7 @@ function doPost(e) {
       default: return _json(false, "Unknown Action: " + action, null, 404);
     }
   } catch (err) {
+    // Return the actual error in the 'data' field so backend can log it
     return _json(false, "Internal Execution Error", err.toString(), 500);
   }
 }
@@ -66,11 +67,10 @@ function doPost(e) {
 // ─── ACTION HANDLERS ─────────────────────────────────────────────────────────
 
 function _handleCreateForm(payload) {
-  // ⚡ MANUAL RUN DETECTION: If user clicks "Run" in editor, payload is undefined.
+  // ⚡ MANUAL RUN DETECTION
   if (!payload || typeof payload !== 'object') {
-    Logger.log("⚠️ NOTICE: You clicked 'Run' in the editor. This function only works when called from the Dashboard.");
-    Logger.log("To authorize, please run the 'RUN_ME_TO_AUTHORIZE' function instead.");
-    return _json(false, "Manual execution ignored. Use the Dashboard to generate forms.", null, 400);
+    Logger.log("⚠️ NOTICE: You clicked 'Run' in the editor. This only works from the Dashboard.");
+    return _json(false, "Manual execution ignored.", null, 400);
   }
 
   const speaker = payload.speaker_name;
@@ -86,13 +86,13 @@ function _handleCreateForm(payload) {
   form.setCollectEmail(false);
   form.setAllowResponseEdits(false);
 
-  // Step 1: Student Identity
+  // Step 1: Student Identity (Matches CSV Headers)
   form.addSectionHeaderItem().setTitle("Step 1: Your Information");
-  form.addTextItem().setTitle("Your Full Name").setRequired(true);
+  form.addTextItem().setTitle("Name of Student").setRequired(true);
   form.addMultipleChoiceItem().setTitle("Department").setChoiceValues(CONFIG.DEPARTMENT_OPTIONS).setRequired(true);
-  form.addTextItem().setTitle("Roll Number / Student ID").setRequired(true);
+  form.addTextItem().setTitle("Roll No.").setRequired(true);
 
-  // Step 2: Session Value (EXACT CSV MAPPING)
+  // Step 2: Session Value (Matches CSV Headers)
   form.addPageBreakItem().setTitle("Step 2: Session Value");
   form.addMultipleChoiceItem()
     .setTitle("Did the session help you gain a better understanding of industry trends or career paths?")
@@ -100,12 +100,12 @@ function _handleCreateForm(payload) {
     .setRequired(true);
   
   form.addScaleItem()
-    .setTitle("How would you rate the session overall? (1 – Poor | 5 – Excellent)")
+    .setTitle("How would you rate the session overall?  \n(1 – Poor | 2 – Fair | 3 – Good | 4 – Very Good | 5 – Excellent)")
     .setBounds(1, 5)
     .setLabels("1 ⭐", "5 ⭐")
     .setRequired(true);
 
-  // Step 3: Detailed Insights
+  // Step 3: Detailed Insights (Matches CSV Headers)
   form.addPageBreakItem().setTitle("Step 3: Insights & Suggestions");
   form.addParagraphTextItem().setTitle("What aspect of the session did you find most valuable?").setRequired(true);
   form.addParagraphTextItem().setTitle("What improvements or suggestions would you recommend for future alumni sessions?").setRequired(false);
@@ -113,7 +113,6 @@ function _handleCreateForm(payload) {
 
   const formId = form.getId();
   
-  // Storage for submission correlation
   PropertiesService.getScriptProperties().setProperty(`config_${formId}`, JSON.stringify({
     webhook_url: webhookUrl,
     event_id: eventId,
@@ -121,7 +120,6 @@ function _handleCreateForm(payload) {
     venue_date: date
   }));
 
-  // Automatic Trigger Attachment
   ScriptApp.newTrigger('onFormSubmitTrigger').forForm(form).onFormSubmit().create();
 
   console.log(`[SUCCESS] Form created for ${speaker} (ID: ${formId})`);
@@ -134,15 +132,11 @@ function _handleCreateForm(payload) {
 // ─── TRIGGER LOGIC ───────────────────────────────────────────────────────────
 
 function onFormSubmitTrigger(e) {
-  if (!e || !e.source) {
-    console.warn("Trigger warning: Expected event object missing (this happens if run manually).");
-    return;
-  }
+  if (!e || !e.source) return;
   
   try {
     const formId = e.source.getId();
     const config = JSON.parse(PropertiesService.getScriptProperties().getProperty(`config_${formId}`) || "{}");
-    
     if (!config.webhook_url) return;
 
     const answers = {};
@@ -151,9 +145,9 @@ function onFormSubmitTrigger(e) {
       const a = ir.getResponse();
       
       // Precision Header Mapping (Matches CSV perfectly)
-      if (q.includes("Full Name")) answers.name_of_student = a;
+      if (q.includes("Name of Student")) answers.name_of_student = a;
       else if (q.includes("Department")) answers.department_original = a;
-      else if (q.includes("Roll Number")) answers.roll_no_original = a;
+      else if (q.includes("Roll No.")) answers.roll_no_original = a;
       else if (q.includes("industry trends")) answers.session_help_understanding = a;
       else if (q.includes("rate the session")) answers.session_rating = a;
       else if (q.includes("most valuable")) answers.aspect_most_valuable = a;
@@ -161,22 +155,20 @@ function onFormSubmitTrigger(e) {
       else if (q.includes("future alumni speakers to cover")) answers.future_topics = a;
     });
 
-    const payload = {
-      form_id: formId,
-      event_id: config.event_id,
-      timestamp: new Date().toISOString(),
-      responses: {
-        ...answers,
-        alumni_speaker_name: config.speaker_name,
-        date_of_lecture: config.venue_date
-      }
-    };
-
     UrlFetchApp.fetch(config.webhook_url, {
       method: "post",
       contentType: "application/json",
       headers: { "Authorization": "Bearer " + CONFIG.WEBHOOK_SECRET },
-      payload: JSON.stringify(payload),
+      payload: JSON.stringify({
+        form_id: formId,
+        event_id: config.event_id,
+        timestamp: new Date().toISOString(),
+        responses: {
+          ...answers,
+          alumni_speaker_name: config.speaker_name,
+          date_of_lecture: config.venue_date
+        }
+      }),
       muteHttpExceptions: true
     });
 
@@ -188,10 +180,16 @@ function onFormSubmitTrigger(e) {
 // ─── DATA RETRIEVAL ──────────────────────────────────────────────────────────
 
 function _handleGetResponses(payload) {
+  // ⚡ MANUAL RUN DETECTION
+  if (!payload || typeof payload !== 'object' || !payload.form_id) {
+    Logger.log("⚠️ NOTICE: You clicked 'Run' in the editor. This only works from the Dashboard.");
+    return _json(false, "Manual execution ignored.", null, 400);
+  }
+
   const formId = payload.form_id;
   try {
     const form = FormApp.openById(formId);
-    if (!form) throw new Error("Could not access Form. Ensure script is owner.");
+    if (!form) throw new Error("Could not access Form.");
     
     const results = form.getResponses().map(resp => {
       const answers = { timestamp: resp.getTimestamp().toISOString() };
@@ -199,9 +197,9 @@ function _handleGetResponses(payload) {
         const q = ir.getItem().getTitle();
         const a = ir.getResponse();
         
-        if (q.indexOf("Full Name") > -1) answers.name_of_student = a;
+        if (q.indexOf("Name of Student") > -1) answers.name_of_student = a;
         else if (q.indexOf("Department") > -1) answers.department_original = a;
-        else if (q.indexOf("Roll Number") > -1) answers.roll_no_original = a;
+        else if (q.indexOf("Roll No.") > -1) answers.roll_no_original = a;
         else if (q.indexOf("industry trends") > -1) answers.session_help_understanding = a;
         else if (q.indexOf("rate the session") > -1) answers.session_rating = a;
         else if (q.indexOf("most valuable") > -1) answers.aspect_most_valuable = a;
@@ -219,12 +217,6 @@ function _handleGetResponses(payload) {
 // ─── JSON HELPER ─────────────────────────────────────────────────────────────
 
 function _json(success, message, data, code = 200) {
-  const output = { 
-    success: success, 
-    message: message, 
-    data: data, 
-    v: CONFIG.VERSION,
-    timestamp: new Date().toISOString() 
-  };
+  const output = { success, message, data, v: CONFIG.VERSION, timestamp: new Date().toISOString() };
   return ContentService.createTextOutput(JSON.stringify(output)).setMimeType(ContentService.MimeType.JSON);
 }

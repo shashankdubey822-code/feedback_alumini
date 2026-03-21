@@ -185,7 +185,11 @@ def _call_google_apps_script(url, payload, timeout=90):
                     logger.info(f"Google Apps Script call successful: {response_data.get('message', 'OK')}")
                     return True, response_data.get('data', {}), None
                 else:
-                    error_msg = response_data.get('message', 'Unknown error from Google Script')
+                    # Capture both 'message' and more detailed 'data' (if provided by script)
+                    message = response_data.get('message', 'Unknown error from Google Script')
+                    details = response_data.get('data', '')
+                    error_msg = f"{message}: {details}" if details else message
+                    
                     logger.warning(f"Google Apps Script returned success=false: {error_msg}")
                     return False, None, error_msg
                     
