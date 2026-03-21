@@ -3,3 +3,11 @@
 [2026-03-21 10:06:55] INFO     | backend.utils.logger:81 | Creating events table...
 [2026-03-21 10:06:55] INFO     | backend.utils.logger:97 | Database schema verified and ready
 [2026-03-21 10:06:55] INFO     | backend.utils.logger:104 | Application initialized successfully
+[2026-03-21 11:53:35] INFO     | backend.utils.logger:45 | Application starting in development mode
+[2026-03-21 11:53:35] INFO     | backend.utils.logger:93 | Adding column dl_sentiment_score to dashboard_data
+[2026-03-21 11:53:35] INFO     | backend.utils.logger:93 | Adding column dl_sentiment_label to dashboard_data
+[2026-03-21 11:53:35] INFO     | backend.utils.logger:93 | Adding column dl_keywords to dashboard_data
+[2026-03-21 11:53:35] INFO     | backend.utils.logger:93 | Adding column dl_topic_id to dashboard_data
+[2026-03-21 11:53:35] INFO     | backend.utils.logger:93 | Adding column dl_processed to dashboard_data
+[2026-03-21 11:53:35] INFO     | backend.utils.logger:116 | Database schema verified and ready
+[2026-03-21 11:53:35] INFO     | backend.utils.logger:110 | Application initialized successfully
