@@ -429,46 +429,136 @@ def get_consolidated_analytics(app, filters=None, search=None):
     # ── 7. Deep Learning Payload Aggregation ─────────────────────────
     sentiment_counts = {'POSITIVE': 0, 'NEUTRAL': 0, 'NEGATIVE': 0}
     keyword_freq = {}
+    
+    # New Deep Analysis trackers
+    imp_sentiment = {'POSITIVE': 0, 'NEUTRAL': 0, 'NEGATIVE': 0, 'NO_RESPONSE': 0}
+    val_sentiment = {'POSITIVE': 0, 'NEUTRAL': 0, 'NEGATIVE': 0, 'NO_RESPONSE': 0}
+    actionable_stats = {'actionable': 0, 'non_actionable': 0}
+    category_counts = {}
+    future_keyword_freq = {}
+    
     import json
 
     for row in table_data:
-        # Sentiment
+        # Sentiment (legacy)
         label = str(row.get('dl_sentiment_label', '')).upper()
         if label in sentiment_counts:
             sentiment_counts[label] += 1
             
-        # Keywords
+        # Keywords & Deep Analytics
         kw_str = row.get('dl_keywords')
         if kw_str:
             try:
                 kws = json.loads(kw_str) 
-                for kw in kws:
-                    word = kw[0] if isinstance(kw, (list, tuple)) else kw
-                    if isinstance(word, str):
-                        word = word.lower()
-                        keyword_freq[word] = keyword_freq.get(word, 0) + 1
+                
+                if isinstance(kws, dict):
+                    # Actionable vs Non Actionable
+                    if kws.get('is_actionable') == 1:
+                        actionable_stats['actionable'] += 1
+                    else:
+                        actionable_stats['non_actionable'] += 1
+                        
+                    # Column-level sentinel
+                    imp_l = str(kws.get('improvements_sentiment', '')).upper()
+                    if imp_l in imp_sentiment:
+                        imp_sentiment[imp_l] += 1
+                        
+                    val_l = str(kws.get('valuable_sentiment', '')).upper()
+                    if val_l in val_sentiment:
+                        val_sentiment[val_l] += 1
+                        
+                    # Categories
+                    cat = kws.get('category', 'Other')
+                    category_counts[cat] = category_counts.get(cat, 0) + 1
+                    
+                    # Future words
+                    for kw in kws.get('future_keywords', []):
+                        word = kw[0] if isinstance(kw, (list, tuple)) else kw
+                        if isinstance(word, str):
+                            word = word.lower()
+                            future_keyword_freq[word] = future_keyword_freq.get(word, 0) + 1
+                            
+                    # Add back general keywords for original widget
+                    gen_kws = kws.get('general_keywords', [])
+                    for kw in gen_kws:
+                        word = kw[0] if isinstance(kw, (list, tuple)) else kw
+                        if isinstance(word, str):
+                            word = word.lower()
+                            keyword_freq[word] = keyword_freq.get(word, 0) + 1
+                            
+                elif isinstance(kws, list):
+                    for kw in kws:
+                        word = kw[0] if isinstance(kw, (list, tuple)) else kw
+                        if isinstance(word, str):
+                            word = word.lower()
+                            keyword_freq[word] = keyword_freq.get(word, 0) + 1
             except Exception:
                 pass
 
-    total_sentiment_processed = sum(sentiment_counts.values()) or 1
-    avg_polarity = (sentiment_counts['POSITIVE'] - sentiment_counts['NEGATIVE']) / total_sentiment_processed
+    formatted_sentiment = []
+    
+    # 1. Legacy Overall Deep Learning Network
+    if total_sentiment_processed > 1 or sentiment_counts['POSITIVE'] > 0:
+        formatted_sentiment.append({
+            'column': 'Deep Analysis: Overall Extracted Sentiment',
+            'positive': sentiment_counts['POSITIVE'],
+            'neutral': sentiment_counts['NEUTRAL'],
+            'negative': sentiment_counts['NEGATIVE'],
+            'total': total_sentiment_processed,
+            'avgPolarity': avg_polarity,
+            'avgSubjectivity': 0.75,
+            'nonAnswers': total_count - total_sentiment_processed
+        })
+        
+    # 2. Deep Analysis: Improvements
+    imp_total = sum(v for k, v in imp_sentiment.items() if k != 'NO_RESPONSE') or 1
+    if imp_total > 1 or imp_sentiment['POSITIVE'] > 0:
+        formatted_sentiment.append({
+            'column': 'Deep Analysis: Suggestions & Improvements',
+            'positive': imp_sentiment['POSITIVE'],
+            'neutral': imp_sentiment['NEUTRAL'],
+            'negative': imp_sentiment['NEGATIVE'],
+            'total': imp_total,
+            'avgPolarity': (imp_sentiment['POSITIVE'] - imp_sentiment['NEGATIVE']) / imp_total,
+            'avgSubjectivity': 0.8,
+            'nonAnswers': imp_sentiment.get('NO_RESPONSE', 0)
+        })
 
-    formatted_sentiment = [{
-        'column': 'Deep Learning Network',
-        'positive': sentiment_counts['POSITIVE'],
-        'neutral': sentiment_counts['NEUTRAL'],
-        'negative': sentiment_counts['NEGATIVE'],
-        'total': total_sentiment_processed,
-        'avgPolarity': avg_polarity,
-        'avgSubjectivity': 0.75,
-        'nonAnswers': total_count - total_sentiment_processed
-    }] if total_sentiment_processed > 1 or sentiment_counts['POSITIVE'] > 0 else []
+    # 3. Deep Analysis: Valuable Aspects
+    val_total = sum(v for k, v in val_sentiment.items() if k != 'NO_RESPONSE') or 1
+    if val_total > 1 or val_sentiment['POSITIVE'] > 0:
+        formatted_sentiment.append({
+            'column': 'Deep Analysis: Valuable Aspects',
+            'positive': val_sentiment['POSITIVE'],
+            'neutral': val_sentiment['NEUTRAL'],
+            'negative': val_sentiment['NEGATIVE'],
+            'total': val_total,
+            'avgPolarity': (val_sentiment['POSITIVE'] - val_sentiment['NEGATIVE']) / val_total,
+            'avgSubjectivity': 0.8,
+            'nonAnswers': val_sentiment.get('NO_RESPONSE', 0)
+        })
 
+    # 4. Keywords
+    formatted_keywords = []
     sorted_keywords = sorted(keyword_freq.items(), key=lambda x: x[1], reverse=True)[:40]
-    formatted_keywords = [{
-        'column': 'Deep Learning Topics',
-        'words': [{'text': k, 'count': v, 'type': 'unigram' if len(k.split()) == 1 else 'bigram'} for k, v in sorted_keywords]
-    }] if sorted_keywords else []
+    if sorted_keywords:
+        formatted_keywords.append({
+            'column': 'Deep Analysis: Overall Frequent Topics',
+            'words': [{'text': k, 'count': v, 'type': 'unigram' if len(k.split()) == 1 else 'bigram'} for k, v in sorted_keywords]
+        })
+        
+    sorted_fut_keywords = sorted(future_keyword_freq.items(), key=lambda x: x[1], reverse=True)[:40]
+    if sorted_fut_keywords:
+        formatted_keywords.append({
+            'column': 'Deep Analysis: Requested Future Topics',
+            'words': [{'text': k, 'count': v, 'type': 'unigram' if len(k.split()) == 1 else 'bigram'} for k, v in sorted_fut_keywords]
+        })
+    
+    # Bundle the deep analysis payload
+    deep_analysis = {
+        'actionableStats': actionable_stats,
+        'categories': [{'name': k, 'value': v} for k, v in sorted(category_counts.items(), key=lambda x: x[1], reverse=True) if k != "Other"]
+    }
 
     return {
         'kpis':         formatted_kpis,
@@ -481,6 +571,7 @@ def get_consolidated_analytics(app, filters=None, search=None):
         'timeTrends':   [],
         'sentiment':    formatted_sentiment,
         'keywords':     formatted_keywords,
+        'deepAnalysis': deep_analysis,
         'speakerStats': speaker_stats_payload,
         'tableData':    table_data,
         'meta': {

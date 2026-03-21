@@ -33,7 +33,7 @@ def start_dl_worker(logger_unused):
 
                 # Find unprocessed rows
                 cursor.execute('''
-                    SELECT id, improvements_suggestions, aspect_most_valuable, session_help_understanding
+                    SELECT id, improvements_suggestions, aspect_most_valuable, session_help_understanding, future_topics
                     FROM dashboard_data 
                     WHERE dl_processed = 0 
                     LIMIT 20
@@ -43,17 +43,54 @@ def start_dl_worker(logger_unused):
                 if rows:
                     dl_logger.info(f"DL Worker processing {len(rows)} new records...")
                     for row in rows:
-                        # Combine text for comprehensive analysis
-                        text_parts = []
-                        for col in ['improvements_suggestions', 'aspect_most_valuable', 'session_help_understanding']:
-                            if row[col] and str(row[col]).strip() and str(row[col]).lower() != 'nan':
-                                text_parts.append(str(row[col]))
+                        # Fetch text parts
+                        imp_text = str(row['improvements_suggestions'] or '').strip()
+                        val_text = str(row['aspect_most_valuable'] or '').strip()
+                        fut_text = str(row['future_topics'] or '').strip()
+                        help_text = str(row['session_help_understanding'] or '').strip()
                         
+                        # Combine text for legacy general analysis
+                        text_parts = [t for t in [imp_text, val_text, help_text] if t and t.lower() != 'nan']
                         full_text = ". ".join(text_parts)
                         
-                        # Run the deep learning pipeline
+                        # Run the deep learning pipeline (overall)
                         sentiment = nlp.analyze_sentiment(full_text)
-                        keywords = nlp.extract_keywords(full_text)
+                        general_keywords = nlp.extract_keywords(full_text)
+                        
+                        # ----- DEEP ANALYSIS -----
+                        # 1. Sentiment Scorecards
+                        imp_sentiment = nlp.analyze_sentiment(imp_text)['label'] if imp_text and not nlp.is_non_answer(imp_text) else 'NO_RESPONSE'
+                        val_sentiment = nlp.analyze_sentiment(val_text)['label'] if val_text and not nlp.is_non_answer(val_text) else 'NO_RESPONSE'
+                        
+                        # 2. Top Trending Topics Word Cloud
+                        fut_keywords = nlp.extract_keywords(fut_text)
+                        
+                        # 3. Actionable vs Non-Actionable Filter
+                        is_actionable = 1 if imp_text and not nlp.is_non_answer(imp_text) else 0
+                        
+                        # 4. Suggestion Categorization
+                        category = "Other"
+                        imp_lower = imp_text.lower()
+                        if any(w in imp_lower for w in ['interact', 'activity', 'engage', 'practical']):
+                            category = "More Interaction"
+                        elif any(w in imp_lower for w in ['tech', 'skill', 'code', 'ai', 'program']):
+                            category = "Technical Deep Dives"
+                        elif any(w in imp_lower for w in ['career', 'job', 'placement', 'interview', 'resume']):
+                            category = "Career Advice"
+                        elif any(w in imp_lower for w in ['time', 'duration', 'short', 'long', 'slow', 'fast', 'pace']):
+                            category = "Duration/Time"
+                        elif is_actionable == 1:
+                            category = "General Improvement"
+                            
+                        # Store in extended JSON payload
+                        extended_data = {
+                            "improvements_sentiment": imp_sentiment,
+                            "valuable_sentiment": val_sentiment,
+                            "future_keywords": fut_keywords,
+                            "is_actionable": is_actionable,
+                            "category": category if is_actionable == 1 else "Non-Actionable",
+                            "general_keywords": general_keywords
+                        }
                         
                         cursor.execute('''
                             UPDATE dashboard_data 
@@ -61,7 +98,7 @@ def start_dl_worker(logger_unused):
                                 dl_keywords = ?, dl_processed = 1
                             WHERE id = ?
                         ''', (sentiment['polarity'], sentiment['label'], 
-                              json.dumps(keywords), row['id']))
+                              json.dumps(extended_data), row['id']))
                     conn.commit()
                     dl_logger.info(f"DL Worker finished processing {len(rows)} records.")
                 conn.close()
