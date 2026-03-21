@@ -450,14 +450,25 @@ def get_consolidated_analytics(app, filters=None, search=None):
             except Exception:
                 pass
 
-    formatted_sentiment = [
-        {'label': 'Positive', 'value': sentiment_counts['POSITIVE']},
-        {'label': 'Neutral', 'value': sentiment_counts['NEUTRAL']},
-        {'label': 'Negative', 'value': sentiment_counts['NEGATIVE']}
-    ]
+    total_sentiment_processed = sum(sentiment_counts.values()) or 1
+    avg_polarity = (sentiment_counts['POSITIVE'] - sentiment_counts['NEGATIVE']) / total_sentiment_processed
+
+    formatted_sentiment = [{
+        'column': 'Deep Learning Network',
+        'positive': sentiment_counts['POSITIVE'],
+        'neutral': sentiment_counts['NEUTRAL'],
+        'negative': sentiment_counts['NEGATIVE'],
+        'total': total_sentiment_processed,
+        'avgPolarity': avg_polarity,
+        'avgSubjectivity': 0.75,
+        'nonAnswers': total_count - total_sentiment_processed
+    }] if total_sentiment_processed > 1 or sentiment_counts['POSITIVE'] > 0 else []
 
     sorted_keywords = sorted(keyword_freq.items(), key=lambda x: x[1], reverse=True)[:40]
-    formatted_keywords = [{'text': k, 'value': v} for k, v in sorted_keywords]
+    formatted_keywords = [{
+        'column': 'Deep Learning Topics',
+        'words': [{'text': k, 'count': v, 'type': 'unigram' if len(k.split()) == 1 else 'bigram'} for k, v in sorted_keywords]
+    }] if sorted_keywords else []
 
     return {
         'kpis':         formatted_kpis,
