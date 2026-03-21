@@ -203,7 +203,9 @@ class NLPService:
                 phrases.append(f"{words[i]} {words[i+1]}")
             
             # Remove standalone Unigrams to force goal-centric phrases
-            # phrases.extend(words)
+            # but allow them if the user ONLY entered 1 word!
+            if not phrases and words:
+                phrases.extend(words)
 
             phrase_counts = Counter(phrases)
             
