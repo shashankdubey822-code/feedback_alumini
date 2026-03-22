@@ -9,6 +9,8 @@ __pycache__/
 .env
 *.log
 logs/
+.vscode/
+scripts/
 
 # Data folder structure (tracked), but ignore actual data files
 data/uploads/*.csv
