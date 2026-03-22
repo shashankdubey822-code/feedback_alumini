@@ -11,6 +11,7 @@ from ..services.kpi_service import KPIService
 from ..utils.logger import get_section_logger, log_endpoint_access
 import sqlite3
 import os
+from ..utils.db_helper import get_db_connection
 
 logger = get_section_logger('api')
 
@@ -242,7 +243,7 @@ def get_legacy_data():
         from flask import current_app
         return jsonify(get_consolidated_analytics(current_app)), 200
     except Exception as e:
-        logger.error(f"Error in /api/data: {str(e)}")
+        logger.exception(f"CRITICAL Error in /api/data: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @legacy_bp.route('/filter', methods=['POST'])

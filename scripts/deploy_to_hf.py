@@ -23,7 +23,7 @@ if result.returncode != 0:
 
 # Step 2: Add all changes
 print("\n📦 Staging all changes...")
-result = subprocess.run(['git', 'add', 'backend/routes/admin.py', 'frontend/app.js'], capture_output=True, text=True)
+result = subprocess.run(['git', 'add', '.'], capture_output=True, text=True)
 if result.returncode != 0:
     print("❌ Error:", result.stderr)
     sys.exit(1)
