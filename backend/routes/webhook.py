@@ -12,6 +12,10 @@ from ..utils.db_helper import get_db_connection
 
 logger = get_section_logger('webhook')
 
+# Simple in-memory queue for dashboard notifications
+# (Using global as we're in a single-process Flask dev server)
+LATEST_NOTIFICATIONS = []
+
 webhook_bp = Blueprint('webhook', __name__, url_prefix='/api/v1/webhook')
 
 
@@ -218,6 +222,10 @@ def receive_form_submission():
         db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
         record_id = store_webhook_submission(db_path, payload)
 
+        # Add to notification queue
+        student_name = payload.get('name_of_student', 'Anonymous')
+        LATEST_NOTIFICATIONS.append(f"New submission from: {student_name}")
+
         logger.info(f"Successfully received webhook submission #{record_id}")
         update_sync_status(True)
 
@@ -288,3 +296,15 @@ def test_webhook():
         logger.error(f"Error in test webhook: {error_msg}")
         update_sync_status(False, error_msg)
         return jsonify({'error': error_msg}), 500
+
+
+@webhook_bp.route('/notifications', methods=['GET'])
+def get_notifications():
+    """Fetch and clear the latest notifications for the dashboard"""
+    global LATEST_NOTIFICATIONS
+    notifications = list(LATEST_NOTIFICATIONS)
+    LATEST_NOTIFICATIONS.clear()
+    return jsonify({
+        'status': 'success',
+        'notifications': notifications
+    }), 200

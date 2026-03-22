@@ -1792,4 +1792,48 @@ class SmartCalendar {
         }
     }, 30000);
 
+    // --- TOAST NOTIFICATIONS ---
+    window.showToast = function(message) {
+        let container = document.querySelector('.toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.className = 'toast-container';
+            document.body.appendChild(container);
+        }
+
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.innerHTML = `
+            <div class="toast-icon">📢</div>
+            <div class="toast-content">${esc(message)}</div>
+            <div class="toast-close" onclick="this.parentElement.remove()">×</div>
+        `;
+
+        container.appendChild(toast);
+        // Trigger reflow for animation
+        toast.offsetHeight; 
+        toast.classList.add('show');
+
+        // Auto-remove after 6 seconds
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 500);
+        }, 6000);
+    };
+
+    // --- NOTIFICATION POLLING ---
+    function checkNotifications() {
+        fetch('/api/v1/webhook/notifications')
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success' && data.notifications) {
+                    data.notifications.forEach(msg => window.showToast(msg));
+                }
+            })
+            .catch(err => console.debug("Notification poll failed (normal if server restarting)"));
+    }
+
+    // Start polling every 8 seconds
+    setInterval(checkNotifications, 8000);
+
 })();
