@@ -367,7 +367,8 @@ def create_event_and_form():
         
         # Step 2: Call Google Apps Script to create form
         secret = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
-        webhook_url = request.host_url.rstrip('/') + '/api/v1/webhook/forms/submit'
+        base_url = os.environ.get('PUBLIC_URL') or request.host_url
+        webhook_url = base_url.rstrip('/') + '/api/v1/webhook/forms/submit'
         
         payload = {
             'secret': secret,
@@ -525,9 +526,23 @@ def close_form():
 
         conn.commit()
         conn.close()
+        
+        # ACTUALLY CALL GOOGLE APPS SCRIPT TO ENFORCE STRICT CLOSURE
+        apps_script_url = os.getenv('APPS_SCRIPT_URL')
+        if apps_script_url:
+            secret = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
+            payload = {
+                'secret': secret,
+                'action': 'close_form',
+                'form_id': form_id
+            }
+            # Fire and forget closure command - we don't fail the API if Google complains
+            success, _, err = _call_google_apps_script(apps_script_url, payload)
+            if not success:
+                logger.warning(f"Google Script Form Closure failed for {form_id}: {err}")
 
         logger.info(f"Form '{form_id}' successfully closed by admin.")
-        return jsonify({'message': 'Form closed successfully', 'status': 'closed'})
+        return jsonify({'message': 'Form closed successfully (Google Form locked)', 'status': 'closed'})
 
     except Exception as e:
         logger.error(f"Error closing form: {str(e)}")
@@ -589,7 +604,8 @@ def generate_form():
         
         # Call Google Apps Script
         secret = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
-        webhook_url = request.host_url.rstrip('/') + '/api/v1/webhook/forms/submit'
+        base_url = os.environ.get('PUBLIC_URL') or request.host_url
+        webhook_url = base_url.rstrip('/') + '/api/v1/webhook/forms/submit'
         
         payload = {
             'secret': secret,

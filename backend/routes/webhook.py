@@ -2,8 +2,10 @@
 Webhook Routes - Handle incoming webhooks from Google Forms
 """
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 import sqlite3
+import os
+import json
 from datetime import datetime
 from ..utils.logger import get_section_logger, log_endpoint_access
 from ..utils.db_helper import get_db_connection
@@ -16,6 +18,54 @@ webhook_bp = Blueprint('webhook', __name__, url_prefix='/api/v1/webhook')
 def verify_webhook_secret(token: str, expected: str) -> bool:
     """Verify webhook authorization token"""
     return token == expected
+
+
+def update_sync_status(success: bool, error_message=None):
+    """Update the sync_health.json file with the latest status"""
+    try:
+        # Use a safe path relative to the app root
+        status_file = os.path.join(current_app.root_path, 'logs', 'sync_health.json')
+        
+        status_data = {
+            "status": "active",
+            "last_sync": None,
+            "success_count": 0,
+            "failure_count": 0,
+            "last_error": None
+        }
+        
+        if os.path.exists(status_file):
+            try:
+                with open(status_file, 'r', encoding='utf-8') as f:
+                    status_data = json.load(f)
+            except:
+                pass
+        
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        status_data["last_heartbeat"] = now_str
+        
+        if success:
+            status_data["status"] = "working"
+            status_data["last_sync"] = now_str
+            try:
+                curr_count = status_data.get("success_count", 0)
+                status_data["success_count"] = int(curr_count) + 1 if curr_count is not None else 1
+            except (ValueError, TypeError):
+                status_data["success_count"] = 1
+        else:
+            status_data["status"] = "error"
+            try:
+                curr_count = status_data.get("failure_count", 0)
+                status_data["failure_count"] = int(curr_count) + 1 if curr_count is not None else 1
+            except (ValueError, TypeError):
+                status_data["failure_count"] = 1
+            status_data["last_error"] = error_message
+            
+        os.makedirs(os.path.dirname(status_file), exist_ok=True)
+        with open(status_file, 'w', encoding='utf-8') as f:
+            json.dump(status_data, f, indent=2)
+    except Exception as e:
+        logger.error(f"Critical error updating sync status JSON: {str(e)}")
 
 
 def store_webhook_submission(db_path: str, payload: dict) -> int:
@@ -139,7 +189,6 @@ def store_webhook_submission(db_path: str, payload: dict) -> int:
 def receive_form_submission():
     """Receive and store form submission from Google Apps Script"""
     try:
-        from flask import current_app
 
         # Verify authorization token
         auth_token = request.headers.get('Authorization', '').replace('Bearer ', '')
@@ -155,11 +204,22 @@ def receive_form_submission():
         if not payload:
             return jsonify({'error': 'No data provided'}), 400
 
+        # Handle heartbeat ping from Google Apps Script
+        if payload.get('action') == 'heartbeat':
+            logger.info("Received heartbeat ping from Google Apps Script")
+            update_sync_status(True)
+            return jsonify({
+                'status': 'success',
+                'message': 'Heartbeat received',
+                'timestamp': datetime.utcnow().isoformat()
+            }), 200
+
         # Store submission
         db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
         record_id = store_webhook_submission(db_path, payload)
 
         logger.info(f"Successfully received webhook submission #{record_id}")
+        update_sync_status(True)
 
         return jsonify({
             'status': 'success',
@@ -168,8 +228,10 @@ def receive_form_submission():
         }), 200
 
     except Exception as e:
-        logger.error(f"Error processing webhook: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        error_msg = str(e)
+        logger.error(f"Error processing webhook: {error_msg}")
+        update_sync_status(False, error_msg)
+        return jsonify({'error': error_msg}), 500
 
 
 @webhook_bp.route('/forms/verify', methods=['GET'])
@@ -186,7 +248,6 @@ def verify_webhook():
 def test_webhook():
     """Test webhook with sample data (requires valid token)"""
     try:
-        from flask import current_app
 
         # Verify authorization token
         auth_token = request.headers.get('Authorization', '').replace('Bearer ', '')
@@ -214,6 +275,7 @@ def test_webhook():
         record_id = store_webhook_submission(db_path, test_payload)
 
         logger.info(f"Test webhook submission stored with ID #{record_id}")
+        update_sync_status(True)
 
         return jsonify({
             'status': 'success',
@@ -222,5 +284,7 @@ def test_webhook():
         }), 200
 
     except Exception as e:
-        logger.error(f"Error in test webhook: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        error_msg = str(e)
+        logger.error(f"Error in test webhook: {error_msg}")
+        update_sync_status(False, error_msg)
+        return jsonify({'error': error_msg}), 500

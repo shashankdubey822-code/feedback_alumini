@@ -29,9 +29,8 @@ function RUN_ME_TO_AUTHORIZE() {
   try {
     const props = PropertiesService.getScriptProperties();
     props.setProperty("AUTH_CHECK", new Date().toISOString());
-    FormApp.getActiveForm(); 
-    ScriptApp.getProjectTriggers(); 
-    Logger.log("✅ AUTHORIZATION SUCCESSFUL. You can now use the dashboard.");
+    ScriptApp.newTrigger('onHeartbeatTrigger').timeBased().everyHours(1).create();
+    Logger.log("✅ AUTHORIZATION SUCCESSFUL. Heartbeat established.");
   } catch (e) {
     Logger.log("⚠️ INFO: " + e.message);
     Logger.log("If asked for permissions, click REVIEW PERMISSIONS -> Select Account -> Advanced -> Allow.");
@@ -67,6 +66,7 @@ function doPost(e) {
     switch (action) {
       case "create_form": return _handleCreateForm(payload);
       case "get_responses": return _handleGetResponses(payload);
+      case "close_form": return _handleCloseForm(payload);
       case "ping": return _json(true, "Connectivity Active", { version: CONFIG.VERSION });
       default: return _json(false, "Unknown Action: " + action, null, 404);
     }
@@ -134,14 +134,21 @@ function _handleCreateForm(payload) {
 
   // ⚡ AUTOMATIC TRIGGER PRUNING (Personal accounts are limited to 20)
   const allTriggers = ScriptApp.getProjectTriggers();
-  if (allTriggers.length > 18) {
+  if (allTriggers.length > 15) {
     Logger.log("⚠️ Pruning old triggers to make room (Auto-Cleanup)...");
     for (let i = 0; i < 5; i++) {
        if (allTriggers[i]) try { ScriptApp.deleteTrigger(allTriggers[i]); } catch(f) {}
     }
   }
 
+  // 1: Trigger for INSTANT webhooks on submission
   ScriptApp.newTrigger('onFormSubmitTrigger').forForm(form).onFormSubmit().create();
+
+  // 2: Trigger for STRICT 24-hour closure
+  const timeTrigger = ScriptApp.newTrigger('onAutoCloseFormTrigger').timeBased().after(24 * 60 * 60 * 1000).create();
+  
+  // Save mapping so the time trigger knows WHICH form to close
+  PropertiesService.getScriptProperties().setProperty(`close_${timeTrigger.getUniqueId()}`, formId);
 
   console.log(`[SUCCESS] Form created for ${speaker} (ID: ${formId})`);
   return _json(true, "Form Generated Successfully", { 
@@ -198,7 +205,35 @@ function onFormSubmitTrigger(e) {
   }
 }
 
-// ─── DATA RETRIEVAL ──────────────────────────────────────────────────────────
+function onAutoCloseFormTrigger(e) {
+  // This runs exactly 24 hours after creation
+  if (!e || !e.triggerUid) return;
+  
+  const triggerId = e.triggerUid;
+  const formId = PropertiesService.getScriptProperties().getProperty(`close_${triggerId}`);
+  
+  if (formId) {
+    try {
+      const form = FormApp.openById(formId);
+      form.setAcceptingResponses(false);
+      form.setCustomClosedFormMessage("Sorry this form is closed, reach your mentor");
+      PropertiesService.getScriptProperties().deleteProperty(`close_${triggerId}`);
+    } catch(err) {
+      console.error("Failed to auto-close form:", err);
+    }
+  }
+  
+  // Cleanup the used trigger
+  const triggers = ScriptApp.getProjectTriggers();
+  for (let i = 0; i < triggers.length; i++) {
+    if (triggers[i].getUniqueId() === triggerId) {
+      ScriptApp.deleteTrigger(triggers[i]);
+      break;
+    }
+  }
+}
+
+// ─── DATA RETRIEVAL & CLOSURE ────────────────────────────────────────────────
 
 function _handleGetResponses(payload) {
   // ⚡ MANUAL RUN DETECTION
@@ -235,9 +270,62 @@ function _handleGetResponses(payload) {
   }
 }
 
+function _handleCloseForm(payload) {
+  if (!payload || typeof payload !== 'object' || !payload.form_id) {
+    return _json(false, "Missing form_id in payload.", null, 400);
+  }
+  
+  const formId = payload.form_id;
+  try {
+    const form = FormApp.openById(formId);
+    if (!form) throw new Error("Could not access Form.");
+    
+    // STRICT CLOSURE
+    form.setAcceptingResponses(false);
+    form.setCustomClosedFormMessage("Sorry this form is closed, reach your mentor");
+    
+    return _json(true, "Form Strictly Closed on Google Servers", { form_id: formId });
+  } catch (e) {
+    return _json(false, "Closure Failure", e.toString(), 500);
+  }
+}
+
 // ─── JSON HELPER ─────────────────────────────────────────────────────────────
 
 function _json(success, message, data, code = 200) {
   const output = { success, message, data, v: CONFIG.VERSION, timestamp: new Date().toISOString() };
   return ContentService.createTextOutput(JSON.stringify(output)).setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Sends a periodic heartbeat to the backend to verify connectivity
+ */
+function onHeartbeatTrigger() {
+  const props = PropertiesService.getScriptProperties();
+  const webhookUrl = props.getProperty("WEBHOOK_URL");
+  const secret = props.getProperty("WEBHOOK_SECRET") || "webhook-secret-key";
+  
+  if (!webhookUrl) {
+    Logger.log("Heartbeat skipped: WEBHOOK_URL not set.");
+    return;
+  }
+  
+  try {
+    const payload = {
+      action: "heartbeat",
+      timestamp: new Date().toISOString(),
+      form_id: "HEARTBEAT"
+    };
+    
+    UrlFetchApp.fetch(webhookUrl, {
+      method: "post",
+      contentType: "application/json",
+      headers: { "Authorization": "Bearer " + secret },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    Logger.log("Heartbeat sent to: " + webhookUrl);
+  } catch (e) {
+    Logger.log("Heartbeat failed: " + e.toString());
+  }
 }

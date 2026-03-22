@@ -391,7 +391,8 @@ def create_event_and_form():
         
         # Step 2: Call Google Apps Script to create form
         secret = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
-        webhook_url = request.host_url.rstrip('/') + '/api/v1/webhook/forms/submit'
+        base_url = os.environ.get('PUBLIC_URL') or request.host_url
+        webhook_url = base_url.rstrip('/') + '/api/v1/webhook/forms/submit'
         
         payload = {
             'secret': secret,
@@ -541,7 +542,8 @@ def generate_form():
             
             # Call Google Apps Script
             secret = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
-            webhook_url = request.host_url.rstrip('/') + '/api/v1/webhook/forms/submit'
+            base_url = os.environ.get('PUBLIC_URL') or request.host_url
+            webhook_url = base_url.rstrip('/') + '/api/v1/webhook/forms/submit'
             
             payload = {
                 'secret': secret,
