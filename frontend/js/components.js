@@ -3,18 +3,18 @@ function renderDashboard() {
     const a = state.analytics;
     if (!a) return;
 
-    try { renderKPIs(a.kpis); } catch(e) { console.error("Error renderKPIs:", e); }
-    try { renderFilters(a.filters); } catch(e) { console.error("Error renderFilters:", e); }
-    try { renderAIInsights(a.aiInsights); } catch(e) { console.error("Error renderAIInsights:", e); }
-    try { renderCharts(a.charts); } catch(e) { console.error("Error renderCharts:", e); }
-    try { renderDeepAnalysis(a.deepAnalysis); } catch(e) { console.error("Error renderDeepAnalysis:", e); }
-    try { renderSentiment(a.sentiment); } catch(e) { console.error("Error renderSentiment:", e); }
-    try { renderKeywords(a.keywords); } catch(e) { console.error("Error renderKeywords:", e); }
-    try { renderSpeakers(a.speakerStats); } catch(e) { console.error("Error renderSpeakers:", e); }
-    try { renderTable(); } catch(e) { console.error("Error renderTable:", e); }
+    try { renderKPIs(a.kpis); } catch (e) { console.error("Error renderKPIs:", e); }
+    try { renderFilters(a.filters); } catch (e) { console.error("Error renderFilters:", e); }
+    try { renderAIInsights(a.aiInsights); } catch (e) { console.error("Error renderAIInsights:", e); }
+    try { renderCharts(a.charts); } catch (e) { console.error("Error renderCharts:", e); }
+    try { renderDeepAnalysis(a.deepAnalysis); } catch (e) { console.error("Error renderDeepAnalysis:", e); }
+    try { renderSentiment(a.sentiment); } catch (e) { console.error("Error renderSentiment:", e); }
+    try { renderKeywords(a.keywords); } catch (e) { console.error("Error renderKeywords:", e); }
+    try { renderSpeakers(a.speakerStats); } catch (e) { console.error("Error renderSpeakers:", e); }
+    try { renderTable(); } catch (e) { console.error("Error renderTable:", e); }
 
     // Hide sections with no data
-    try { toggleSectionVisibility('speakers-section', a.speakerStats && a.speakerStats.length > 0); } catch(e) {}
+    try { toggleSectionVisibility('speakers-section', a.speakerStats && a.speakerStats.length > 0); } catch (e) { }
 }
 
 function toggleSectionVisibility(sectionId, hasData) {
@@ -139,7 +139,7 @@ function renderFilters(filters) {
 function updateSpeakerSuggestions(filters) {
     const speakerFilter = filters.find(f => f.column === 'alumni_speaker_name');
     if (!speakerFilter || !speakerFilter.options) return;
-    
+
     // Cache the full list for autocomplete (even when filtered)
     state.allSpeakers = speakerFilter.options.map(o => o.value);
 }
@@ -152,7 +152,7 @@ function fuzzyScore(query, target) {
     const q = query.toLowerCase();
     const t = target.toLowerCase();
     if (t.includes(q)) return 100 + (t.startsWith(q) ? 50 : 0) - t.length; // Strong substring match
-    
+
     let score = 0;
     let tIdx = 0;
     for (let qChar of q) {
@@ -196,14 +196,14 @@ function renderSpeakerAutocomplete(query) {
         const item = document.createElement('div');
         item.className = 'autocomplete-item';
         item.dataset.index = idx;
-        
+
         // Highlight matching characters
         let html = '';
         let tIdx = 0;
         const q = query.toLowerCase();
         const t = m.name;
         const tLower = t.toLowerCase();
-        
+
         for (let qChar of q) {
             const hit = tLower.indexOf(qChar, tIdx);
             if (hit !== -1) {
@@ -212,12 +212,12 @@ function renderSpeakerAutocomplete(query) {
             }
         }
         html += esc(t.substring(tIdx));
-        
+
         item.innerHTML = `
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             <span>${html}</span>
         `;
-        
+
         item.addEventListener('click', () => {
             selectSpeaker(m.name);
         });
@@ -322,7 +322,7 @@ async function applyFilters() {
         // Check if data actually changed simply using string length as a fast heuristic
         const currentDataHash = JSON.stringify(state.tableData).length;
         const newDataHash = JSON.stringify(analytics.tableData || []).length;
-        
+
         state.analytics = analytics;
         state.tableData = analytics.tableData || [];
         state.currentPage = 1;
@@ -358,18 +358,18 @@ function clearAllFilters() {
 function renderDeepAnalysis(da) {
     const container = document.getElementById('deep-actionable-grid');
     const subsection = document.getElementById('deep-actionable-subsection');
-    
+
     if (!da || (!da.actionableStats && (!da.categories || da.categories.length === 0))) {
-        if(subsection) subsection.style.display = 'none';
+        if (subsection) subsection.style.display = 'none';
         return;
     }
-    
-    if(subsection) subsection.style.display = 'block';
-    if(container) container.innerHTML = '';
-    
-    const actStats = da.actionableStats || {actionable: 0, non_actionable: 0};
+
+    if (subsection) subsection.style.display = 'block';
+    if (container) container.innerHTML = '';
+
+    const actStats = da.actionableStats || { actionable: 0, non_actionable: 0 };
     const totalAct = actStats.actionable + actStats.non_actionable;
-    
+
     if (totalAct > 0 && container) {
         const actCard = document.createElement('div');
         actCard.className = 'chart-card';
@@ -378,7 +378,7 @@ function renderDeepAnalysis(da) {
             <div class="chart-canvas-wrapper"><canvas></canvas></div>
         `;
         container.appendChild(actCard);
-        
+
         const actChart = new Chart(actCard.querySelector('canvas'), {
             type: 'doughnut',
             data: {
@@ -407,7 +407,7 @@ function renderDeepAnalysis(da) {
         });
         state.charts.push(actChart);
     }
-    
+
     const cats = da.categories || [];
     if (cats.length > 0 && container) {
         const catCard = document.createElement('div');
@@ -417,7 +417,7 @@ function renderDeepAnalysis(da) {
             <div class="chart-canvas-wrapper"><canvas></canvas></div>
         `;
         container.appendChild(catCard);
-        
+
         const catChart = new Chart(catCard.querySelector('canvas'), {
             type: 'bar',
             data: {
@@ -520,15 +520,15 @@ function renderSentiment(sentimentData) {
         container.appendChild(card);
 
         drawSentimentGauge(card.querySelector('.sentiment-gauge canvas'), polarity);
-        
+
         card.querySelectorAll('.clickable-sentiment').forEach(row => {
             row.style.cursor = 'pointer';
             row.title = 'Click to view students';
-            
+
             // Add slight hover effect via JS since CSS isn't easily modifiable right now
             row.addEventListener('mouseenter', () => row.style.backgroundColor = 'rgba(255,255,255,0.05)');
             row.addEventListener('mouseleave', () => row.style.backgroundColor = 'transparent');
-            
+
             row.addEventListener('click', () => {
                 const sent = row.getAttribute('data-sentiment');
                 const colTitle = row.getAttribute('data-col');
@@ -589,7 +589,7 @@ function renderKeywords(keywordsData) {
 
         const maxCount = Math.max(...kw.words.map(w => w.count));
         const minCount = Math.min(...kw.words.map(w => w.count));
-        
+
         const cloudContainer = document.createElement('div');
         cloudContainer.className = 'word-cloud';
 
@@ -599,7 +599,7 @@ function renderKeywords(keywordsData) {
             const color = CHART_COLORS[idx % CHART_COLORS.length];
             const bgColor = color + '18';
             const isBigram = word.type === 'bigram';
-            
+
             const span = document.createElement('span');
             span.className = `word-tag ${isBigram ? 'bigram-tag' : ''}`;
             span.style.fontSize = `${size}px`;
@@ -609,7 +609,7 @@ function renderKeywords(keywordsData) {
             span.title = `${word.count} occurrences${isBigram ? ' (phrase)' : ''} - Click to see students`;
             span.style.cursor = 'pointer';
             span.textContent = `${isBigram ? '⟨ ' : ''}${word.text}${isBigram ? ' ⟩' : ''}`;
-            
+
             span.addEventListener('click', () => {
                 openDataModal('Trending Topics', word.text, word.count, kw.column, 'dl_keyword', null);
             });
@@ -659,7 +659,7 @@ function renderSpeakers(speakerStats) {
                 </div>
                 <div class="speaker-sentiment-pill ${sentClass}">${sentLabel} (${speaker.sentiment.toFixed(2)})</div>
             `;
-            
+
             card.addEventListener('click', () => {
                 openDataModal('Speaker Analysis', speaker.name, speaker.count, ss.column, 'categorical', null);
             });
@@ -725,8 +725,8 @@ function renderSpeakers(speakerStats) {
                         data: ss.speakers.map(s => s.sentiment),
                         backgroundColor: ss.speakers.map(s =>
                             s.sentiment > 0.1 ? 'rgba(52, 211, 153, 0.6)' :
-                            s.sentiment < -0.1 ? 'rgba(251, 113, 133, 0.6)' :
-                            'rgba(251, 191, 36, 0.6)'
+                                s.sentiment < -0.1 ? 'rgba(251, 113, 133, 0.6)' :
+                                    'rgba(251, 191, 36, 0.6)'
                         ),
                         borderRadius: 6,
                         borderWidth: 0,
@@ -1042,7 +1042,7 @@ function openDataModal(chartTitle, clickedLabel, clickedValue, column, columnTyp
                     const dl = JSON.parse(row['dl_keywords']);
                     if (!dl.category) return false;
                     return String(dl.category).toLowerCase().trim() === searchLabel;
-                } catch(e) { return false; }
+                } catch (e) { return false; }
             });
         } else if (columnType === 'dl_sentiment') {
             filteredRows = state.tableData.filter(row => {
@@ -1059,7 +1059,7 @@ function openDataModal(chartTitle, clickedLabel, clickedValue, column, columnTyp
                     if (binBoundary.includes('Valuable')) {
                         return String(dl.valuable_sentiment || '').toUpperCase().trim() === targetSent;
                     }
-                } catch(e) { return false; }
+                } catch (e) { return false; }
                 return false;
             });
         } else if (columnType === 'dl_keyword') {
@@ -1082,7 +1082,7 @@ function openDataModal(chartTitle, clickedLabel, clickedValue, column, columnTyp
                         const word = Array.isArray(kwData) ? kwData[0] : kwData;
                         return String(word).toLowerCase().trim() === searchLabel;
                     });
-                } catch(e) { return false; }
+                } catch (e) { return false; }
             });
         } else if (columnType === 'dl_actionability') {
             const isActionable = clickedLabel === 'Actionable Suggestions';
@@ -1091,7 +1091,7 @@ function openDataModal(chartTitle, clickedLabel, clickedValue, column, columnTyp
                 try {
                     const dl = JSON.parse(row['dl_keywords']);
                     return !!dl.is_actionable === isActionable;
-                } catch(e) { return false; }
+                } catch (e) { return false; }
             });
         } else {
             // Categorical: exact match on the specific column only
@@ -1443,7 +1443,7 @@ class SmartCalendar {
     // ── Generate form ────────────────────────────────────────
     async function generateForm() {
         const speaker = document.getElementById('fb-speaker-name').value.trim();
-        const date    = document.getElementById('fb-venue-date').value.trim();
+        const date = document.getElementById('fb-venue-date').value.trim();
 
         if (!speaker || !date) {
             showStatus('Please fill in both Speaker Name and Venue Date.', 'error');
@@ -1451,13 +1451,13 @@ class SmartCalendar {
         }
 
         const btn = document.getElementById('btn-generate-form');
-        
+
         // Prevent double-click with proper state management
         if (btn.disabled) {
             console.log('[FORM] Button already disabled, ignoring click');
             return;
         }
-        
+
         btn.disabled = true;
         btn.textContent = 'Creating event & form...';
         btn.style.opacity = '0.7';
@@ -1471,13 +1471,13 @@ class SmartCalendar {
                 headers: authHeaders(),
                 body: JSON.stringify({ speaker_name: speaker, venue_date: date })
             });
-            
+
             const data = await response.json();
-            
+
             if (!data.success) {
                 throw new Error(data.error || 'Failed to create event and form');
             }
-            
+
             // Success! Form created atomically
             _currentFormUrl = data.form_url;
             console.log("[FORM] Successfully created:", {
@@ -1485,26 +1485,26 @@ class SmartCalendar {
                 form_id: data.form_id,
                 form_url: data.form_url
             });
-            
+
             const urlEl = document.getElementById('fb-form-url-text');
             urlEl.textContent = _currentFormUrl || 'Error: URL not returned';
             urlEl.style.color = '#ffffff';
-            
+
             document.getElementById('fb-result').style.display = 'block';
 
             btn.textContent = 'Generate Another Form';
             btn.disabled = false;
             btn.style.opacity = '1';
-            
+
             showNotification('✅ Google Form created successfully!', 'success');
-            
+
             loadEvents(); // refresh list
 
         } catch (err) {
             console.error('[FORM] Error:', err);
-            
+
             let errorMessage = 'Error: ' + err.message;
-            
+
             // Enhanced error messages
             if (err.message.includes('APPS_SCRIPT_URL')) {
                 errorMessage = '⚠️ Google Apps Script not configured. Please contact administrator.';
@@ -1513,7 +1513,7 @@ class SmartCalendar {
             } else if (err.message.includes('Connection failed')) {
                 errorMessage = '🌐 Cannot reach Google Apps Script. Check your internet connection.';
             }
-            
+
             showStatus(errorMessage, 'error');
             btn.textContent = 'Generate Google Form';
             btn.disabled = false;
@@ -1526,7 +1526,7 @@ class SmartCalendar {
         const list = document.getElementById('fb-events-list');
         list.innerHTML = '<div style="color:#8b8b9e;font-size:13px;text-align:center;padding:16px;">Loading...</div>';
         try {
-            const res  = await fetch(`${API_BASE}/api/admin/events`, { headers: authHeaders() });
+            const res = await fetch(`${API_BASE}/api/admin/events`, { headers: authHeaders() });
             const data = await res.json();
             if (!data.success) throw new Error(data.error);
 
@@ -1540,28 +1540,28 @@ class SmartCalendar {
                 const card = document.createElement('div');
                 card.style.cssText = 'background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px;';
                 const hasForm = !!ev.form_url;
-                
+
                 let isExpired = ev.status === 'closed';
                 let timeRemainingStr = '';
-                
+
                 if (hasForm && !isExpired && ev.created_at) {
-                     // Normalize sqlite timestamp missing "T" or timezone
-                     let dateStr = ev.created_at;
-                     if (!dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
-                     if (!dateStr.endsWith('Z')) dateStr += 'Z';
-                     
-                     const createdDate = new Date(dateStr);
-                     const expiryDate = new Date(createdDate.getTime() + 24 * 60 * 60 * 1000);
-                     const now = new Date();
-                     const diff = expiryDate - now;
-                     if (diff <= 0) {
-                         isExpired = true;
-                     } else {
-                         const h = Math.floor(diff / (1000 * 60 * 60)).toString().padStart(2, '0');
-                         const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)).toString().padStart(2, '0');
-                         const s = Math.floor((diff % (1000 * 60)) / 1000).toString().padStart(2, '0');
-                         timeRemainingStr = `<span class="form-timer" data-expiry="${expiryDate.getTime()}" style="color:#fca5a5;font-family:monospace;font-size:12px;background:rgba(239,68,68,0.1);padding:4px 8px;border-radius:6px;border:1px solid rgba(239,68,68,0.2);">⏱ ${h}h ${m}m ${s}s</span>`;
-                     }
+                    // Normalize sqlite timestamp missing "T" or timezone
+                    let dateStr = ev.created_at;
+                    if (!dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
+                    if (!dateStr.endsWith('Z')) dateStr += 'Z';
+
+                    const createdDate = new Date(dateStr);
+                    const expiryDate = new Date(createdDate.getTime() + 24 * 60 * 60 * 1000);
+                    const now = new Date();
+                    const diff = expiryDate - now;
+                    if (diff <= 0) {
+                        isExpired = true;
+                    } else {
+                        const h = Math.floor(diff / (1000 * 60 * 60)).toString().padStart(2, '0');
+                        const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)).toString().padStart(2, '0');
+                        const s = Math.floor((diff % (1000 * 60)) / 1000).toString().padStart(2, '0');
+                        timeRemainingStr = `<span class="form-timer" data-expiry="${expiryDate.getTime()}" style="color:#fca5a5;font-family:monospace;font-size:12px;background:rgba(239,68,68,0.1);padding:4px 8px;border-radius:6px;border:1px solid rgba(239,68,68,0.2);">⏱ ${h}h ${m}m ${s}s</span>`;
+                    }
                 }
 
                 card.innerHTML = `
@@ -1618,7 +1618,7 @@ class SmartCalendar {
             // Close form status buttons
             list.querySelectorAll('.btn-close-form').forEach(btn => {
                 btn.addEventListener('click', async () => {
-                    if(!confirm("Are you sure you want to close this form immediately? No further responses will be accepted.")) return;
+                    if (!confirm("Are you sure you want to close this form immediately? No further responses will be accepted.")) return;
                     const formId = btn.dataset.form;
                     if (!formId) return;
                     btn.textContent = '...';
@@ -1755,11 +1755,11 @@ class SmartCalendar {
     setInterval(() => {
         const timers = document.querySelectorAll('.form-timer');
         let needsReload = false;
-        
+
         timers.forEach(timer => {
             const expiry = parseInt(timer.dataset.expiry, 10);
             if (!expiry) return;
-            
+
             const diff = expiry - Date.now();
             if (diff <= 0) {
                 timer.textContent = 'Expired';
@@ -1772,7 +1772,7 @@ class SmartCalendar {
                 timer.textContent = `⏱ ${h}h ${m}m ${s}s`;
             }
         });
-        
+
         if (needsReload) {
             // Give it a moment to avoid hammering
             setTimeout(() => loadEvents(), 2000);
@@ -1793,7 +1793,7 @@ class SmartCalendar {
     }, 30000);
 
     // --- TOAST NOTIFICATIONS ---
-    window.showToast = function(message) {
+    window.showToast = function (message) {
         let container = document.querySelector('.toast-container');
         if (!container) {
             container = document.createElement('div');
@@ -1811,7 +1811,7 @@ class SmartCalendar {
 
         container.appendChild(toast);
         // Trigger reflow for animation
-        toast.offsetHeight; 
+        toast.offsetHeight;
         toast.classList.add('show');
 
         // Auto-remove after 6 seconds
@@ -1833,42 +1833,7 @@ class SmartCalendar {
             .catch(err => console.debug("Notification poll failed (normal if server restarting)"));
     }
 
-    // --- SYNC STATUS MONITORING ---
-    function updateSyncStatusUI() {
-        const badge = document.getElementById('sync-status-badge');
-        const text = document.getElementById('sync-status-text');
-        if (!badge || !text) return;
-
-        fetch('/api/v1/webhook/status')
-            .then(res => res.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    const config = data.config;
-                    const health = data.health || {};
-                    
-                    if (!config.public_url_set) {
-                        badge.className = 'sync-status-indicator sync-status-error';
-                        text.innerText = "URL Not Set (HF)";
-                    } else if (health.status === 'error') {
-                        badge.className = 'sync-status-indicator sync-status-error';
-                        text.innerText = "Sync Error";
-                    } else if (health.status === 'active' || health.success_count > 0) {
-                        badge.className = 'sync-status-indicator sync-status-active';
-                        text.innerText = "Sync Active";
-                    } else {
-                        badge.className = 'sync-status-indicator';
-                        text.innerText = "Sync Ready";
-                    }
-                }
-            })
-            .catch(() => {
-                badge.className = 'sync-status-indicator';
-                text.innerText = "Server Offline";
-            });
-    }
-
-    // Start polling every 15 seconds
-    setInterval(updateSyncStatusUI, 15000);
-    updateSyncStatusUI(); // Initial check
+    // Start polling every 8 seconds
+    setInterval(checkNotifications, 8000);
 
 })();
