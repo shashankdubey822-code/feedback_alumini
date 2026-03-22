@@ -63,6 +63,25 @@ def create_app(config=None):
     from backend.services.dl_worker import start_dl_worker
     start_dl_worker(logger)
 
+    # Run startup error detection (log criticals, don't block boot)
+    try:
+        from backend.error_detection.reporter import run_all_checks
+        upload_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'uploads')
+        report = run_all_checks(app.config.get('DATABASE_PATH', 'dashboard.db'), upload_dir)
+        summary = report.get('summary', {})
+        if summary.get('critical', 0) > 0:
+            logger.warning(
+                f"Startup error check: {summary['critical']} CRITICAL, "
+                f"{summary['warnings']} warnings. Visit /api/v1/errors/report for details."
+            )
+        else:
+            logger.info(
+                f"Startup error check passed: {summary['ok']} OK, "
+                f"{summary['warnings']} warnings."
+            )
+    except Exception as _e:
+        logger.warning(f"Startup error detection skipped: {_e}")
+
     # Enable CORS
     CORS(app, resources={
         r"/api/*": {

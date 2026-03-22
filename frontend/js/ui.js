@@ -1,132 +1,53 @@
+/* ui.js — screen helpers used by app.js */
+
 // ========== SCREEN SWITCHING ==========
 function showSection(sectionId) {
-    // Hide all dashboard sections
-    document.querySelectorAll('.dashboard-section').forEach(sec => {
-        sec.classList.remove('active');
-    });
-    
-    // Show target section
+    document.querySelectorAll('.dashboard-section').forEach(sec => sec.classList.remove('active'));
     const target = document.getElementById(sectionId);
     if (target) {
         target.classList.add('active');
-        // Ensure scroll to top
         window.scrollTo(0, 0);
     }
-
-    // Update sidebar active state
-    document.querySelectorAll('.sidebar .nav-item, .sidebar-nav .nav-item').forEach(btn => {
+    document.querySelectorAll('.sidebar .nav-item').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.section === sectionId);
     });
-
-    // SCOPING: If leaving overview, reset filters to show global data in other sections
-    const activeFilters = (window.state && state.activeFilters) ? state.activeFilters : {};
-    if (sectionId !== 'overview-section' && Object.keys(activeFilters).length > 0) {
+    if (sectionId !== 'overview-section' && Object.keys((window.state && state.activeFilters) || {}).length > 0) {
         if (typeof clearAllFilters === 'function') clearAllFilters();
     }
 }
 
 function switchToDashboard() {
     showSection('overview-section');
-    if (window.state && state.fileName) {
-        const badge = document.getElementById('file-badge');
-        if (badge) badge.textContent = state.fileName;
-    }
+    const badge = document.getElementById('file-badge');
+    if (badge && window.state) badge.textContent = state.fileName || 'No file loaded';
 }
 
 function switchToUpload() {
     showSection('upload-section');
     if (typeof hideProgress === 'function') hideProgress();
-    const fileInput = document.getElementById('file-input');
-    const linkInput = document.getElementById('google-link-input');
-    if (fileInput) fileInput.value = '';
-    if (linkInput) linkInput.value = '';
+    const fi = document.getElementById('file-input');
+    const li = document.getElementById('google-link-input');
+    if (fi) fi.value = '';
+    if (li) li.value = '';
     if (typeof destroyCharts === 'function') destroyCharts();
 }
 
-
-// ========== SIDEBAR NAVIGATION ==========
-function setupSidebarNav() {
-    document.querySelectorAll('.sidebar-nav .nav-item').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const targetId = btn.dataset.section;
-            if (targetId) showSection(targetId);
-            document.getElementById('sidebar').classList.remove('open');
-        });
-    });
-
-    const toggle = document.getElementById('sidebar-toggle');
-    if (toggle) {
-        toggle.addEventListener('click', () => {
-            document.getElementById('sidebar').classList.toggle('open');
-        });
-    }
-}
-
-
 // ========== MODAL HANDLERS ==========
 function setupModals() {
-    // Data Modal
-    const dataModal = document.getElementById('data-modal');
-    const dataModalClose = document.getElementById('modal-close');
-    if (dataModalClose) {
-        dataModalClose.addEventListener('click', () => dataModal.classList.add('hidden'));
-    }
-
-    // Admin Login Modal
-    const adminModal = document.getElementById('admin-login-modal');
-    const adminModalClose = document.getElementById('admin-login-close');
-    if (adminModalClose) {
-        adminModalClose.addEventListener('click', () => adminModal.classList.add('hidden'));
-    }
-
-    // Feedback Form Modal
-    const feedbackModal = document.getElementById('feedback-modal');
-    const feedbackModalClose = document.getElementById('feedback-modal-close');
-    if (feedbackModalClose) {
-        feedbackModalClose.addEventListener('click', () => feedbackModal.classList.add('hidden'));
-    }
-
+    const pairs = [
+        ['modal-close',          'data-modal'],
+        ['admin-login-close',    'admin-login-modal'],
+        ['feedback-modal-close', 'feedback-modal'],
+    ];
+    pairs.forEach(([btnId, modalId]) => {
+        const btn = document.getElementById(btnId);
+        const modal = document.getElementById(modalId);
+        if (btn && modal) btn.addEventListener('click', () => modal.classList.add('hidden'));
+    });
+    // Close on backdrop click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+        overlay.addEventListener('click', e => {
+            if (e.target === overlay) overlay.classList.add('hidden');
+        });
+    });
 }
-
-// Modify setupDashboardHandlers to include setupModals
-function setupDashboardHandlers() {
-    setupModals();
-    const btnAdminPanel = document.getElementById('btn-admin-panel');
-    if (btnAdminPanel) {
-        btnAdminPanel.addEventListener('click', showAdminPanel);
-    }
-    document.getElementById('btn-clear-filters').addEventListener('click', clearAllFilters);
-    document.getElementById('global-search').addEventListener('input', debounce(applyFilters, 400));
-
-    // Auto-refresh the dashboard live (Webhooks sync) - ENHANCED with abort control
-    setInterval(async () => {
-        const dash = document.getElementById('dashboard-screen');
-        if (!dash || !dash.classList.contains('active')) return;
-        
-        const searchVal = document.getElementById('global-search').value.trim();
-        if (searchVal.length > 0) return; // Don't disrupt active searching
-        
-        try {
-            // Abort any pending auto-refresh request
-            if (currentAutoRefreshController) {
-                currentAutoRefreshController.abort();
-                console.log('[AUTO-REFRESH] Aborted previous request');
-            }
-            
-            // Create new AbortController for this refresh
-            currentAutoRefreshController = new AbortController();
-            
-            // We just re-run the normal filter workflow silently to pull new webhook data
-            await applyFilters(true); // true = silent flag
-            
-            currentAutoRefreshController = null;
-        } catch(e) {
-            if (e.name !== 'AbortError') {
-                console.error('[AUTO-REFRESH] Error:', e);
-            }
-            currentAutoRefreshController = null;
-        }
-    }, 10000);
-}
-
-

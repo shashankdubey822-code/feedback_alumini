@@ -92,39 +92,14 @@ document.addEventListener('DOMContentLoaded', () => {
 // ========== TOAST NOTIFICATIONS ==========
 function showNotification(message, type = 'info') {
     const toast = document.createElement('div');
-    toast.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 12px 16px;
-        border-radius: 8px;
-        font-size: 14px;
-        z-index: 10000;
-        animation: slideIn 0.3s ease-out;
-        max-width: 400px;
-        word-wrap: break-word;
-        font-family: Inter, sans-serif;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    `;
-
-    if (type === 'error') {
-        toast.style.background = '#ef4444';
-        toast.style.color = '#fff';
-    } else if (type === 'success') {
-        toast.style.background = '#10b981';
-        toast.style.color = '#fff';
-    } else {
-        toast.style.background = '#6366f1';
-        toast.style.color = '#fff';
-    }
-
+    toast.className = `toast toast-${type}`;
     toast.textContent = message;
     document.body.appendChild(toast);
 
     setTimeout(() => {
-        toast.style.animation = 'slideOut 0.3s ease-out';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
+        toast.classList.add('hiding');
+        setTimeout(() => toast.remove(), 280);
+    }, 3200);
 }
 
 // ========== ENHANCED CLIPBOARD (FIX: Error handling + fallback) ==========
@@ -628,6 +603,7 @@ function renderDashboard() {
     try { renderAIInsights(a.aiInsights); } catch(e) { console.error("Error renderAIInsights:", e); }
     try { renderCharts(a.charts); } catch(e) { console.error("Error renderCharts:", e); }
     try { renderTimeTrends(a.timeTrends); } catch(e) { console.error("Error renderTimeTrends:", e); }
+    try { renderDeepAnalysis(a.deepAnalysis); } catch(e) { console.error("Error renderDeepAnalysis:", e); }
     try { renderSentiment(a.sentiment); } catch(e) { console.error("Error renderSentiment:", e); }
     try { renderKeywords(a.keywords); } catch(e) { console.error("Error renderKeywords:", e); }
     try { renderSpeakers(a.speakerStats); } catch(e) { console.error("Error renderSpeakers:", e); }
@@ -671,6 +647,54 @@ function renderAIInsights(insights) {
         card.classList.add(typeClass);
         container.appendChild(card);
     });
+}
+
+// ========== DEEP ANALYSIS ==========
+function renderDeepAnalysis(da) {
+    const container = document.getElementById('deep-actionable-grid');
+    const subsection = document.getElementById('deep-actionable-subsection');
+    if (!da || (!da.actionableStats && (!da.categories || da.categories.length === 0))) {
+        if (subsection) subsection.style.display = 'none';
+        return;
+    }
+    if (subsection) subsection.style.display = 'block';
+    if (container) container.innerHTML = '';
+
+    const actStats = da.actionableStats || { actionable: 0, non_actionable: 0 };
+    const totalAct = actStats.actionable + actStats.non_actionable;
+
+    if (totalAct > 0 && container) {
+        const actCard = document.createElement('div');
+        actCard.className = 'chart-card';
+        actCard.innerHTML = `<div class="chart-card-header"><div class="chart-card-title">Actionability Filter</div></div><div class="chart-canvas-wrapper"><canvas></canvas></div>`;
+        container.appendChild(actCard);
+        const actChart = new Chart(actCard.querySelector('canvas'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Actionable Suggestions', 'Generic/Non-Answers'],
+                datasets: [{ data: [actStats.actionable, actStats.non_actionable], backgroundColor: ['#34d399', '#fb7185'], borderWidth: 0 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#8b8b9e' } } }, cutout: '60%' }
+        });
+        state.charts.push(actChart);
+    }
+
+    const cats = da.categories || [];
+    if (cats.length > 0 && container) {
+        const catCard = document.createElement('div');
+        catCard.className = 'chart-card';
+        catCard.innerHTML = `<div class="chart-card-header"><div class="chart-card-title">Suggestion Categories</div></div><div class="chart-canvas-wrapper"><canvas></canvas></div>`;
+        container.appendChild(catCard);
+        const catChart = new Chart(catCard.querySelector('canvas'), {
+            type: 'bar',
+            data: {
+                labels: cats.map(c => truncate(c.name, 18)),
+                datasets: [{ label: 'Suggestions', data: cats.map(c => c.value), backgroundColor: CHART_COLORS, borderRadius: 6 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b8b9e' } }, x: { grid: { display: false }, ticks: { color: '#8b8b9e' } } } }
+        });
+        state.charts.push(catChart);
+    }
 }
 
 // ========== KPI CARDS ==========
@@ -782,6 +806,7 @@ async function applyFilters() {
             renderAIInsights(analytics.aiInsights);
             renderCharts(analytics.charts);
             renderTimeTrends(analytics.timeTrends);
+            renderDeepAnalysis(analytics.deepAnalysis);
             renderSentiment(analytics.sentiment);
             renderKeywords(analytics.keywords);
             renderSpeakers(analytics.speakerStats);

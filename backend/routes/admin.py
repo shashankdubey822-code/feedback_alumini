@@ -476,6 +476,7 @@ def create_event():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @admin_bp.route('/events', methods=['GET'])
+@log_endpoint_access
 def get_events():
     """Get list of real feedback events from the database"""
     try:

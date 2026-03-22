@@ -3,10 +3,8 @@ API Routes - REST endpoints for analytics and data retrieval
 """
 
 from flask import Blueprint, jsonify, request
-from ..services.analytics import AnalyticsService
 from ..services.chart_service import ChartService
 from ..services.nlp_service import NLPService
-from ..services.speaker_service import SpeakerService
 from ..services.kpi_service import KPIService
 from ..utils.logger import get_section_logger, log_endpoint_access
 import sqlite3
@@ -20,13 +18,13 @@ legacy_bp = Blueprint('legacy', __name__, url_prefix='/api')
 
 
 def get_services(app):
-    """Initialize services"""
-    db_path = app.config.get('DATABASE_PATH', 'database/dashboard.db')
+    """Initialize services — NLPService is cached on the app object (singleton)."""
+    db_path = app.config.get('DATABASE_PATH', 'dashboard.db')
+    if not hasattr(app, '_nlp_service'):
+        app._nlp_service = NLPService()
     return {
-        'analytics': AnalyticsService(db_path),
         'charts': ChartService(db_path),
-        'nlp': NLPService(),
-        'speakers': SpeakerService(db_path),
+        'nlp': app._nlp_service,
         'kpi': KPIService(db_path),
     }
 
@@ -41,81 +39,6 @@ def health_check():
     }), 200
 
 
-@api_bp.route('/analytics/summary', methods=['GET'])
-@log_endpoint_access
-def get_analytics_summary():
-    """Get comprehensive analytics summary"""
-    try:
-        from flask import current_app
-        services = get_services(current_app)
-        summary = services['analytics'].get_statistics_summary()
-        return jsonify(summary), 200
-    except Exception as e:
-        logger.error(f"Error getting analytics summary: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-@api_bp.route('/analytics/records', methods=['GET'])
-@log_endpoint_access
-def get_records():
-    """Get all feedback records with optional filtering"""
-    try:
-        from flask import current_app
-        services = get_services(current_app)
-
-        department = request.args.get('department', None)
-        start_date = request.args.get('start_date', None)
-        end_date = request.args.get('end_date', None)
-        limit = request.args.get('limit', 100, type=int)
-
-        if department:
-            records = services['analytics'].get_records_by_department(department, limit)
-        elif start_date and end_date:
-            records = services['analytics'].get_records_by_date_range(start_date, end_date)
-        else:
-            conn = services['analytics'].get_connection()
-            cursor = conn.cursor()
-            cursor.execute('SELECT * FROM dashboard_data ORDER BY timestamp_normalized DESC LIMIT ?', (limit,))
-            records = [dict(row) for row in cursor.fetchall()]
-            conn.close()
-
-        return jsonify({
-            'count': len(records),
-            'records': records[:limit]
-        }), 200
-    except Exception as e:
-        logger.error(f"Error getting records: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-@api_bp.route('/analytics/departments', methods=['GET'])
-@log_endpoint_access
-def get_department_analytics():
-    """Get department-wise analytics"""
-    try:
-        from flask import current_app
-        services = get_services(current_app)
-        distribution = services['analytics'].get_department_distribution()
-        return jsonify({'departments': distribution}), 200
-    except Exception as e:
-        logger.error(f"Error getting department analytics: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-@api_bp.route('/analytics/quality', methods=['GET'])
-@log_endpoint_access
-def get_data_quality():
-    """Get data quality metrics"""
-    try:
-        from flask import current_app
-        services = get_services(current_app)
-        metrics = services['analytics'].get_data_quality_metrics()
-        return jsonify(metrics), 200
-    except Exception as e:
-        logger.error(f"Error getting data quality: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
 @api_bp.route('/charts/all', methods=['GET'])
 @log_endpoint_access
 def get_all_charts():
@@ -127,38 +50,6 @@ def get_all_charts():
         return jsonify(charts), 200
     except Exception as e:
         logger.error(f"Error getting charts: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-@api_bp.route('/speakers', methods=['GET'])
-@log_endpoint_access
-def get_speakers():
-    """Get all speakers"""
-    try:
-        from flask import current_app
-        services = get_services(current_app)
-        speakers = services['speakers'].get_all_speakers()
-        return jsonify({'speakers': speakers}), 200
-    except Exception as e:
-        logger.error(f"Error getting speakers: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-@api_bp.route('/speakers/<speaker_name>', methods=['GET'])
-@log_endpoint_access
-def get_speaker_detail(speaker_name):
-    """Get speaker profile and feedback"""
-    try:
-        from flask import current_app
-        services = get_services(current_app)
-        profile = services['speakers'].get_speaker_profile(speaker_name)
-        feedback = services['speakers'].get_speaker_feedback_summary(speaker_name)
-        return jsonify({
-            'profile': profile,
-            'feedback': feedback,
-        }), 200
-    except Exception as e:
-        logger.error(f"Error getting speaker detail: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -183,12 +74,23 @@ def get_all_kpis():
 @api_bp.route('/trends/all', methods=['GET'])
 @log_endpoint_access
 def get_all_trends():
-    """Get all trend data"""
+    """Get all trend data (time-series from dashboard_data)"""
     try:
         from flask import current_app
-        services = get_services(current_app)
-        trends = services['trends'].get_all_trends()
-        return jsonify(trends), 200
+        db_path = current_app.config.get('DATABASE_PATH', 'dashboard.db')
+        conn = get_db_connection(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DATE(timestamp_normalized) as date, COUNT(*) as count
+            FROM dashboard_data
+            WHERE timestamp_normalized IS NOT NULL
+            GROUP BY DATE(timestamp_normalized)
+            ORDER BY date ASC
+        """)
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return jsonify({'trends': rows}), 200
     except Exception as e:
         logger.error(f"Error getting trends: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -216,6 +118,22 @@ def get_dl_status():
     except Exception as e:
         logger.error(f"Error getting DL status: {str(e)}")
         return jsonify({'processing_count': 0, 'error': str(e)}), 500
+
+
+@api_bp.route('/errors/report', methods=['GET'])
+@log_endpoint_access
+def get_error_report():
+    """Run all page-level error detectors and return a structured report."""
+    try:
+        from flask import current_app
+        from ..error_detection.reporter import run_all_checks
+        db_path = current_app.config.get('DATABASE_PATH', 'dashboard.db')
+        upload_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data', 'uploads')
+        report = run_all_checks(db_path, upload_dir)
+        return jsonify(report), 200
+    except Exception as e:
+        logger.error(f"Error running error report: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 
 @api_bp.errorhandler(404)
@@ -378,11 +296,6 @@ def get_consolidated_analytics(app, filters=None, search=None):
 
     # ── 5. Total Responses KPI ───────────────────────────────────────
     total_count = len(table_data)
-    formatted_kpis.insert(0, {
-        'label': 'Total Responses',
-        'value': str(total_count),
-        'sub':   'All-time records'
-    })
 
     # ── 6. Column type detection ─────────────────────────────────────
     num_keywords  = {'rating', 'score', 'count', 'num', 'total', 'age', 'year'}
@@ -690,7 +603,7 @@ def get_consolidated_analytics(app, filters=None, search=None):
     formatted_kpis.append({
         'label': 'Total Responses',
         'value': str(total_count),
-        'sub':   'Filtered results'
+        'sub':   'All-time records'
     })
     formatted_kpis.append({
         'label': 'Average Rating',

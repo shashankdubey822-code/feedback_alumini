@@ -48,9 +48,6 @@ function setupAdminAuth() {
     const btnBackToDashboard = document.getElementById('btn-back-to-dashboard');
     if (btnBackToDashboard) {
         btnBackToDashboard.addEventListener('click', () => {
-            document.getElementById('upload-screen').classList.remove('active');
-            document.getElementById('loading-screen').classList.add('active');
-            document.getElementById('dashboard-screen').classList.remove('active');
             loadInitialData();
         });
     }
@@ -88,11 +85,7 @@ function setupAdminAuth() {
                 }
 
                 showProgress('Data loaded successfully!', 100);
-                setTimeout(() => {
-                    document.getElementById('upload-screen').classList.remove('active');
-                    document.getElementById('loading-screen').classList.add('active');
-                    loadInitialData();
-                }, 1000);
+                setTimeout(() => loadInitialData(), 1000);
             } catch (err) {
                 showNotification('Error: ' + err.message, 'error');
                 hideProgress();
@@ -106,13 +99,12 @@ function showAdminPanel() {
         document.getElementById('admin-login-modal').classList.remove('hidden');
         return;
     }
-    document.getElementById('loading-screen').classList.remove('active');
-    document.getElementById('dashboard-screen').classList.remove('active');
-    document.getElementById('upload-screen').classList.add('active');
+    showSection('upload-section');
     hideProgress();
-    document.getElementById('file-input').value = '';
-    const googleInput = document.getElementById('google-link-input');
-    if (googleInput) googleInput.value = '';
+    const fi = document.getElementById('file-input');
+    const li = document.getElementById('google-link-input');
+    if (fi) fi.value = '';
+    if (li) li.value = '';
 }
 
 

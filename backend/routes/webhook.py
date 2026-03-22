@@ -49,10 +49,14 @@ def format_submission_timestamp_like_csv(iso_str: str) -> tuple:
     normalized = local.strftime("%Y-%m-%d %H:%M:%S")
     return display, normalized
 
+import threading
+
 logger = get_section_logger('webhook')
 
-# Simple in-memory queue for dashboard notifications
-# (Using global as we're in a single-process Flask dev server)
+# Thread-safe in-memory notification queue
+# NOTE: Works correctly in single-worker mode (dev + HF Spaces default).
+# For multi-worker gunicorn, replace with Redis or a DB-backed table.
+_notifications_lock = threading.Lock()
 LATEST_NOTIFICATIONS = []
 
 webhook_bp = Blueprint('webhook', __name__, url_prefix='/api/v1/webhook')
@@ -262,9 +266,13 @@ def receive_form_submission():
         db_path = current_app.config.get('DATABASE_PATH')
         record_id = store_webhook_submission(db_path, payload)
 
-        # Add to notification queue
+        # Add to notification queue (thread-safe)
         student_name = (payload.get('responses') or {}).get('name_of_student') or payload.get('name_of_student') or 'Anonymous'
-        LATEST_NOTIFICATIONS.append(f"New submission from: {student_name}")
+        with _notifications_lock:
+            LATEST_NOTIFICATIONS.append(f"New submission from: {student_name}")
+            # Cap at 50 to prevent unbounded growth
+            if len(LATEST_NOTIFICATIONS) > 50:
+                LATEST_NOTIFICATIONS.pop(0)
 
         logger.info(f"Successfully received webhook submission #{record_id}")
         update_sync_status(True)
@@ -342,8 +350,9 @@ def test_webhook():
 def get_notifications():
     """Fetch and clear the latest notifications for the dashboard"""
     global LATEST_NOTIFICATIONS
-    notifications = list(LATEST_NOTIFICATIONS)
-    LATEST_NOTIFICATIONS.clear()
+    with _notifications_lock:
+        notifications = list(LATEST_NOTIFICATIONS)
+        LATEST_NOTIFICATIONS.clear()
     return jsonify({
         'status': 'success',
         'notifications': notifications

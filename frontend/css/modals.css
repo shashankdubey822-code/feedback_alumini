@@ -1,35 +1,40 @@
-/* === DATA MODAL === */
+/* ============================================================
+   DataLens — Modals, Toasts, Calendar, Autocomplete
+   ============================================================ */
+
+/* === MODAL OVERLAY === */
 .modal-overlay {
     position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0, 0, 0, 0.75);
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
     z-index: 9999;
     display: flex;
     align-items: center;
     justify-content: center;
     opacity: 1;
-    transition: opacity 0.3s ease;
+    transition: opacity var(--t-base);
 }
 .modal-overlay.hidden {
     opacity: 0;
     pointer-events: none;
 }
 .modal-content {
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
-    border-radius: 16px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
     width: 90%;
     max-width: 1200px;
-    height: 85vh;
+    max-height: 88vh;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+    box-shadow: var(--shadow-lg);
     transform: scale(1);
-    transition: transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+    transition: transform var(--t-slow);
 }
 .modal-overlay.hidden .modal-content {
-    transform: scale(0.95);
+    transform: scale(0.96);
 }
 .modal-header {
     padding: 20px 24px;
@@ -37,26 +42,28 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-shrink: 0;
 }
 .modal-title {
-    font-size: 18px;
+    font-size: 17px;
     font-weight: 600;
     margin: 0;
+    color: var(--text-primary);
 }
 .modal-close {
     background: transparent;
     border: none;
     color: var(--text-muted);
     cursor: pointer;
-    border-radius: 8px;
+    border-radius: var(--r-sm);
     padding: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s;
+    transition: all var(--t-base);
 }
 .modal-close:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.08);
     color: var(--text-primary);
 }
 .modal-body {
@@ -69,44 +76,318 @@
     border-collapse: separate;
     border-spacing: 0;
 }
-.modal-body th, .modal-body td {
-    padding: 12px 16px;
+.modal-body th,
+.modal-body td {
+    padding: 11px 14px;
     border-bottom: 1px solid var(--border-subtle);
     font-size: 13px;
     text-align: left;
-    max-width: 300px;
+    max-width: 280px;
     white-space: normal;
     word-break: break-word;
 }
 .modal-body th {
-    background: var(--bg-dark);
+    background: var(--bg-surface);
     font-weight: 600;
     color: var(--text-secondary);
     position: sticky;
     top: -20px;
     z-index: 10;
 }
-
-/* ========== TOAST NOTIFICATIONS ========== */
-@keyframes slideIn {
-    from {
-        transform: translateX(400px);
-        opacity: 0;
-    }
-    to {
-        transform: translateX(0);
-        opacity: 1;
-    }
+.modal-body tr:hover td {
+    background: rgba(255, 255, 255, 0.02);
 }
 
-@keyframes slideOut {
-    from {
-        transform: translateX(0);
-        opacity: 1;
-    }
-    to {
-        transform: translateX(400px);
-        opacity: 0;
-    }
+/* === TOAST NOTIFICATIONS === */
+@keyframes toastIn {
+    from { transform: translateX(420px); opacity: 0; }
+    to   { transform: translateX(0);     opacity: 1; }
+}
+@keyframes toastOut {
+    from { transform: translateX(0);     opacity: 1; }
+    to   { transform: translateX(420px); opacity: 0; }
 }
 
+.toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 18px;
+    border-radius: var(--r-sm);
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 10001;
+    max-width: 380px;
+    word-wrap: break-word;
+    font-family: 'Inter', sans-serif;
+    box-shadow: var(--shadow-md);
+    animation: toastIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid transparent;
+}
+.toast.toast-success {
+    background: rgba(52, 211, 153, 0.15);
+    border-color: rgba(52, 211, 153, 0.3);
+    color: #34d399;
+}
+.toast.toast-error {
+    background: rgba(251, 113, 133, 0.15);
+    border-color: rgba(251, 113, 133, 0.3);
+    color: #fb7185;
+}
+.toast.toast-info {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.3);
+    color: var(--text-accent);
+}
+.toast.toast-warning {
+    background: rgba(251, 191, 36, 0.15);
+    border-color: rgba(251, 191, 36, 0.3);
+    color: var(--amber);
+}
+.toast.hiding {
+    animation: toastOut 0.25s ease-in forwards;
+}
+
+/* === DL PROCESSING POPUP === */
+#dl-processing-popup {
+    position: fixed;
+    bottom: -80px;
+    right: 24px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-accent);
+    border-radius: var(--r-md);
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-accent);
+    box-shadow: var(--shadow-md), var(--shadow-glow);
+    z-index: 9000;
+    transition: bottom 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+#dl-processing-popup.visible {
+    bottom: 24px;
+}
+#dl-processing-popup::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: dlPulse 1.2s ease-in-out infinite;
+    flex-shrink: 0;
+}
+@keyframes dlPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.4; transform: scale(0.7); }
+}
+
+/* === SMART CALENDAR === */
+.smart-calendar-popup {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 16px;
+    width: 260px;
+    box-shadow: var(--shadow-lg);
+    user-select: none;
+}
+.sc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+.sc-month-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.sc-nav-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: var(--r-xs);
+    display: flex;
+    align-items: center;
+    transition: all var(--t-fast);
+}
+.sc-nav-btn:hover:not(.sc-disabled) {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+}
+.sc-nav-btn.sc-disabled { opacity: 0.3; cursor: not-allowed; }
+.sc-day-names {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    margin-bottom: 6px;
+}
+.sc-day-name {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 4px 0;
+}
+.sc-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+}
+.sc-day {
+    text-align: center;
+    font-size: 12px;
+    padding: 6px 2px;
+    border-radius: var(--r-xs);
+    border: none;
+    background: transparent;
+    cursor: default;
+    color: var(--text-muted);
+}
+.sc-day.sc-available {
+    color: var(--text-primary);
+    cursor: pointer;
+    font-weight: 500;
+    transition: all var(--t-fast);
+}
+.sc-day.sc-available:hover {
+    background: var(--accent-dim);
+    color: var(--accent-light);
+}
+.sc-day.sc-selected {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+}
+.sc-day.sc-today { outline: 1px solid var(--border-accent); }
+.sc-day.sc-unavailable { opacity: 0.25; }
+.sc-day.sc-empty { visibility: hidden; }
+.sc-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-subtle);
+}
+.sc-data-count {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+.sc-clear-btn {
+    font-size: 11px;
+    color: var(--rose);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: var(--r-xs);
+    transition: background var(--t-fast);
+}
+.sc-clear-btn:hover { background: rgba(251, 113, 133, 0.1); }
+
+/* Calendar input wrapper */
+.calendar-input-wrap {
+    position: relative;
+    flex: 1;
+}
+.calendar-input-icon {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+/* === AUTOCOMPLETE DROPDOWN === */
+.autocomplete-wrapper { position: relative; }
+.autocomplete-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    box-shadow: var(--shadow-md);
+    z-index: 10002;
+    max-height: 220px;
+    overflow-y: auto;
+    display: none;
+}
+.autocomplete-dropdown.active { display: block; }
+.autocomplete-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background var(--t-fast);
+}
+.autocomplete-item:hover,
+.autocomplete-item.selected {
+    background: var(--accent-dim);
+    color: var(--text-primary);
+}
+.autocomplete-item svg { color: var(--text-muted); flex-shrink: 0; }
+.match-highlight {
+    color: var(--accent-light);
+    font-weight: 600;
+}
+
+/* === ADMIN LOGIN MODAL (overrides) === */
+#admin-login-modal .modal-content {
+    max-width: 400px;
+    padding: 32px;
+    text-align: center;
+}
+#admin-login-modal .modal-header {
+    justify-content: center;
+    border-bottom: none;
+    padding-bottom: 0;
+}
+#admin-password {
+    width: 100%;
+    margin-bottom: 16px;
+    padding: 12px;
+    font-size: 15px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--border-strong);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    outline: none;
+    font-family: 'Inter', sans-serif;
+    transition: border-color var(--t-base);
+}
+#admin-password:focus { border-color: var(--accent); }
+#btn-admin-submit {
+    width: 100%;
+    padding: 12px;
+    border-radius: var(--r-sm);
+    background: var(--grad-accent);
+    color: #fff;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    transition: opacity var(--t-base);
+}
+#btn-admin-submit:hover { opacity: 0.88; }
+#admin-login-error {
+    color: var(--rose);
+    margin-top: 12px;
+    display: none;
+    font-size: 13px;
+}
