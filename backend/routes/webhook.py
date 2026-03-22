@@ -308,3 +308,32 @@ def get_notifications():
         'status': 'success',
         'notifications': notifications
     }), 200
+
+
+@webhook_bp.route('/status', methods=['GET'])
+def get_sync_status():
+    """Detailed sync health report for the dashboard"""
+    import os
+    public_url = os.environ.get('PUBLIC_URL')
+    webhook_secret = os.getenv('WEBHOOK_SECRET')
+    
+    # Read status from sync_health.json
+    status_file = os.path.join(current_app.root_path, 'logs', 'sync_health.json')
+    health = {}
+    try:
+        if os.path.exists(status_file):
+            with open(status_file, 'r') as f:
+                health = json.load(f)
+    except Exception as e:
+        logger.error(f"Error reading sync health file: {e}")
+
+    return jsonify({
+        'status': 'success',
+        'config': {
+            'public_url_set': bool(public_url),
+            'secret_set': bool(webhook_secret),
+            'public_url': public_url
+        },
+        'health': health
+    }), 200
+

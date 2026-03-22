@@ -19,3 +19,14 @@
 [2026-03-22 09:36:03] INFO     | backend.utils.logger:107 | POST /api/v1/webhook/forms/submit - 200
 [2026-03-22 09:36:03] DEBUG    | backend.utils.logger:101 | GET /api/v1/webhook/notifications from 127.0.0.1
 [2026-03-22 09:36:03] INFO     | backend.utils.logger:107 | GET /api/v1/webhook/notifications - 404
+[2026-03-22 09:42:46] DEBUG    | backend.utils.logger:101 | POST /api/v1/webhook/forms/submit from 127.0.0.1
+[2026-03-22 09:42:46] INFO     | backend.utils.logger:76 | POST /api/v1/webhook/forms/submit - 127.0.0.1
+[2026-03-22 09:42:46] INFO     | backend.utils.logger:107 | POST /api/v1/webhook/forms/submit - 200
+[2026-03-22 09:42:46] DEBUG    | backend.utils.logger:101 | GET /api/v1/webhook/notifications from 127.0.0.1
+[2026-03-22 09:42:46] INFO     | backend.utils.logger:107 | GET /api/v1/webhook/notifications - 404
+[2026-03-22 10:13:12] DEBUG    | backend.utils.logger:101 | GET /api/v1/webhook/notifications from 127.0.0.1
+[2026-03-22 10:13:12] INFO     | backend.utils.logger:107 | GET /api/v1/webhook/notifications - 404
+[2026-03-22 10:18:32] DEBUG    | backend.utils.logger:101 | GET /api/v1/webhook/status from 127.0.0.1
+[2026-03-22 10:18:32] INFO     | backend.utils.logger:107 | GET /api/v1/webhook/status - 404
+[2026-03-22 10:19:59] DEBUG    | backend.utils.logger:101 | GET /api/v1/webhook/status from 127.0.0.1
+[2026-03-22 10:19:59] INFO     | backend.utils.logger:107 | GET /api/v1/webhook/status - 404

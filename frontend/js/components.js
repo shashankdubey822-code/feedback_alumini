@@ -1833,7 +1833,42 @@ class SmartCalendar {
             .catch(err => console.debug("Notification poll failed (normal if server restarting)"));
     }
 
-    // Start polling every 8 seconds
-    setInterval(checkNotifications, 8000);
+    // --- SYNC STATUS MONITORING ---
+    function updateSyncStatusUI() {
+        const badge = document.getElementById('sync-status-badge');
+        const text = document.getElementById('sync-status-text');
+        if (!badge || !text) return;
+
+        fetch('/api/v1/webhook/status')
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const config = data.config;
+                    const health = data.health || {};
+                    
+                    if (!config.public_url_set) {
+                        badge.className = 'sync-status-indicator sync-status-error';
+                        text.innerText = "URL Not Set (HF)";
+                    } else if (health.status === 'error') {
+                        badge.className = 'sync-status-indicator sync-status-error';
+                        text.innerText = "Sync Error";
+                    } else if (health.status === 'active' || health.success_count > 0) {
+                        badge.className = 'sync-status-indicator sync-status-active';
+                        text.innerText = "Sync Active";
+                    } else {
+                        badge.className = 'sync-status-indicator';
+                        text.innerText = "Sync Ready";
+                    }
+                }
+            })
+            .catch(() => {
+                badge.className = 'sync-status-indicator';
+                text.innerText = "Server Offline";
+            });
+    }
+
+    // Start polling every 15 seconds
+    setInterval(updateSyncStatusUI, 15000);
+    updateSyncStatusUI(); // Initial check
 
 })();
