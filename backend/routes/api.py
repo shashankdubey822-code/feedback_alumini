@@ -323,6 +323,9 @@ def get_consolidated_analytics(app, filters=None, search=None):
     val_keyword_freq = {}
     imp_keyword_freq = {}
     session_understanding_counts = {}
+    topic_freq = {}  # BERTopic cluster label → count
+    dept_counts = {}  # department → response count
+    rating_by_dept = {}  # department → [ratings]
     
     import json
     speaker_tracker = {} # name -> {count, total_rating, total_sentiment}
@@ -356,6 +359,20 @@ def get_consolidated_analytics(app, filters=None, search=None):
         if raw_ts and len(str(raw_ts)) >= 10:
             date_key = str(raw_ts)[:10] # YYYY-MM-DD
             time_tracker[date_key] = time_tracker.get(date_key, 0) + 1
+
+        # Department tracking
+        dept = row.get('department_cleaned') or row.get('Department') or ''
+        if dept:
+            # Shorten long school names for display
+            short = dept.replace('School of Engineering: ', '').replace('School of ', '')
+            dept_counts[short] = dept_counts.get(short, 0) + 1
+            try:
+                r_val2 = float(row.get('session_rating') or 0)
+                if r_val2 > 0:
+                    if short not in rating_by_dept:
+                        rating_by_dept[short] = []
+                    rating_by_dept[short].append(r_val2)
+            except: pass
 
         # Sentiment (legacy)
         label = str(row.get('dl_sentiment_label', '')).upper()
@@ -431,6 +448,11 @@ def get_consolidated_analytics(app, filters=None, search=None):
                         if isinstance(word, str):
                             word = word.lower()
                             keyword_freq[word] = keyword_freq.get(word, 0) + 1
+
+                    # BERTopic cluster label
+                    topic_lbl = kws.get('topic_label')
+                    if topic_lbl and topic_lbl not in ('Uncategorised', ''):
+                        topic_freq[topic_lbl] = topic_freq.get(topic_lbl, 0) + 1
                             
                 elif isinstance(kws, list):
                     for kw in kws:
@@ -534,7 +556,8 @@ def get_consolidated_analytics(app, filters=None, search=None):
     # Bundle the deep analysis payload
     deep_analysis = {
         'actionableStats': actionable_stats,
-        'categories': [{'name': k, 'value': v} for k, v in sorted(category_counts.items(), key=lambda x: x[1], reverse=True) if k != "Other"]
+        'categories': [{'name': k, 'value': v} for k, v in sorted(category_counts.items(), key=lambda x: x[1], reverse=True) if k != "Other"],
+        'topicClusters': [{'name': k, 'value': v} for k, v in sorted(topic_freq.items(), key=lambda x: x[1], reverse=True)],
     }
 
     # Add Session Impact to main charts
@@ -553,45 +576,114 @@ def get_consolidated_analytics(app, filters=None, search=None):
             'backgroundColors': ['#34d399', '#fbbf24', '#fb7185'] 
         })
 
+    # Department response breakdown
+    if dept_counts:
+        sorted_depts = sorted(dept_counts.items(), key=lambda x: x[1], reverse=True)
+        formatted_charts.append({
+            'title': 'Responses by Department',
+            'type': 'horizontalBar',
+            'labels': [d for d, _ in sorted_depts],
+            'data': [v for _, v in sorted_depts],
+            'column': 'department_cleaned',
+            'columnType': 'text',
+        })
+
+    # Avg rating by department (if we have enough data)
+    dept_avg_ratings = {d: round(sum(rs) / len(rs), 2) for d, rs in rating_by_dept.items() if len(rs) >= 2}
+    if dept_avg_ratings:
+        sorted_dept_ratings = sorted(dept_avg_ratings.items(), key=lambda x: x[1], reverse=True)
+        formatted_charts.append({
+            'title': 'Avg Session Rating by Department',
+            'type': 'bar',
+            'labels': [d for d, _ in sorted_dept_ratings],
+            'data': [v for _, v in sorted_dept_ratings],
+            'column': 'department_cleaned',
+            'columnType': 'text',
+            'yLabel': 'Avg Rating',
+        })
+
     # ── 8. Dynamic AI Insights Generation ─────────────────────────────
     ai_insights = [
         {'type': 'trend',   'icon': '📈', 'text': 'Dashboard data synchronized.'},
-        {'type': 'success', 'icon': '🎯', 'text': f'Found {total_count} feedback records.'}
+        {'type': 'success', 'icon': '🎯', 'text': f'Analysed {total_count} feedback records across {len(dept_counts)} department{"s" if len(dept_counts) != 1 else ""}.'}
     ]
-    
+
+    # Department participation insight
+    if dept_counts:
+        top_dept = sorted(dept_counts.items(), key=lambda x: x[1], reverse=True)[0]
+        dept_pct = round(top_dept[1] / total_count * 100) if total_count else 0
+        ai_insights.append({'type': 'info', 'icon': '🏫', 'text': f'Highest participation: {top_dept[0]} contributed {top_dept[1]} responses ({dept_pct}% of total).'})
+
+    # Session understanding insight
+    if session_understanding_counts:
+        sig_count = session_understanding_counts.get('Yes, significantly', 0)
+        sig_pct = round(sig_count / total_count * 100) if total_count else 0
+        not_really = session_understanding_counts.get('Not really', 0)
+        if sig_pct >= 60:
+            ai_insights.append({'type': 'success', 'icon': '🎓', 'text': f'High impact: {sig_pct}% of students said the session significantly helped their understanding of industry trends.'})
+        elif not_really > 0:
+            ai_insights.append({'type': 'warning', 'icon': '📉', 'text': f'Engagement gap: {not_really} student{"s" if not_really != 1 else ""} reported the session did not help their understanding.'})
+
     # Sentiment Insight
     total_sentiment = sum(sentiment_counts.values())
     if total_sentiment > 0:
         pos_pct = round((sentiment_counts['POSITIVE'] / total_sentiment) * 100)
+        neg_pct = round((sentiment_counts['NEGATIVE'] / total_sentiment) * 100)
         if pos_pct >= 70:
-            ai_insights.append({'type': 'success', 'icon': '✨', 'text': f'Strong positive reception: {pos_pct}% of attendees enjoyed the session.'})
+            ai_insights.append({'type': 'success', 'icon': '✨', 'text': f'Strong positive reception: {pos_pct}% positive sentiment in written feedback.'})
         elif pos_pct < 40:
-            ai_insights.append({'type': 'warning', 'icon': '⚠️', 'text': f'Mixed reception: Only {pos_pct}% positive sentiment detected in detailed feedback.'})
-            
-    # Topic Insight
+            ai_insights.append({'type': 'warning', 'icon': '⚠️', 'text': f'Mixed reception: Only {pos_pct}% positive sentiment — {neg_pct}% negative detected in detailed feedback.'})
+
+    # Top requested future topic
     if sorted_fut_keywords:
         top_topic = sorted_fut_keywords[0][0]
         count = sorted_fut_keywords[0][1]
         if count > 1:
-            ai_insights.append({'type': 'info', 'icon': '💡', 'text': f'Future Trend: "{top_topic.title()}" is the most requested topic for upcoming sessions.'})
-            
+            # Show top 3 if available
+            top3 = [k for k, _ in sorted_fut_keywords[:3]]
+            top3_str = ', '.join(f'"{t.title()}"' for t in top3)
+            ai_insights.append({'type': 'info', 'icon': '💡', 'text': f'Most requested future topics: {top3_str}.'})
+
     # Actionability Insight
     act_count = actionable_stats['actionable']
+    non_act = actionable_stats['non_actionable']
     if act_count > 0:
-        ai_insights.append({'type': 'warning', 'icon': '🛡️', 'text': f'Action required: {act_count} records contain specific, implementable improvement suggestions.'})
-        
-    # Speaker Insight
+        act_pct = round(act_count / (act_count + non_act) * 100) if (act_count + non_act) > 0 else 0
+        ai_insights.append({'type': 'warning', 'icon': '🛡️', 'text': f'{act_count} actionable suggestions ({act_pct}% of responses) — these contain specific, implementable improvement ideas.'})
+
+    # Speaker insights
     if speaker_list:
         top_speaker = speaker_list[0]
-        ts_ratings = top_speaker.get('ratings', {})
-        if ts_ratings.get('Rating', 0) >= 4.5:
-             ai_insights.append({'type': 'success', 'icon': '🌟', 'text': f'Top Performer: {top_speaker["name"]} achieved a perfect rating from most attendees.'})
+        ts_rating = top_speaker.get('ratings', {}).get('Rating', 0)
+        if ts_rating >= 4.5:
+            ai_insights.append({'type': 'success', 'icon': '🌟', 'text': f'Top rated speaker: {top_speaker["name"]} — avg rating {ts_rating}/5 from {top_speaker["count"]} responses.'})
+        # Most sessions speaker
+        if len(speaker_list) > 1:
+            ai_insights.append({'type': 'trend', 'icon': '🎤', 'text': f'{len(speaker_list)} unique speakers featured. Most sessions: {top_speaker["name"]} ({top_speaker["count"]} responses).'})
 
-    # Participation Insight
+    # Avg rating insight
+    if total_rating_count > 0:
+        avg_r = round(total_rating_sum / total_rating_count, 2)
+        if avg_r >= 4.5:
+            ai_insights.append({'type': 'success', 'icon': '⭐', 'text': f'Excellent overall rating: {avg_r}/5 average across {total_rating_count} rated responses.'})
+        elif avg_r < 3.5:
+            ai_insights.append({'type': 'warning', 'icon': '📊', 'text': f'Below-average rating: {avg_r}/5 — consider reviewing session format and content delivery.'})
+
+    # Dept with best avg rating
+    if dept_avg_ratings and len(dept_avg_ratings) > 1:
+        best_dept = sorted(dept_avg_ratings.items(), key=lambda x: x[1], reverse=True)[0]
+        ai_insights.append({'type': 'info', 'icon': '🏆', 'text': f'Highest rated department: {best_dept[0]} with avg {best_dept[1]}/5.'})
+
+    # Participation Insight (suggestion categories)
     if category_counts:
         top_cat = sorted(category_counts.items(), key=lambda x: x[1], reverse=True)[0]
-        if top_cat[1] > total_count * 0.3:
-            ai_insights.append({'type': 'info', 'icon': '🚀', 'text': f'Key Focus: Feedback is heavily centered on "{top_cat[0]}" related themes.'})
+        if top_cat[1] > total_count * 0.2:
+            ai_insights.append({'type': 'info', 'icon': '🚀', 'text': f'Dominant feedback theme: "{top_cat[0]}" — mentioned in {top_cat[1]} suggestions.'})
+
+    # Topic Cluster Insight (BERTopic)
+    if topic_freq:
+        top_topic_cluster = sorted(topic_freq.items(), key=lambda x: x[1], reverse=True)[0]
+        ai_insights.append({'type': 'info', 'icon': '🧠', 'text': f'AI Topic Cluster: "{top_topic_cluster[0].title()}" is the dominant theme across {top_topic_cluster[1]} responses.'})
 
     # Finalize Time Trends
     sorted_dates = sorted(time_tracker.keys())
@@ -616,6 +708,22 @@ def get_consolidated_analytics(app, filters=None, search=None):
         'label': 'Positive Sentiment',
         'value': f"{pos_pct}%",
         'sub':   'Detailed feedback'
+    })
+
+    # Session impact KPI
+    sig_count = session_understanding_counts.get('Yes, significantly', 0)
+    sig_pct = round(sig_count / total_count * 100) if total_count > 0 else 0
+    formatted_kpis.append({
+        'label': 'High Impact Sessions',
+        'value': f"{sig_pct}%",
+        'sub':   'Said "Yes, significantly"'
+    })
+
+    # Unique speakers KPI
+    formatted_kpis.append({
+        'label': 'Unique Speakers',
+        'value': str(len(speaker_tracker)),
+        'sub':   'Alumni featured'
     })
 
     return {

@@ -332,9 +332,13 @@ async function applyFilters() {
         if (!response.ok) throw new Error('Filter failed');
 
         const analytics = await response.json();
-        // Check if data actually changed simply using string length as a fast heuristic
-        const currentDataHash = JSON.stringify(state.tableData).length;
-        const newDataHash = JSON.stringify(analytics.tableData || []).length;
+        // Content-based hash: compare first+last row IDs and total count for reliable change detection
+        const hashRows = (rows) => {
+            if (!rows || rows.length === 0) return '0::';
+            return `${rows.length}:${JSON.stringify(rows[0])}:${JSON.stringify(rows[rows.length - 1])}`;
+        };
+        const currentDataHash = hashRows(state.tableData);
+        const newDataHash = hashRows(analytics.tableData || []);
 
         state.analytics = analytics;
         state.tableData = analytics.tableData || [];

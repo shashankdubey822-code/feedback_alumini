@@ -294,19 +294,7 @@ function switchToDashboardFromLoading() {
     document.getElementById('loading-screen').classList.remove('active');
     document.getElementById('dashboard-screen').classList.add('active');
     document.getElementById('file-badge').textContent = state.fileName;
-    
-    // Default to overview section
     showSection('overview-section');
-}
-
-function showSection(sectionId) {
-    document.querySelectorAll('.dashboard-section').forEach(s => s.classList.remove('active'));
-    document.getElementById(sectionId).classList.add('active');
-    
-    document.querySelectorAll('.sidebar .nav-item').forEach(btn => {
-        if (btn.dataset.section === sectionId) btn.classList.add('active');
-        else btn.classList.remove('active');
-    });
 }
 
 // ========== FILE UPLOAD ==========
@@ -633,10 +621,8 @@ function renderAIInsights(insights) {
 
     insights.forEach((insight, idx) => {
         const card = document.createElement('div');
-        card.className = 'insight-card';
-        card.style.animationDelay = `${idx * 0.08}s`;
-
-        const typeClass = `insight-${insight.type}`;
+        card.className = `insight-card insight-${insight.type}`;
+        card.style.animationDelay = `${idx * 0.06}s`;
 
         card.innerHTML = `
             <div class="insight-icon">${insight.icon}</div>
@@ -644,7 +630,6 @@ function renderAIInsights(insights) {
                 <p class="insight-text">${esc(insight.text)}</p>
             </div>
         `;
-        card.classList.add(typeClass);
         container.appendChild(card);
     });
 }
@@ -765,6 +750,7 @@ async function applyFilters() {
     const globalSearch = document.getElementById('global-search').value.trim();
     const filters = {};
 
+    // Text / numeric / date inputs
     document.querySelectorAll('#filters-grid [data-column]').forEach(el => {
         const col = el.dataset.column;
         const dtype = el.dataset.type;
@@ -779,6 +765,15 @@ async function applyFilters() {
             if (typeof filters[col] === 'object') filters[col].to = val;
         } else {
             filters[col] = val;
+        }
+    });
+
+    // Multi-select checkboxes (categorical filters)
+    document.querySelectorAll('#filters-grid .filter-multiselect').forEach(div => {
+        const col = div.dataset.column;
+        const selected = Array.from(div.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+        if (selected.length > 0) {
+            filters[col] = selected;
         }
     });
 
@@ -821,6 +816,9 @@ function clearAllFilters() {
     document.querySelectorAll('#filters-grid .filter-input, #filters-grid .filter-select').forEach(el => {
         el.value = '';
     });
+    document.querySelectorAll('#filters-grid .filter-multiselect input[type="checkbox"]').forEach(cb => {
+        cb.checked = false;
+    });
     document.getElementById('global-search').value = '';
     applyFilters();
 }
@@ -855,26 +853,28 @@ function renderCharts(charts) {
         container.appendChild(card);
 
         const canvas = card.querySelector('canvas');
+        const isHBar = chart.type === 'horizontalBar';
+        const chartType = isHBar ? 'bar' : chart.type;
         const chartInstance = new Chart(canvas, {
-            type: chart.type,
+            type: chartType,
             data: {
-                // Doughnut charts show labels in legend — keep full names there.
-                // Bar/line charts show labels on the axis — truncate to avoid overlap.
-                labels: chart.type === 'doughnut'
+                labels: chartType === 'doughnut'
                     ? chart.labels
-                    : chart.labels.map(l => truncate(l, 22)),
+                    : chart.labels.map(l => truncate(l, isHBar ? 30 : 22)),
                 datasets: [{
                     label: chart.yLabel || 'Count',
                     data: chart.data,
-                    backgroundColor: chart.type === 'doughnut'
-                        ? chart.labels.map((_, i) => CHART_COLORS[i % CHART_COLORS.length])
-                        : 'rgba(99, 102, 241, 0.6)',
-                    borderColor: chart.type === 'doughnut' ? 'transparent' : '#6366f1',
-                    borderWidth: chart.type === 'doughnut' ? 0 : 1,
-                    borderRadius: chart.type === 'bar' ? 6 : 0,
+                    backgroundColor: chart.backgroundColors
+                        ? chart.backgroundColors
+                        : chartType === 'doughnut'
+                            ? chart.labels.map((_, i) => CHART_COLORS[i % CHART_COLORS.length])
+                            : chart.labels.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]),
+                    borderColor: chartType === 'doughnut' ? 'transparent' : 'transparent',
+                    borderWidth: 0,
+                    borderRadius: chartType === 'bar' ? 6 : 0,
                 }],
             },
-            options: getChartOptions(chart.type, chart.xLabel, chart.yLabel, chart),
+            options: getChartOptions(chartType, chart.xLabel, chart.yLabel, { ...chart, horizontal: isHBar }),
         });
         state.charts.push(chartInstance);
     });

@@ -270,6 +270,10 @@
             <span class="file-badge" id="file-badge">No file loaded</span>
           </div>
           <div class="topbar-right">
+            <div class="dl-badge" id="dl-badge">
+              <span class="dl-badge-dot"></span>
+              <span>Processing</span>
+            </div>
             <div class="search-box-top">
               <svg
                 width="16"
@@ -569,80 +573,21 @@
       </div>
       <!-- ███ ADMIN LOGIN MODAL ███ -->
       <div id="admin-login-modal" class="modal-overlay hidden">
-        <div
-          class="modal-content"
-          style="max-width: 400px; padding: 32px; text-align: center"
-        >
-          <div
-            class="modal-header"
-            style="justify-content: center; margin-bottom: 24px"
-          >
+        <div class="modal-content">
+          <div class="modal-header">
             <h3 class="modal-title">Admin Access</h3>
-            <button
-              id="admin-login-close"
-              class="modal-close"
-              style="position: absolute; right: 24px"
-            >
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
+            <button id="admin-login-close" class="modal-close">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
             </button>
           </div>
           <div class="modal-body">
-            <label for="admin-password" style="display: block; font-size: 12px; color: #8b8b9e; margin-bottom: 8px; font-weight: 500;">Admin Password</label>
-            <input
-              type="password"
-              id="admin-password"
-              placeholder="Enter Admin Password"
-              style="
-                width: 100%;
-                margin-bottom: 16px;
-                padding: 12px;
-                font-size: 16px;
-                border-radius: 8px;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                background: rgba(255, 255, 255, 0.05);
-                color: white;
-                outline: none;
-                font-family: Inter;
-              "
-            />
-            <button
-              id="btn-admin-submit"
-              style="
-                width: 100%;
-                padding: 12px;
-                border-radius: 8px;
-                background: #6366f1;
-                color: white;
-                border: none;
-                font-weight: 600;
-                cursor: pointer;
-                font-family: Inter;
-                font-size: 16px;
-              "
-            >
-              Login
-            </button>
-            <p
-              id="admin-login-error"
-              style="
-                color: #ef4444;
-                margin-top: 12px;
-                display: none;
-                font-size: 14px;
-              "
-            >
-              Invalid password
-            </p>
+            <label for="admin-password">Admin Password</label>
+            <input type="password" id="admin-password" placeholder="Enter Admin Password" />
+            <button id="btn-admin-submit">Login</button>
+            <p id="admin-login-error">Invalid password</p>
           </div>
         </div>
       </div>
