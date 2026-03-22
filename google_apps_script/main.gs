@@ -3,6 +3,15 @@
  * ║   Alumni Feedback System — Advanced Google Apps Script v3.5     ║
  * ║  PRO-GRADE | 100% CSV SYNC | Error-Resilient | Self-Auth        ║
  * ╚══════════════════════════════════════════════════════════════════╝
+ *
+ * SCRIPT PROPERTIES (Project Settings → Script properties) — must match Hugging Face / backend:
+ *   SECRET_KEY       — same as server env APPS_SCRIPT_SECRET (default datalens2026 if unset)
+ *   WEBHOOK_SECRET   — same as server env WEBHOOK_SECRET (default webhook-secret-key if unset)
+ *   WEBHOOK_URL      — optional; used only by hourly heartbeat (not per-form webhooks)
+ *
+ * SETUP: Deploy → New deployment → Web app → Execute as: Me → Who has access: Anyone (or your choice).
+ * Run RUN_ME_TO_AUTHORIZE once after changes so Triggers + UrlFetch to your Space are allowed.
+ * Windows "Run as administrator" does not affect this script; authorization is your Google account.
  */
 
 const CONFIG = {
@@ -182,9 +191,10 @@ function _handleCreateForm(payload) {
 
 function onFormSubmitTrigger(e) {
   if (!e || !e.source) return;
-  
+
+  let formId = "";
   try {
-    const formId = e.source.getId();
+    formId = e.source.getId();
     const config = JSON.parse(PropertiesService.getScriptProperties().getProperty(`config_${formId}`) || "{}");
     if (!config.webhook_url) return;
 
@@ -204,25 +214,64 @@ function onFormSubmitTrigger(e) {
       else if (q.includes("future alumni speakers to cover")) answers.future_topics = a;
     });
 
-    UrlFetchApp.fetch(config.webhook_url, {
+    const webhookPayload = JSON.stringify({
+      form_id: formId,
+      event_id: config.event_id,
+      timestamp: new Date().toISOString(),
+      responses: {
+        ...answers,
+        alumni_speaker_name: config.speaker_name,
+        date_of_lecture: config.venue_date
+      }
+    });
+
+    const resp = UrlFetchApp.fetch(config.webhook_url, {
       method: "post",
       contentType: "application/json",
       headers: { "Authorization": "Bearer " + CONFIG.WEBHOOK_SECRET },
-      payload: JSON.stringify({
-        form_id: formId,
-        event_id: config.event_id,
-        timestamp: new Date().toISOString(),
-        responses: {
-          ...answers,
-          alumni_speaker_name: config.speaker_name,
-          date_of_lecture: config.venue_date
-        }
-      }),
+      payload: webhookPayload,
       muteHttpExceptions: true
     });
 
+    const code = resp.getResponseCode();
+    const text = resp.getContentText() || "";
+    const preview = text.length > 500 ? text.substring(0, 500) + "…" : text;
+    PropertiesService.getScriptProperties().setProperty(
+      "LAST_WEBHOOK_SYNC",
+      JSON.stringify({
+        at: new Date().toISOString(),
+        http_status: code,
+        body_preview: preview,
+        form_id: formId,
+        webhook_host: (function () {
+          try {
+            return config.webhook_url.split("/")[2] || config.webhook_url;
+          } catch (e) {
+            return "";
+          }
+        })()
+      })
+    );
+
+    if (code < 200 || code >= 300) {
+      console.error("Webhook HTTP " + code + ": " + preview);
+    } else {
+      console.log("Webhook OK HTTP " + code + " for form " + formId);
+    }
+
   } catch (err) {
     console.error("Advanced Webhook Failure:", err.toString());
+    try {
+      PropertiesService.getScriptProperties().setProperty(
+        "LAST_WEBHOOK_SYNC",
+        JSON.stringify({
+          at: new Date().toISOString(),
+          http_status: 0,
+          error: err.toString(),
+          form_id: formId || "unknown"
+        })
+      );
+    } catch (ignore) {}
   }
 }
 

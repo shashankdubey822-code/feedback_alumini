@@ -48,6 +48,15 @@ def create_app(config=None):
     logger = setup_logger(app)
     logger.info(f"Application starting in {app.config.get('FLASK_ENV', 'development')} mode")
 
+    # Hugging Face Spaces set SPACE_ID; without PUBLIC_URL, embedded Google Form webhooks often point
+    # at a wrong host (internal/http). See env.example for required secrets.
+    if os.getenv('SPACE_ID') and not (os.getenv('PUBLIC_URL') or '').strip():
+        logger.warning(
+            'PUBLIC_URL is unset in a Hugging Face Space (SPACE_ID is set). '
+            'Set PUBLIC_URL to your public https://…hf.space origin (no trailing slash) so '
+            'new forms receive a reachable webhook URL. Then create a new event from the dashboard.'
+        )
+
     # Initialize database on startup
     initialize_database(app, logger)
 

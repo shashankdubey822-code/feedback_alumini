@@ -29,7 +29,7 @@ else:
 
 print("\n2. Attempting a direct POST request to the Google Script...")
 payload = {
-    "secret": "datalens2026",
+    "secret": os.getenv("APPS_SCRIPT_SECRET", "datalens2026"),
     "action": "create_form",
     "speaker_name": "Timeout Debug Test Speaker",
     "venue_date": "2026-03-21",
