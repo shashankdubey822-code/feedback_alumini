@@ -145,27 +145,25 @@ function updateSpeakerSuggestions(filters) {
 }
 
 /**
- * Advanced Fuzzy Scoring Algorithm
- * Returns a score based on match quality (high score = better match)
+ * Speaker name matches query: full string starts with query, or any word starts with query (prefix-only).
  */
-function fuzzyScore(query, target) {
-    const q = query.toLowerCase();
-    const t = target.toLowerCase();
-    if (t.includes(q)) return 100 + (t.startsWith(q) ? 50 : 0) - t.length; // Strong substring match
+function speakerNameMatchesQuery(query, name) {
+    const q = query.trim().toLowerCase();
+    if (!q) return false;
+    const n = name.toLowerCase();
+    if (n.startsWith(q)) return true;
+    return n.split(/\s+/).some((w) => w.startsWith(q));
+}
 
-    let score = 0;
-    let tIdx = 0;
-    for (let qChar of q) {
-        const foundIdx = t.indexOf(qChar, tIdx);
-        if (foundIdx === -1) return 0; // Not a fuzzy match (chars must be in order)
-        score += 10 - (foundIdx - tIdx); // Closer chars = higher score
-        tIdx = foundIdx + 1;
-    }
-    return score;
+function speakerMatchRank(query, name) {
+    const q = query.trim().toLowerCase();
+    const n = name.toLowerCase();
+    if (n.startsWith(q)) return 0;
+    return 1;
 }
 
 /**
- * Render custom autocomplete dropdown with fuzzy matching
+ * Autocomplete: only show rows while something still matches; hide entirely when none (no "no match" banner).
  */
 let selectedSuggestionIdx = -1;
 
@@ -174,44 +172,59 @@ function renderSpeakerAutocomplete(query) {
     if (!dropdown) return;
 
     if (!query || query.length < 1) {
+        dropdown.innerHTML = '';
         dropdown.classList.remove('active');
         return;
     }
 
-    const matches = state.allSpeakers
-        .map(name => ({ name, score: fuzzyScore(query, name) }))
-        .filter(m => m.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 8);
+    const list = Array.isArray(state.allSpeakers) ? state.allSpeakers : [];
+    const matches = list
+        .filter((name) => speakerNameMatchesQuery(query, name))
+        .sort((a, b) => {
+            const ra = speakerMatchRank(query, a);
+            const rb = speakerMatchRank(query, b);
+            if (ra !== rb) return ra - rb;
+            return a.localeCompare(b, undefined, { sensitivity: 'base' });
+        })
+        .slice(0, 10);
 
     if (matches.length === 0) {
-        dropdown.innerHTML = '<div class="no-suggestions">No speakers found</div>';
-        dropdown.classList.add('active');
+        dropdown.innerHTML = '';
+        dropdown.classList.remove('active');
         return;
     }
 
     selectedSuggestionIdx = -1;
     dropdown.innerHTML = '';
-    matches.forEach((m, idx) => {
+    const qLower = query.trim().toLowerCase();
+    matches.forEach((name, idx) => {
         const item = document.createElement('div');
         item.className = 'autocomplete-item';
-        item.dataset.index = idx;
+        item.dataset.index = String(idx);
 
-        // Highlight matching characters
+        const nLower = name.toLowerCase();
         let html = '';
-        let tIdx = 0;
-        const q = query.toLowerCase();
-        const t = m.name;
-        const tLower = t.toLowerCase();
-
-        for (let qChar of q) {
-            const hit = tLower.indexOf(qChar, tIdx);
-            if (hit !== -1) {
-                html += esc(t.substring(tIdx, hit)) + `<span class="match-highlight">${esc(t[hit])}</span>`;
-                tIdx = hit + 1;
+        if (nLower.startsWith(qLower)) {
+            html =
+                `<span class="match-highlight">${esc(name.slice(0, query.trim().length))}</span>` +
+                esc(name.slice(query.trim().length));
+        } else {
+            const parts = name.split(/(\s+)/);
+            for (const part of parts) {
+                if (!part.trim()) {
+                    html += esc(part);
+                    continue;
+                }
+                const pl = part.toLowerCase();
+                if (pl.startsWith(qLower)) {
+                    html +=
+                        `<span class="match-highlight">${esc(part.slice(0, query.trim().length))}</span>` +
+                        esc(part.slice(query.trim().length));
+                } else {
+                    html += esc(part);
+                }
             }
         }
-        html += esc(t.substring(tIdx));
 
         item.innerHTML = `
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -219,7 +232,7 @@ function renderSpeakerAutocomplete(query) {
         `;
 
         item.addEventListener('click', () => {
-            selectSpeaker(m.name);
+            selectSpeaker(name);
         });
         dropdown.appendChild(item);
     });
@@ -1384,6 +1397,30 @@ class SmartCalendar {
         };
     }
 
+    async function loadSpeakerNamesForForm() {
+        if (!getToken()) return;
+        try {
+            const res = await fetch(`${API_BASE}/api/admin/speaker-names`, { headers: authHeaders() });
+            const data = await res.json();
+            if (data.success && Array.isArray(data.names) && data.names.length) {
+                state.allSpeakers = data.names;
+            }
+        } catch (e) {
+            console.warn('[speakers] Could not load speaker list:', e);
+        }
+    }
+
+    function setVenueDateMinToday() {
+        const d = document.getElementById('fb-venue-date');
+        if (!d) return;
+        const t = new Date();
+        const yyyy = t.getFullYear();
+        const mm = String(t.getMonth() + 1).padStart(2, '0');
+        const dd = String(t.getDate()).padStart(2, '0');
+        d.min = `${yyyy}-${mm}-${dd}`;
+        if (d.value && d.value < d.min) d.value = '';
+    }
+
     // ── Open / close modal ───────────────────────────────────
     function openFeedbackModal() {
         if (!getToken()) {
@@ -1395,6 +1432,8 @@ class SmartCalendar {
                 setTimeout(() => {
                     if (getToken()) {
                         document.getElementById('feedback-modal').classList.remove('hidden');
+                        setVenueDateMinToday();
+                        loadSpeakerNamesForForm();
                         loadEvents();
                     }
                     origSubmit.removeEventListener('click', handler);
@@ -1404,6 +1443,8 @@ class SmartCalendar {
             return;
         }
         resetForm();
+        setVenueDateMinToday();
+        loadSpeakerNamesForForm();
         document.getElementById('feedback-modal').classList.remove('hidden');
         loadEvents();
     }
@@ -1415,6 +1456,11 @@ class SmartCalendar {
     function resetForm() {
         document.getElementById('fb-speaker-name').value = '';
         document.getElementById('fb-venue-date').value = '';
+        const dd = document.getElementById('speaker-autocomplete-dropdown');
+        if (dd) {
+            dd.innerHTML = '';
+            dd.classList.remove('active');
+        }
         document.getElementById('fb-status').style.display = 'none';
         document.getElementById('fb-result').style.display = 'none';
         const btn = document.getElementById('btn-generate-form');
@@ -1447,6 +1493,12 @@ class SmartCalendar {
 
         if (!speaker || !date) {
             showStatus('Please fill in both Speaker Name and Venue Date.', 'error');
+            return;
+        }
+
+        const dateInput = document.getElementById('fb-venue-date');
+        if (dateInput && dateInput.min && date < dateInput.min) {
+            showStatus('Venue date cannot be before today.', 'error');
             return;
         }
 

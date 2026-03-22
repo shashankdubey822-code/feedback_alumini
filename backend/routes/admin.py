@@ -503,6 +503,30 @@ def get_events():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@admin_bp.route('/speaker-names', methods=['GET'])
+@log_endpoint_access
+def get_speaker_names():
+    """Distinct alumni speaker names from dashboard_data for form autocomplete."""
+    try:
+        db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT DISTINCT TRIM(alumni_speaker_name) AS n
+            FROM dashboard_data
+            WHERE alumni_speaker_name IS NOT NULL AND TRIM(alumni_speaker_name) != ''
+            ORDER BY n COLLATE NOCASE
+            """
+        )
+        names = [row[0] for row in cursor.fetchall() if row[0]]
+        conn.close()
+        return jsonify({'success': True, 'names': names}), 200
+    except Exception as e:
+        logger.error(f"Error fetching speaker names: {str(e)}")
+        return jsonify({'success': False, 'error': str(e), 'names': []}), 500
+
+
 @admin_bp.route('/close-form', methods=['POST'])
 @log_endpoint_access
 def close_form():

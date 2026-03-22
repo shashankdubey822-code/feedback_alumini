@@ -6,9 +6,48 @@ from flask import Blueprint, request, jsonify, current_app
 import sqlite3
 import os
 import json
-from datetime import datetime
+import re
+from datetime import datetime, timezone
 from ..utils.logger import get_section_logger, log_endpoint_access
 from ..utils.db_helper import get_db_connection
+
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    ZoneInfo = None  # type: ignore
+
+# Matches Student_Feedback_Trimmed.csv roll style: 2K + YY + programme letters + 5 digits (e.g. 2K25EDUN01013, 2K24ECUN03021)
+ROLL_NO_PATTERN = re.compile(r"^2[Kk]\d{2}[A-Za-z]{3,12}\d{5}$")
+
+
+def format_submission_timestamp_like_csv(iso_str: str) -> tuple:
+    """
+    Store timestamps like the CSV column 'Timestamp': M/D/YYYY H:MM:SS in Asia/Kolkata (institution local).
+    Returns (display_timestamp, normalized_sql_timestamp).
+    """
+    dt_utc = None
+    raw = (iso_str or "").strip()
+    try:
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        dt_utc = datetime.fromisoformat(raw)
+        if dt_utc.tzinfo is None:
+            dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+    except Exception:
+        dt_utc = datetime.now(timezone.utc)
+
+    if ZoneInfo:
+        try:
+            local = dt_utc.astimezone(ZoneInfo("Asia/Kolkata"))
+        except Exception:
+            local = dt_utc.astimezone(timezone.utc)
+    else:
+        from datetime import timedelta
+        local = dt_utc + timedelta(hours=5, minutes=30)
+
+    display = f"{local.month}/{local.day}/{local.year} {local.hour}:{local.minute:02d}:{local.second:02d}"
+    normalized = local.strftime("%Y-%m-%d %H:%M:%S")
+    return display, normalized
 
 logger = get_section_logger('webhook')
 
@@ -78,8 +117,9 @@ def store_webhook_submission(db_path: str, payload: dict) -> int:
         conn = get_db_connection(db_path)
         cursor = conn.cursor()
 
-        # Extract form data from webhook payload
-        timestamp = payload.get('timestamp', datetime.utcnow().isoformat())
+        # Extract form data from webhook payload (timestamp aligned to CSV + Asia/Kolkata)
+        raw_ts = payload.get('timestamp') or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        timestamp, timestamp_normalized = format_submission_timestamp_like_csv(raw_ts)
         form_id = payload.get('form_id', 'WEBHOOK_FORM')
         responses = payload.get('responses', {})
 
@@ -114,10 +154,16 @@ def store_webhook_submission(db_path: str, payload: dict) -> int:
                     raise
                 logger.warning(f"Could not parse created_at for expiry check: {created_at_str}. Error: {e}")
 
-        # Normalize roll_no to uppercase
-        roll_no = responses.get('roll_no_original', '')
-        if roll_no and isinstance(roll_no, str):
-            roll_no = roll_no.upper()
+        # Normalize roll_no; prefer compact form when it matches institute pattern (e.g. 2K25EDUN01013)
+        roll_raw = responses.get('roll_no_original', '')
+        roll_no = ''
+        if roll_raw and isinstance(roll_raw, str):
+            roll_no = roll_raw.strip().upper()
+            compact = re.sub(r"[\s\-]+", "", roll_no)
+            if compact and ROLL_NO_PATTERN.match(compact):
+                roll_no = compact
+            elif compact:
+                logger.warning(f"Roll number format unexpected (storing as entered): {roll_raw!r}")
 
         # Map webhook field names to database columns
         insert_query = '''
@@ -149,12 +195,6 @@ def store_webhook_submission(db_path: str, payload: dict) -> int:
         
         # Roll Number normalization (already done for roll_no variable above)
         
-        # Timestamp normalization
-        try:
-            timestamp_normalized = datetime.fromisoformat(timestamp.replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M:%S')
-        except:
-            timestamp_normalized = timestamp
-
         values = (
             timestamp,
             timestamp_normalized,
@@ -223,7 +263,7 @@ def receive_form_submission():
         record_id = store_webhook_submission(db_path, payload)
 
         # Add to notification queue
-        student_name = payload.get('name_of_student', 'Anonymous')
+        student_name = (payload.get('responses') or {}).get('name_of_student') or payload.get('name_of_student') or 'Anonymous'
         LATEST_NOTIFICATIONS.append(f"New submission from: {student_name}")
 
         logger.info(f"Successfully received webhook submission #{record_id}")
@@ -271,7 +311,7 @@ def test_webhook():
             'responses': {
                 'name_of_student': 'Test Student',
                 'department_original': 'Test Department',
-                'roll_no_original': '12345',
+                'roll_no_original': '2K25TESTU01001',
                 'session_rating': 4,
                 'aspect_most_valuable': 'Great session',
                 'improvements_suggestions': 'More examples would help',

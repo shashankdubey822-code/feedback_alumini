@@ -86,25 +86,6 @@ function setupModals() {
         feedbackModalClose.addEventListener('click', () => feedbackModal.classList.add('hidden'));
     }
 
-    // System Checkup Modal
-    const checkupModal = document.getElementById('system-checkup-modal');
-    const checkupModalClose = document.getElementById('checkup-modal-close');
-    if (checkupModalClose) {
-        checkupModalClose.addEventListener('click', () => checkupModal.classList.add('hidden'));
-    }
-    
-    const btnRetry = document.getElementById('btn-checkup-retry');
-    if (btnRetry) {
-        btnRetry.addEventListener('click', () => {
-             // Reset UI and run again
-             document.querySelectorAll('.checkup-item .status-badge').forEach(b => {
-                 b.textContent = 'Checking...';
-                 b.style.background = 'rgba(255,255,255,0.05)';
-                 b.style.color = '#8b8b9e';
-             });
-             performSystemCheckup();
-        });
-    }
 }
 
 // Modify setupDashboardHandlers to include setupModals

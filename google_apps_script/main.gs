@@ -132,7 +132,15 @@ function _handleCreateForm(payload) {
   form.addSectionHeaderItem().setTitle("Step 1: Your Information");
   form.addTextItem().setTitle("Name of Student").setRequired(true);
   form.addMultipleChoiceItem().setTitle("Department").setChoiceValues(CONFIG.DEPARTMENT_OPTIONS).setRequired(true);
-  form.addTextItem().setTitle("Roll No.").setRequired(true);
+  const rollItem = form.addTextItem().setTitle("Roll No.").setRequired(true);
+  const rollPattern = "^2[Kk]\\d{2}[A-Za-z]{3,12}\\d{5}$";
+  rollItem.setHelpText("Format: 2K + 2-digit batch year + programme code + 5 digits (e.g. 2K25EDUN01013, 2K24ECUN03021). No spaces.");
+  rollItem.setValidation(
+    FormApp.createTextValidation()
+      .requireTextMatchesPattern(rollPattern)
+      .setHelpText("Use your official roll number format, e.g. 2K25EDUN01013.")
+      .build()
+  );
 
   // Step 2: Session Value (Matches CSV Headers)
   form.addPageBreakItem().setTitle("Step 2: Session Value");

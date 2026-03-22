@@ -339,6 +339,13 @@
     animation: autocomplete-fade-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Form Manager: suggestions in document flow so Venue Date moves with list height */
+.fb-autocomplete-block .autocomplete-dropdown {
+    position: static;
+    margin-top: 6px;
+    max-height: 200px;
+}
+
 @keyframes autocomplete-fade-in {
     from {
         opacity: 0;
