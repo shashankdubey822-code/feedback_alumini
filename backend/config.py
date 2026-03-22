@@ -15,7 +15,7 @@ class Config:
     TESTING = False
 
     # Database
-    DATABASE_PATH = os.getenv('DATABASE_PATH', 'dashboard.db')
+    DATABASE_PATH = os.getenv('DATABASE_PATH', 'database/dashboard.db')
     SQLALCHEMY_DATABASE_URI = f'sqlite:///{DATABASE_PATH}'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = False

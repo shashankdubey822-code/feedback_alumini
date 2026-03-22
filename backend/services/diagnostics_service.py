@@ -150,7 +150,7 @@ class DiagnosticsService:
         return history
 
     def check_endpoints(self, request_host_url):
-        """Check if all key API endpoints are responsive."""
+        """Check if all key API endpoints are responsive. Tries public URL and localhost fallback."""
         endpoints = [
             '/api/data',
             '/api/v1/admin/events',
@@ -158,13 +158,34 @@ class DiagnosticsService:
         ]
         results = {}
         for ep in endpoints:
+            status = 'error'
+            msg = 'Connection failed'
+            
+            # Try 1: request_host_url (provided by frontend)
             try:
                 url = request_host_url.rstrip('/') + ep
                 req = urllib.request.Request(url, method='GET')
-                with urllib.request.urlopen(req, timeout=5) as response:
-                    results[ep] = {'status': 'ok', 'code': response.status}
+                with urllib.request.urlopen(req, timeout=3) as response:
+                    if response.status == 200:
+                        results[ep] = {'status': 'ok', 'code': 200}
+                        continue
             except Exception as e:
-                results[ep] = {'status': 'error', 'message': str(e)}
+                msg = f"Host URL failed: {str(e)}"
+
+            # Try 2: localhost (for internal container checks)
+            try:
+                port = os.getenv('PORT', '7860')
+                url = f"http://127.0.0.1:{port}" + ep
+                req = urllib.request.Request(url, method='GET')
+                with urllib.request.urlopen(req, timeout=2) as response:
+                    if response.status == 200:
+                        results[ep] = {'status': 'ok', 'code': 200, 'via': 'localhost'}
+                        continue
+            except Exception as e:
+                msg += f" | Localhost fallback failed: {str(e)}"
+            
+            results[ep] = {'status': 'error', 'message': msg}
+            
         return results
 
     def perform_full_checkup(self, request_host_url):

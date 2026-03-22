@@ -5,8 +5,8 @@ __pycache__/
 *.pyc
 *.pyo
 .DS_Store
+*.db
 .env
-dashboard.db
 
 # Data folder structure (tracked), but ignore actual data files
 data/uploads/*.csv
