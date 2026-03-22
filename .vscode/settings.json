@@ -23,5 +23,6 @@
   "[markdown]": {
     "editor.wordWrap": "on",
     "editor.rulers": [80, 120]
-  }
+  },
+  "kiroAgent.configureMCP": "Disabled"
 }

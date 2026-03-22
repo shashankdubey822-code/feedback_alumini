@@ -461,7 +461,11 @@ function setupSidebarNav() {
     document.querySelectorAll('.sidebar .nav-item').forEach((btn) => {
         btn.addEventListener('click', () => {
             const targetId = btn.dataset.section;
-            if (targetId) showSection(targetId);
+            if (btn.id === 'btn-upload-data') {
+                showAdminPanel();
+            } else if (targetId) {
+                showSection(targetId);
+            }
             document.getElementById('sidebar').classList.remove('open');
         });
     });
