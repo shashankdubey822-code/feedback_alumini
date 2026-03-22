@@ -5,6 +5,7 @@ Health Routes - Service health and status monitoring
 from flask import Blueprint, jsonify
 import sqlite3
 from ..utils.logger import get_logger
+from ..utils.db_helper import get_db_connection
 
 logger = get_logger(__name__)
 
@@ -14,7 +15,7 @@ health_bp = Blueprint('health', __name__, url_prefix='/api/v1')
 def check_database_health(db_path: str) -> dict:
     """Check database connection and basic statistics"""
     try:
-        conn = sqlite3.connect(db_path)
+        conn = get_db_connection(db_path)
         cursor = conn.cursor()
 
         # Check if main table exists

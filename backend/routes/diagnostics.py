@@ -2,76 +2,57 @@
 Diagnostics API - for isolating and reading module-specific error logs
 """
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request, current_app
 from backend.utils.logger import get_section_logger
+from backend.services.diagnostics_service import DiagnosticsService
 import os
-import sqlite3
 
 diagnostics_bp = Blueprint('diagnostics', __name__, url_prefix='/api/v1/diagnostics')
-logger = get_section_logger('api')  # Use generic API logger for diagnostics routing
+logger = get_section_logger('api')
 
-def get_logs_dir():
-    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs')
+def get_service():
+    return DiagnosticsService(current_app.config)
 
 @diagnostics_bp.route('/health', methods=['GET'])
 def check_health():
-    """Overall system diagnostic health check"""
+    """Quick health check for basic component status"""
     try:
-        from flask import current_app
-        db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
+        service = get_service()
+        db_check = service.check_database()
+        apps_script_check = service.check_apps_script()
         
-        cursor.execute("PRAGMA table_info(dashboard_data)")
-        cols = [row[1] for row in cursor.fetchall()]
-        db_status = "OK" if cols else "ERROR"
-        
-        has_nlp = "dl_processed" in cols
-        counts = {}
-        if has_nlp:
-            cursor.execute("SELECT COUNT(*) FROM dashboard_data WHERE dl_processed = 0")
-            counts['dl_pending'] = cursor.fetchone()[0]
-            cursor.execute("SELECT COUNT(*) FROM dashboard_data WHERE dl_processed = 1")
-            counts['dl_completed'] = cursor.fetchone()[0]
-            
-        conn.close()
-        
-        log_dir = get_logs_dir()
-        log_files = []
-        if os.path.exists(log_dir):
-            log_files = os.listdir(log_dir)
-            
         return jsonify({
-            'status': 'healthy' if db_status == "OK" else 'degraded',
-            'components': {
-                'database': db_status,
-                'nlp_schema_ready': has_nlp
-            },
-            'queue_metrics': counts,
-            'active_error_logs': log_files
+            'status': 'healthy' if db_check['status'] == 'ok' else 'degraded',
+            'database': db_check['status'],
+            'apps_script': apps_script_check['status'],
+            'nlp_ready': db_check.get('nlp_ready', False)
         }), 200
     except Exception as e:
-        logger.error(f"Diagnostics Healthcheck Error: {str(e)}")
+        logger.error(f"Quick Healthcheck Error: {str(e)}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@diagnostics_bp.route('/full-check', methods=['GET'])
+def perform_full_check():
+    """Deep diagnostic check of the entire pipeline"""
+    try:
+        service = get_service()
+        # Use request.host_url as a fallback for the public URL
+        report = service.perform_full_checkup(request.host_url)
+        return jsonify(report), 200
+    except Exception as e:
+        logger.error(f"Full Diagnostic Error: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @diagnostics_bp.route('/logs/<section>', methods=['GET'])
 def read_section_logs(section):
-    """
-    Read the last 100 lines of a specific section's error log.
-    Sections: api, nlp, webhook, db, dl_worker
-    """
+    """Read the last 100 lines of a specific section's error log."""
     try:
-        log_dir = get_logs_dir()
+        log_dir = os.path.join(current_app.root_path, 'logs')
         filename = f"{section}_errors.log"
         file_path = os.path.join(log_dir, filename)
         
         if not os.path.exists(file_path):
-            return jsonify({
-                'section': section,
-                'status': 'no_logs_found',
-                'lines': []
-            }), 200
+            return jsonify({'section': section, 'status': 'no_logs_found', 'lines': []}), 200
             
         with open(file_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()[-100:]

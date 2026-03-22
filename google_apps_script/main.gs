@@ -67,6 +67,7 @@ function doPost(e) {
       case "create_form": return _handleCreateForm(payload);
       case "get_responses": return _handleGetResponses(payload);
       case "close_form": return _handleCloseForm(payload);
+      case "diagnose": return _handleDiagnose(payload);
       case "ping": return _json(true, "Connectivity Active", { version: CONFIG.VERSION });
       default: return _json(false, "Unknown Action: " + action, null, 404);
     }
@@ -77,6 +78,26 @@ function doPost(e) {
 }
 
 // ─── ACTION HANDLERS ─────────────────────────────────────────────────────────
+
+/**
+ * Returns a full diagnostic report of the script's state
+ */
+function _handleDiagnose(payload) {
+  const props = PropertiesService.getScriptProperties().getProperties();
+  const triggers = ScriptApp.getProjectTriggers();
+  
+  const diagnosticData = {
+    version: CONFIG.VERSION,
+    properties_count: Object.keys(props).length,
+    trigger_count: triggers.length,
+    timezone: Session.getScriptTimeZone(),
+    user_email: Session.getEffectiveUser().getEmail(),
+    webhook_url_configured: !!props["WEBHOOK_URL"],
+    auth_check: props["AUTH_CHECK"] || "Never verified"
+  };
+  
+  return _json(true, "Diagnostic Data Retrieved", diagnosticData);
+}
 
 function _handleCreateForm(payload) {
   // ⚡ MANUAL RUN DETECTION

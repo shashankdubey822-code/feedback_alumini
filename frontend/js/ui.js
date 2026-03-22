@@ -63,8 +63,53 @@ function setupSidebarNav() {
 }
 
 
-// ========== DASHBOARD HANDLERS ==========
+// ========== MODAL HANDLERS ==========
+function setupModals() {
+    // Data Modal
+    const dataModal = document.getElementById('data-modal');
+    const dataModalClose = document.getElementById('modal-close');
+    if (dataModalClose) {
+        dataModalClose.addEventListener('click', () => dataModal.classList.add('hidden'));
+    }
+
+    // Admin Login Modal
+    const adminModal = document.getElementById('admin-login-modal');
+    const adminModalClose = document.getElementById('admin-login-close');
+    if (adminModalClose) {
+        adminModalClose.addEventListener('click', () => adminModal.classList.add('hidden'));
+    }
+
+    // Feedback Form Modal
+    const feedbackModal = document.getElementById('feedback-modal');
+    const feedbackModalClose = document.getElementById('feedback-modal-close');
+    if (feedbackModalClose) {
+        feedbackModalClose.addEventListener('click', () => feedbackModal.classList.add('hidden'));
+    }
+
+    // System Checkup Modal
+    const checkupModal = document.getElementById('system-checkup-modal');
+    const checkupModalClose = document.getElementById('checkup-modal-close');
+    if (checkupModalClose) {
+        checkupModalClose.addEventListener('click', () => checkupModal.classList.add('hidden'));
+    }
+    
+    const btnRetry = document.getElementById('btn-checkup-retry');
+    if (btnRetry) {
+        btnRetry.addEventListener('click', () => {
+             // Reset UI and run again
+             document.querySelectorAll('.checkup-item .status-badge').forEach(b => {
+                 b.textContent = 'Checking...';
+                 b.style.background = 'rgba(255,255,255,0.05)';
+                 b.style.color = '#8b8b9e';
+             });
+             performSystemCheckup();
+        });
+    }
+}
+
+// Modify setupDashboardHandlers to include setupModals
 function setupDashboardHandlers() {
+    setupModals();
     const btnAdminPanel = document.getElementById('btn-admin-panel');
     if (btnAdminPanel) {
         btnAdminPanel.addEventListener('click', showAdminPanel);

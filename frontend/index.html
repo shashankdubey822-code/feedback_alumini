@@ -714,6 +714,77 @@
         </div>
       </div>
       <!-- /FEEDBACK FORM MODAL -->
+      
+      <!-- ███ SYSTEM CHECKUP MODAL ███ -->
+      <div id="system-checkup-modal" class="modal-overlay hidden" style="z-index: 10001;">
+        <div class="modal-content" style="max-width: 480px; padding: 0; overflow: hidden; border: 1px solid rgba(99, 102, 241, 0.3); box-shadow: 0 20px 50px rgba(0,0,0,0.6);">
+          <div class="modal-header" style="padding: 24px; background: rgba(99, 102, 241, 0.05); border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div class="checkup-pulse" style="width: 12px; height: 12px; border-radius: 50%; background: #6366f1; box-shadow: 0 0 10px #6366f1;"></div>
+              <h3 class="modal-title" style="margin: 0; font-size: 18px;">System Integrity Check</h3>
+            </div>
+            <button id="checkup-modal-close" class="modal-close">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="modal-body" style="padding: 24px;">
+            <p style="color: #8b8b9e; font-size: 13px; margin-bottom: 24px; line-height: 1.5;">
+              We're verifying the connection between your Dashboard, the Python backend, and the Google Apps Script environment.
+            </p>
+            
+            <div id="checkup-list" style="display: flex; flex-direction: column; gap: 16px;">
+              <!-- Item 1: Database -->
+              <div class="checkup-item" id="check-db">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 14px; color: #f0f0f5; font-weight: 500;">Database Connection</span>
+                  <span class="status-badge" style="background: rgba(255,255,255,0.05); color: #8b8b9e; font-size: 11px; padding: 2px 8px; border-radius: 10px;">Checking...</span>
+                </div>
+                <div class="status-msg" style="font-size: 11px; color: #6b7280; margin-top: 4px;">Verifying local SQLite storage...</div>
+              </div>
+              
+              <!-- Item 2: Apps Script -->
+              <div class="checkup-item" id="check-script">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 14px; color: #f0f0f5; font-weight: 500;">Google Apps Script</span>
+                  <span class="status-badge" style="background: rgba(255,255,255,0.05); color: #8b8b9e; font-size: 11px; padding: 2px 8px; border-radius: 10px;">Checking...</span>
+                </div>
+                <div class="status-msg" style="font-size: 11px; color: #6b7280; margin-top: 4px;">Pinging Google macro servers...</div>
+              </div>
+              
+              <!-- Item 3: Webhook -->
+              <div class="checkup-item" id="check-webhook">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 14px; color: #f0f0f5; font-weight: 500;">Webhook Reachability</span>
+                  <span class="status-badge" style="background: rgba(255,255,255,0.05); color: #8b8b9e; font-size: 11px; padding: 2px 8px; border-radius: 10px;">Checking...</span>
+                </div>
+                <div class="status-msg" style="font-size: 11px; color: #6b7280; margin-top: 4px;">Validating public URL for auto-sync...</div>
+              </div>
+            </div>
+            
+            <!-- Deep Trace Section (Initially Hidden) -->
+            <div id="deep-trace-section" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.05); display: none;">
+              <h4 style="font-size: 12px; color: #6366f1; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; font-weight: 700;">Deep Trace & Webhook History</h4>
+              
+              <div id="endpoint-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
+                 <!-- Endpoints will be injected here -->
+              </div>
+              
+              <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 12px; border: 1px solid rgba(255,255,255,0.05); font-family: 'Courier New', monospace;">
+                 <div style="font-size: 11px; color: #a5b4fc; margin-bottom: 8px; border-bottom: 1px solid rgba(165,180,252,0.1); padding-bottom: 4px;">Latest Webhook Events (Google -> Backend)</div>
+                 <div id="webhook-log-trace" style="font-size: 10px; color: #94a3b8; max-height: 100px; overflow-y: auto; line-height: 1.4;">
+                    Checking sync health logs...
+                 </div>
+              </div>
+            </div>
+            
+            <div id="checkup-footer" style="margin-top: 32px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.05); display: none;">
+              <button id="btn-checkup-retry" style="width: 100%; padding: 12px; border-radius: 8px; background: rgba(99, 102, 241, 0.1); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.2); font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                Run Deep Diagnostics
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
     </div><!-- /dashboard-screen -->
 

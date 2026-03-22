@@ -326,7 +326,7 @@ def get_consolidated_analytics(app, filters=None, search=None):
     speaker_stats_payload = []
 
     # ── 4. Table data & meta ─────────────────────────────────────────
-    conn = sqlite3.connect(db_path)
+    conn = get_db_connection(db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
