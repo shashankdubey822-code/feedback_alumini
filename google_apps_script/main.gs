@@ -399,3 +399,18 @@ function onHeartbeatTrigger() {
     Logger.log("Heartbeat failed: " + e.toString());
   }
 }
+
+/**
+ * ONE-TIME SETUP (Project Settings script properties are read-only when you have 50+ properties):
+ * 1. Set the SAME WEBHOOK_SECRET in Hugging Face Space → Secrets.
+ * 2. In the Apps Script editor, select this function → Run → allow permissions.
+ * 3. Check Executions / Logs for "Saved WEBHOOK_SECRET and SECRET_KEY".
+ * 4. Submit a test form; LAST_WEBHOOK_SYNC should show http_status 200, not 401.
+ * 5. Remove the literal strings below (or delete this whole function) after success — do not leave secrets in source long-term.
+ */
+function ONE_TIME_SET_SECRETS() {
+  const p = PropertiesService.getScriptProperties();
+  p.setProperty("WEBHOOK_SECRET", "DL_wh_9fK2mPq7vNx4Rt8sLw3");
+  p.setProperty("SECRET_KEY", "datalens2026");
+  Logger.log("Saved WEBHOOK_SECRET and SECRET_KEY (must match HF WEBHOOK_SECRET and APPS_SCRIPT_SECRET).");
+}
