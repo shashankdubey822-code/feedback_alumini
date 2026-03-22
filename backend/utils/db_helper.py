@@ -25,9 +25,8 @@ def get_db_connection(db_path, timeout=30.0):
 
 
 def initialize_database(app, logger):
-    """Initialize database on application startup"""
     try:
-        db_path = app.config.get('DATABASE_PATH', 'database/dashboard.db')
+        db_path = app.config.get('DATABASE_PATH')
 
         # Create database directory if it doesn't exist (and if there is a directory specified)
         db_dir = os.path.dirname(db_path)

@@ -261,10 +261,7 @@ def get_legacy_filter():
 
 def get_consolidated_analytics(app, filters=None, search=None):
     """
-    Build the full data payload expected by the Premium frontend SPA.
-    KPIService.get_all_kpis() returns a Dict, NOT a list.
-    """
-    db_path = app.config.get('DATABASE_PATH', 'database/dashboard.db')
+    db_path = app.config.get('DATABASE_PATH')
 
     # ── 1. KPIs ─────────────────────────────────────────────────────
     try:

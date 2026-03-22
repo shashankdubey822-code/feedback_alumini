@@ -219,7 +219,7 @@ def receive_form_submission():
             }), 200
 
         # Store submission
-        db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
+        db_path = current_app.config.get('DATABASE_PATH')
         record_id = store_webhook_submission(db_path, payload)
 
         # Add to notification queue

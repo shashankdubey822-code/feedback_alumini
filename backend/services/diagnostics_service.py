@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 class DiagnosticsService:
     def __init__(self, config):
         self.config = config
-        self.db_path = config.get('DATABASE_PATH', 'database/dashboard.db')
+        self.db_path = config.get('DATABASE_PATH', 'dashboard.db')
         self.apps_script_url = os.getenv('APPS_SCRIPT_URL')
         self.apps_script_secret = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
         self.webhook_secret = config.get('WEBHOOK_SECRET', 'webhook-secret-key')
