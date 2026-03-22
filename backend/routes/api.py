@@ -260,7 +260,7 @@ def get_legacy_filter():
         return jsonify({'error': str(e)}), 500
 
 def get_consolidated_analytics(app, filters=None, search=None):
-    """
+    """Consolidate analytics data for the dashboard."""
     db_path = app.config.get('DATABASE_PATH')
 
     # ── 1. KPIs ─────────────────────────────────────────────────────
