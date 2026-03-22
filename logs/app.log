@@ -11,3 +11,11 @@
 [2026-03-21 11:53:35] INFO     | backend.utils.logger:93 | Adding column dl_processed to dashboard_data
 [2026-03-21 11:53:35] INFO     | backend.utils.logger:116 | Database schema verified and ready
 [2026-03-21 11:53:35] INFO     | backend.utils.logger:110 | Application initialized successfully
+[2026-03-22 09:35:34] DEBUG    | backend.utils.logger:101 | POST /api/v1/webhook/forms/submit from 127.0.0.1
+[2026-03-22 09:35:34] INFO     | backend.utils.logger:76 | POST /api/v1/webhook/forms/submit - 127.0.0.1
+[2026-03-22 09:35:34] INFO     | backend.utils.logger:107 | POST /api/v1/webhook/forms/submit - 401
+[2026-03-22 09:36:03] DEBUG    | backend.utils.logger:101 | POST /api/v1/webhook/forms/submit from 127.0.0.1
+[2026-03-22 09:36:03] INFO     | backend.utils.logger:76 | POST /api/v1/webhook/forms/submit - 127.0.0.1
+[2026-03-22 09:36:03] INFO     | backend.utils.logger:107 | POST /api/v1/webhook/forms/submit - 200
+[2026-03-22 09:36:03] DEBUG    | backend.utils.logger:101 | GET /api/v1/webhook/notifications from 127.0.0.1
+[2026-03-22 09:36:03] INFO     | backend.utils.logger:107 | GET /api/v1/webhook/notifications - 404
