@@ -1,0 +1,162 @@
+/* Wiki Specific Styles - The Neon Observatory Aesthetic */
+
+#wiki-section {
+    display: none;
+}
+
+#wiki-section.active {
+    display: block;
+}
+
+/* Wiki Subtabs */
+.wiki-subtabs {
+    display: flex;
+    gap: 8px;
+}
+
+.wiki-subtab {
+    padding: 8px 16px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: #8b8b9e;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.wiki-subtab:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.wiki-subtab.active {
+    color: #00ffff;
+    background: rgba(0, 255, 255, 0.08);
+    border-color: rgba(0, 255, 255, 0.2);
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.1);
+}
+
+/* Wiki Links in Markdown rendering */
+.wiki-markdown-body .wiki-link,
+.chat-msg .wiki-link,
+#wiki-backlinks-list .wiki-link {
+    color: #00ffff !important;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    border-bottom: 1px dashed rgba(0, 255, 255, 0.4);
+    padding: 1px 4px;
+    background: rgba(0, 255, 255, 0.04);
+    border-radius: 4px;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+}
+
+.wiki-markdown-body .wiki-link::before,
+.chat-msg .wiki-link::before,
+#wiki-backlinks-list .wiki-link::before {
+    content: "📖";
+    font-size: 10px;
+    margin-right: 4px;
+}
+
+.wiki-markdown-body .wiki-link:hover,
+.chat-msg .wiki-link:hover,
+#wiki-backlinks-list .wiki-link:hover {
+    color: #fff !important;
+    background: rgba(0, 255, 255, 0.15);
+    border-bottom-style: solid;
+    box-shadow: 0 0 8px rgba(0, 255, 255, 0.2);
+}
+
+/* Explorer tree styles */
+.wiki-explorer-item {
+    transition: all 0.15s ease;
+}
+
+.wiki-explorer-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: #fff !important;
+    padding-left: 10px !important;
+}
+
+.wiki-explorer-folder .folder-arrow {
+    font-size: 8px;
+    color: #8b8b9e;
+    transition: transform 0.2s ease;
+    display: inline-block;
+    width: 10px;
+}
+
+/* Chat bubble aesthetics */
+.chat-msg {
+    animation: slideUp 0.25s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.chat-msg.user {
+    align-self: flex-end;
+    border-bottom-right-radius: 2px !important;
+    border: 1px solid rgba(191, 85, 255, 0.15);
+}
+
+.chat-msg.ai {
+    align-self: flex-start;
+    border-bottom-left-radius: 2px !important;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Custom markdown formatting */
+.wiki-markdown-body h1 {
+    font-size: 20px;
+    color: #fff;
+    margin: 0 0 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 8px;
+}
+
+.wiki-markdown-body h2 {
+    font-size: 16px;
+    color: #ca7bff;
+    margin: 16px 0 8px;
+}
+
+.wiki-markdown-body h3 {
+    font-size: 14px;
+    color: #00ffff;
+    margin: 12px 0 6px;
+}
+
+.wiki-markdown-body li {
+    margin-bottom: 6px;
+}
+
+/* Console logs console */
+#wiki-console-logs {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+
+#wiki-console-logs::-webkit-scrollbar {
+    width: 6px;
+}
+
+#wiki-console-logs::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.1);
+    border-radius: 3px;
+}

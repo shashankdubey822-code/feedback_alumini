@@ -1,0 +1,268 @@
+"""
+Wiki Routes - REST Blueprint for Wiki operations
+"""
+
+from flask import Blueprint, jsonify, request, current_app
+from backend.services.wiki_service import WikiService
+from backend.utils.logger import get_section_logger, log_endpoint_access
+import sqlite3
+import os
+
+logger = get_section_logger('wiki_routes')
+
+wiki_bp = Blueprint('wiki', __name__, url_prefix='/api/v1/wiki')
+
+
+def _get_wiki_service() -> WikiService:
+    """Instantiate or retrieve cached WikiService"""
+    if not hasattr(current_app, '_wiki_service'):
+        current_app._wiki_service = WikiService()
+    return current_app._wiki_service
+
+
+@wiki_bp.route('/status', methods=['GET'])
+@log_endpoint_access
+def get_wiki_status():
+    """Get overall statistics of the Wiki"""
+    try:
+        service = _get_wiki_service()
+        pages = service.list_wiki_pages()
+        
+        # Categorise pages
+        speakers = [p for p in pages if p.startswith('speakers/')]
+        events = [p for p in pages if p.startswith('events/')]
+        concepts = [p for p in pages if p.startswith('concepts/')]
+        suggestions = [p for p in pages if p.startswith('suggestions/')]
+        
+        is_initialized = len(pages) > 0
+        
+        return jsonify({
+            'initialized': is_initialized,
+            'total_pages': len(pages),
+            'counts': {
+                'speakers': len(speakers),
+                'events': len(events),
+                'concepts': len(concepts),
+                'suggestions': len(suggestions),
+                'core': len(pages) - len(speakers) - len(events) - len(concepts) - len(suggestions)
+            }
+        }), 200
+    except Exception as e:
+        logger.error(f"Error checking wiki status: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@wiki_bp.route('/initialize', methods=['POST'])
+@log_endpoint_access
+def initialize_wiki():
+    """Initialize folders and templates"""
+    try:
+        service = _get_wiki_service()
+        success = service.initialize_wiki(force=True)
+        if success:
+            return jsonify({'message': 'Wiki initialized successfully.'}), 200
+        return jsonify({'error': 'Initialization failed.'}), 500
+    except Exception as e:
+        logger.error(f"Error initializing wiki: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@wiki_bp.route('/pages', methods=['GET'])
+@log_endpoint_access
+def get_wiki_pages():
+    """Get list of pages formatted as a tree folder structure"""
+    try:
+        service = _get_wiki_service()
+        pages = service.list_wiki_pages()
+        return jsonify({'pages': pages}), 200
+    except Exception as e:
+        logger.error(f"Error listing wiki pages: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@wiki_bp.route('/pages/<path:filename>', methods=['GET'])
+@log_endpoint_access
+def get_wiki_page_content(filename):
+    """Retrieve raw markdown and formatted HTML for a specific page"""
+    try:
+        service = _get_wiki_service()
+        markdown_content = service.read_wiki_file(filename)
+        
+        if markdown_content is None:
+            return jsonify({'error': f"Page '{filename}' not found."}), 404
+            
+        # ─── NATIVE MARKDOWN TO HTML CONVERTER ───────────────────────────────
+        # Parses double bracket links [[speakers/John_Doe]] into clickable spans
+        # This keeps frontend rendering 100% lightweight and fast
+        html_out = markdown_content
+        
+        # 1. Escape HTML tags
+        html_out = html_out.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        
+        # 2. Bold tags
+        html_out = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', html_out)
+        
+        # 3. List bullets
+        html_out = re.sub(r'^\s*-\s+(.*?)$', r'<li>\1</li>', html_out, flags=re.MULTILINE)
+        
+        # 4. Headers
+        html_out = re.sub(r'^###\s+(.*?)$', r'<h3>\1</h3>', html_out, flags=re.MULTILINE)
+        html_out = re.sub(r'^##\s+(.*?)$', r'<h2>\1</h2>', html_out, flags=re.MULTILINE)
+        html_out = re.sub(r'^#\s+(.*?)$', r'<h1>\1</h1>', html_out, flags=re.MULTILINE)
+        
+        # 5. Double bracket WikiLinks [[path/to/page]] -> Clickable span
+        # e.g. [[speakers/John_Doe]] -> <span class="wiki-link" data-page="speakers/John_Doe">John Doe</span>
+        def replace_link(match):
+            link = match.group(1).strip()
+            # Label displays file name without path and underscores
+            label = link.split('/')[-1].replace('_', ' ').replace('.md', '')
+            return f'<span class="wiki-link" data-page="{link}">{label}</span>'
+            
+        html_out = re.sub(r'\[\[([^\]|]+)(?:\|[^\]]+)?\]\]', replace_link, html_out)
+        
+        # 6. Add line break paragraph wraps
+        html_out = html_out.replace('\n', '<br>')
+        
+        return jsonify({
+            'filename': filename,
+            'markdown': markdown_content,
+            'html': html_out
+        }), 200
+    except Exception as e:
+        logger.error(f"Error reading page '{filename}': {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@wiki_bp.route('/sessions', methods=['GET'])
+@log_endpoint_access
+def get_db_sessions():
+    """Retrieve unique guest lecture sessions and check if compiled in wiki"""
+    try:
+        db_path = current_app.config.get('DATABASE_PATH')
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT alumni_speaker_name, date_of_lecture, COUNT(*) as cnt
+            FROM dashboard_data
+            WHERE alumni_speaker_name IS NOT NULL AND alumni_speaker_name != ''
+              AND date_of_lecture IS NOT NULL AND date_of_lecture != ''
+            GROUP BY alumni_speaker_name, date_of_lecture
+            ORDER BY date_of_lecture DESC
+        ''')
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        
+        service = _get_wiki_service()
+        pages = service.list_wiki_pages()
+        
+        # Map compiled status
+        for r in rows:
+            speaker = r['alumni_speaker_name']
+            date_str = r['date_of_lecture']
+            safe_speaker = speaker.replace(' ', '_').replace('.', '')
+            expected_file = f"events/{date_str}_{safe_speaker}.md"
+            r['compiled'] = expected_file in pages
+
+        return jsonify({'sessions': rows}), 200
+    except Exception as e:
+        logger.error(f"Error loading sessions: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@wiki_bp.route('/ingest', methods=['POST'])
+@log_endpoint_access
+def trigger_ingestion():
+    """Enqueue selected sessions or all sessions for compilation"""
+    try:
+        body = request.get_json() or {}
+        sessions = body.get('sessions', [])
+        
+        if not sessions:
+            return jsonify({'error': 'No sessions selected.'}), 400
+            
+        # Parse sessions format: List[dict(speaker, date)]
+        sessions_tuple = [(s['speaker'], s['date']) for s in sessions]
+        
+        service = _get_wiki_service()
+        message = service.start_batch_ingest_queue(sessions_tuple)
+        return jsonify({'message': message}), 200
+    except Exception as e:
+        logger.error(f"Error triggering batch ingest: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@wiki_bp.route('/ingest/status', methods=['GET'])
+@log_endpoint_access
+def get_ingest_status():
+    """Fetch volatile compiler queue status and logs"""
+    try:
+        service = _get_wiki_service()
+        status_payload = service.get_queue_status()
+        return jsonify(status_payload), 200
+    except Exception as e:
+        logger.error(f"Error fetching queue status: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@wiki_bp.route('/query', methods=['POST'])
+@log_endpoint_access
+def execute_wiki_query():
+    """Synthesize RAG query answers from the compiled wiki"""
+    try:
+        body = request.get_json() or {}
+        question = body.get('question', '').strip()
+        
+        if not question:
+            return jsonify({'error': 'Question cannot be empty.'}), 400
+            
+        service = _get_wiki_service()
+        result = service.query_wiki(question)
+        return jsonify(result), 200
+    except Exception as e:
+        logger.error(f"Error executing wiki query: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@wiki_bp.route('/lint', methods=['GET'])
+@log_endpoint_access
+def run_wiki_lint():
+    """Run broken links and orphans checks"""
+    try:
+        service = _get_wiki_service()
+        results = service.run_wiki_linter()
+        return jsonify(results), 200
+    except Exception as e:
+        logger.error(f"Error running wiki linter: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@wiki_bp.route('/config', methods=['POST'])
+@log_endpoint_access
+def save_wiki_config():
+    """Save active credentials temporarily in environment memory"""
+    try:
+        body = request.get_json() or {}
+        gemini_key = body.get('gemini_key', '').strip()
+        supabase_url = body.get('supabase_url', '').strip()
+        supabase_key = body.get('supabase_key', '').strip()
+        
+        if gemini_key:
+            current_app.config['GEMINI_API_KEY'] = gemini_key
+            os.environ['GEMINI_API_KEY'] = gemini_key
+            service = _get_wiki_service()
+            service.gemini_key = gemini_key
+            
+        if supabase_url and supabase_key:
+            current_app.config['SUPABASE_URL'] = supabase_url
+            current_app.config['SUPABASE_SERVICE_KEY'] = supabase_key
+            os.environ['SUPABASE_URL'] = supabase_url
+            os.environ['SUPABASE_SERVICE_KEY'] = supabase_key
+            # Reset cached supabase client to reinitialize
+            from backend.utils import supabase_helper
+            supabase_helper._supabase_client = None
+            
+        return jsonify({'message': 'Configuration updated successfully.'}), 200
+    except Exception as e:
+        logger.error(f"Error updating config: {str(e)}")
+        return jsonify({'error': str(e)}), 500

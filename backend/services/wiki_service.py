@@ -1,0 +1,664 @@
+"""
+Wiki Service - Manages Karpathy's LLM Wiki (Ingest, Query, Lint, and Supabase Storage Sync)
+"""
+
+import os
+import re
+import json
+import time
+import threading
+from typing import List, Dict, Any, Tuple, Optional
+from datetime import datetime
+import urllib.request
+import urllib.parse
+from backend.config import get_config
+from backend.utils.logger import get_section_logger
+from backend.utils.supabase_helper import (
+    supabase_upload_file,
+    supabase_download_file,
+    supabase_list_files,
+    supabase_delete_file,
+    is_supabase_active
+)
+
+logger = get_section_logger('wiki')
+
+# Class-level compilation logger and queue state
+_ingest_logs: List[str] = []
+_ingest_progress: Dict[str, Any] = {"status": "IDLE", "current": 0, "total": 0, "active_session": ""}
+_queue_lock = threading.Lock()
+
+
+class WikiService:
+    """Manages the creation, synchronization, querying, and linting of the Markdown Wiki"""
+
+    def __init__(self):
+        config = get_config()()
+        self.wiki_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data', 'wiki')
+        self.pages_dir = os.path.join(self.wiki_dir, 'pages')
+        self.bucket = config.SUPABASE_BUCKET
+        self.gemini_key = config.GEMINI_API_KEY
+        
+        # Local dir creation safety
+        os.makedirs(self.wiki_dir, exist_ok=True)
+        os.makedirs(self.pages_dir, exist_ok=True)
+        for sub in ['events', 'speakers', 'concepts', 'suggestions']:
+            os.makedirs(os.path.join(self.pages_dir, sub), exist_ok=True)
+
+    # ─── CORE FILE ACCESSORS ──────────────────────────────────────────────────
+
+    def write_wiki_file(self, rel_path: str, content: str) -> bool:
+        """Write content to local disk AND upload to Supabase Storage if configured"""
+        local_path = os.path.join(self.pages_dir, rel_path)
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        
+        # 1. Write locally
+        try:
+            with open(local_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+        except Exception as e:
+            logger.error(f"Local write failed for '{rel_path}': {str(e)}")
+
+        # 2. Upload to Supabase Storage
+        if is_supabase_active():
+            content_bytes = content.encode('utf-8')
+            success = supabase_upload_file(self.bucket, f"pages/{rel_path}", content_bytes, "text/markdown")
+            if success:
+                logger.info(f"Synced '{rel_path}' to Supabase bucket '{self.bucket}'")
+            return success
+
+        return True
+
+    def read_wiki_file(self, rel_path: str) -> Optional[str]:
+        """Read content from Supabase Storage, falling back to local file if offline"""
+        # 1. Try Supabase Storage first
+        if is_supabase_active():
+            file_bytes = supabase_download_file(self.bucket, f"pages/{rel_path}")
+            if file_bytes is not None:
+                return file_bytes.decode('utf-8')
+
+        # 2. Fallback to Local Disk
+        local_path = os.path.join(self.pages_dir, rel_path)
+        if os.path.exists(local_path):
+            try:
+                with open(local_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+            except Exception as e:
+                logger.error(f"Local read failed for '{rel_path}': {str(e)}")
+        return None
+
+    def list_wiki_pages(self) -> List[str]:
+        """Get relative paths of all pages in the Wiki"""
+        all_pages = []
+        
+        if is_supabase_active():
+            # List files from Supabase Storage
+            # Walk through subdirectories
+            for sub in ['', 'events', 'speakers', 'concepts', 'suggestions']:
+                files = supabase_list_files(self.bucket, f"pages/{sub}".strip('/'))
+                for f in files:
+                    name = f.get('name')
+                    if name and name.endswith('.md'):
+                        path = f"{sub}/{name}".strip('/')
+                        all_pages.append(path)
+            if all_pages:
+                return sorted(list(set(all_pages)))
+
+        # Fallback to local file scanning
+        for root, _, files in os.walk(self.pages_dir):
+            for file in files:
+                if file.endswith('.md'):
+                    full_p = os.path.join(root, file)
+                    rel_p = os.path.relpath(full_p, self.pages_dir).replace('\\', '/')
+                    all_pages.append(rel_p)
+        return sorted(all_pages)
+
+    # ─── INITIALIZATION ───────────────────────────────────────────────────────
+
+    def initialize_wiki(self, force: bool = False) -> bool:
+        """Set up initial directory structure, index, logs, and schema"""
+        logger.info("Initializing Wiki schemas and templates...")
+        
+        # Check if already initialized
+        if not force and self.read_wiki_file('index.md') is not None:
+            logger.info("Wiki is already initialized. Skipping template injection.")
+            return True
+
+        # 1. Create schema.md
+        schema_content = """# Wiki Schema & Guidelines
+
+Welcome to the AI-maintained Knowledge Base of guest lecture feedback.
+
+## Directory Structure
+- `events/` - Summaries of individual guest lectures, named as `[YYYY-MM-DD]_[Speaker_Name].md`.
+- `speakers/` - Dossier pages compiling history, rating trends, and sentiments for each speaker, named as `[Speaker_Name].md`.
+- `concepts/` - Concept or topic pages tracking student interest in specific areas (e.g. `[[Resume_Building]]`, `[[Artificial_Intelligence]]`), named as `[Topic_Name].md`.
+- `suggestions/` - Specific critique categories (e.g. `[[More_Interaction]]`, `[[Duration_and_Pacing]]`), named as `[Category_Name].md`.
+- `index.md` - Content catalog/index.
+- `log.md` - Chronological log of operations.
+
+## Linking Rules
+- Use double-bracket wiki links to interconnect entities (e.g., `[[Jane_Doe]]` inside an event page).
+- Every event page must link back to its corresponding `[[speakers/Speaker_Name]]` and relevant `[[concepts/Concept_Name]]`.
+"""
+        self.write_wiki_file('schema.md', schema_content)
+
+        # 2. Create index.md
+        index_content = """# AI Knowledge Wiki Index
+
+Welcome to the central knowledge index. This index is automatically updated by the AI.
+
+## Index of Pages
+
+### Master Logs
+- [[schema.md]] - Schema & guidelines.
+- [[log.md]] - Chronological log of actions.
+
+### 🎤 Speaker Profiles
+*No speakers compiled yet.*
+
+### 📅 Guest Lectures
+*No guest lectures compiled yet.*
+
+### 💡 Core Concept Hubs
+*No topics compiled yet.*
+
+### 🛠️ Suggestion Categories
+*No suggestions compiled yet.*
+"""
+        self.write_wiki_file('index.md', index_content)
+
+        # 3. Create log.md
+        log_content = f"""# Operation Log
+
+Append-only history of Wiki operations.
+
+## [{datetime.now().strftime('%Y-%m-%d')}] system | Initialization
+- Initialized directory structures.
+- Created `schema.md`, `index.md`, and `log.md`.
+"""
+        self.write_wiki_file('log.md', log_content)
+        return True
+
+    # ─── COMPILER ENGINE (INGEST OPERATION) ───────────────────────────────────
+
+    def compile_session(self, speaker: str, date_str: str, feedback_rows: List[Dict[str, Any]]) -> str:
+        """
+        Compile feedback rows into events, speaker, and concept pages.
+        Runs batch prompts using Gemini, falling back to a rule-based offline generator.
+        """
+        self.log_compilation(f"Compiling feedback for '{speaker}' ({date_str}) - {len(feedback_rows)} responses...")
+        
+        # Prepare aggregated data payload
+        total_responses = len(feedback_rows)
+        ratings = [r.get('session_rating') for r in feedback_rows if r.get('session_rating') is not None]
+        avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else 0.0
+        
+        understanding_levels = {}
+        for r in feedback_rows:
+            shu = r.get('session_help_understanding')
+            if shu:
+                understanding_levels[shu] = understanding_levels.get(shu, 0) + 1
+        
+        valuable_aspects = [r.get('aspect_most_valuable') for r in feedback_rows if r.get('aspect_most_valuable') and len(str(r.get('aspect_most_valuable')).strip()) > 5]
+        critiques = [r.get('improvements_suggestions') for r in feedback_rows if r.get('improvements_suggestions') and len(str(r.get('improvements_suggestions')).strip()) > 5]
+        requests = [r.get('future_topics') for r in feedback_rows if r.get('future_topics') and len(str(r.get('future_topics')).strip()) > 5]
+
+        # Normalize file names (replace spaces with underscores)
+        safe_speaker = speaker.replace(' ', '_').replace('.', '')
+        safe_event = f"{date_str}_{safe_speaker}"
+
+        # ─── TRIGGER COMPILER EXECUTION ───────────────────────────────────────
+        if self.gemini_key:
+            # Execute Generative AI compilation
+            success = self._run_generative_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
+            if success:
+                self.log_compilation(f"Successfully compiled '{speaker}' ({date_str}) using Gemini AI.")
+                return safe_event
+            else:
+                self.log_compilation(f"AI Ingestion failed for '{speaker}'. Falling back to local offline heuristics.")
+        
+        # Execute Offline Heuristics compilation
+        self._run_offline_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
+        self.log_compilation(f"Successfully compiled '{speaker}' ({date_str}) using Local Offline Heuristic Compiler.")
+        return safe_event
+
+    def _run_generative_ingest(self, safe_event: str, safe_speaker: str, speaker: str, date_str: str, 
+                               total: int, avg_rating: float, shu: Dict[str, int], 
+                               val: List[str], crit: List[str], req: List[str]) -> bool:
+        """Call Gemini API to generate professional interlinked markdown pages"""
+        prompt = f"""
+You are the AI Knowledge Base compiler. You are tasked with analyzing student survey feedback for an alumni guest lecture and updating a compounding Wiki.
+Session details:
+- Speaker Name: {speaker}
+- Lecture Date: {date_str}
+- Number of student forms: {total}
+- Average rating: {avg_rating}/5
+- Session Impact understanding: {json.dumps(shu)}
+
+Here are selected student text entries:
+- What aspects they found most valuable: {json.dumps(val[:30])}
+- Specific critiques/suggestions for improvements: {json.dumps(crit[:30])}
+- Topics requested for future sessions: {json.dumps(req[:30])}
+
+Your job is to generate the contents of THREE target wiki files:
+1. `events/{safe_event}.md`: Summarize this specific guest lecture event. Detail the positive aspects, the critiques, the ratings, and link back to `[[speakers/{safe_speaker}]]` and key concepts like `[[concepts/Machine_Learning]]` if applicable.
+2. `speakers/{safe_speaker}.md`: Create or update this speaker dossier. Summarize their performance, aggregate their ratings, note if they improved over previous sessions, and add a historical log.
+3. `concepts/New_Concept.md` / `suggestions/New_Critique.md`: Extract the dominant core topic request (e.g. `[[concepts/Artificial_Intelligence]]`) and the dominant critique category (e.g. `[[suggestions/More_Interaction]]`).
+
+Format your response strictly as a JSON object with this schema:
+{{
+  "event_page": "markdown text for events/{safe_event}.md",
+  "speaker_page": "markdown text for speakers/{safe_speaker}.md",
+  "new_concept_name": "Name_of_Concept",
+  "new_concept_page": "markdown text for concepts/Name_of_Concept.md",
+  "new_suggestion_name": "Name_of_Suggestion",
+  "new_suggestion_page": "markdown text for suggestions/Name_of_Suggestion.md"
+}}
+Ensure the markdown uses clean headings, bullet points, double-bracket wiki links (like [[speakers/{safe_speaker}]] and [[concepts/Machine_Learning]]), and feels extremely analytical.
+"""
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.gemini_key}"
+            req_data = json.dumps({
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"responseMimeType": "application/json"}
+            }).encode('utf-8')
+            
+            request = urllib.request.Request(
+                url, 
+                data=req_data, 
+                headers={'Content-Type': 'application/json'}
+            )
+            
+            with urllib.request.urlopen(request, timeout=30) as response:
+                res_body = json.loads(response.read().decode('utf-8'))
+                text_out = res_body['candidates'][0]['content']['parts'][0]['text']
+                data = json.loads(text_out)
+                
+                # Write event summary
+                self.write_wiki_file(f"events/{safe_event}.md", data['event_page'])
+                
+                # Update/Write speaker dossier
+                existing_speaker = self.read_wiki_file(f"speakers/{safe_speaker}.md")
+                speaker_content = data['speaker_page']
+                if existing_speaker:
+                    # Merge logic: Append latest performance to existing
+                    speaker_content = f"{existing_speaker}\n\n## Update: Session on {date_str}\n- Aggregated score for this lecture: {avg_rating}/5\n- Comments: {data.get('speaker_update_summary', 'Lecture processed successfully.')}"
+                self.write_wiki_file(f"speakers/{safe_speaker}.md", speaker_content)
+                
+                # Write concept and suggestion
+                c_name = data.get('new_concept_name')
+                if c_name:
+                    c_safe = c_name.replace(' ', '_')
+                    self.write_wiki_file(f"concepts/{c_safe}.md", data['new_concept_page'])
+                
+                s_name = data.get('new_suggestion_name')
+                if s_name:
+                    s_safe = s_name.replace(' ', '_')
+                    self.write_wiki_file(f"suggestions/{s_safe}.md", data['new_suggestion_page'])
+
+                # Update index.md and log.md
+                self._update_wiki_indexes(speaker, date_str, safe_event, safe_speaker, c_name, s_name)
+                return True
+        except Exception as e:
+            logger.error(f"Generative ingest failed: {str(e)}")
+            return False
+
+    def _run_offline_ingest(self, safe_event: str, safe_speaker: str, speaker: str, date_str: str, 
+                             total: int, avg_rating: float, shu: Dict[str, int], 
+                             val: List[str], crit: List[str], req: List[str]):
+        """Rules-based offline backup generator when no API keys are available"""
+        # 1. Event page
+        event_md = f"""# Guest Lecture Summary: {speaker}
+- **Date**: {date_str}
+- **Speaker**: [[speakers/{safe_speaker}]]
+- **Total Submissions**: {total} student responses
+- **Average Lecture Rating**: {avg_rating}/5
+
+## Overall Reception
+Students rated this lecture with an average score of {avg_rating}/5. 
+
+## Student Feedback Highlights
+### Valuable Aspects
+{chr(10).join([f'- {v}' for v in val[:5]]) if val else '*No valuable aspects recorded.*'}
+
+### Actionable Critiques & Suggestions
+{chr(10).join([f'- {c}' for c in crit[:5]]) if crit else '*No critiques recorded.*'}
+
+### Requested Future Focus Areas
+{chr(10).join([f'- {r}' for r in req[:5]]) if req else '*No requests recorded.*'}
+"""
+        self.write_wiki_file(f"events/{safe_event}.md", event_md)
+
+        # 2. Speaker Profile
+        existing_speaker = self.read_wiki_file(f"speakers/{safe_speaker}.md")
+        if existing_speaker:
+            speaker_md = f"""{existing_speaker}
+            
+## Update: Session on {date_str}
+- **Lecture Date**: {date_str}
+- **Aggregate Rating**: {avg_rating}/5
+- **Responses Analysed**: {total}
+"""
+        else:
+            speaker_md = f"""# Speaker Dossier: {speaker}
+- **Aggregate Historical Rating**: {avg_rating}/5
+- **Lectures Hosted**: 1
+
+## Historical Record
+- [[events/{safe_event}]] ({date_str}) - Rating: {avg_rating}/5 from {total} reviews.
+
+## Performance Overview
+This speaker has hosted 1 guest lecture. Students highlighted their valuable insights.
+"""
+        self.write_wiki_file(f"speakers/{safe_speaker}.md", speaker_md)
+
+        # 3. Simple topic extracting
+        c_name = None
+        if req:
+            c_name = req[0].strip().title()
+            c_safe = c_name.replace(' ', '_').replace('.', '')
+            c_md = f"""# Concept Hub: {c_name}
+
+This concept page compiles student feedback and interests about **{c_name}**.
+
+## Associated Events
+- [[events/{safe_event}]] ({date_str}) - Students requested this topic for future sessions.
+"""
+            self.write_wiki_file(f"concepts/{c_safe}.md", c_md)
+
+        # 4. Simple suggestion extracting
+        s_name = None
+        if crit:
+            s_name = "Duration_and_Pacing" if any(w in crit[0].lower() for w in ['time', 'duration', 'long', 'slow', 'pace']) else "Interaction_and_Q&A"
+            s_safe = s_name.replace(' ', '_')
+            s_md = f"""# Suggestion Category: {s_name.replace('_', ' ')}
+
+This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** in guest lectures.
+
+## Associated Incidents
+- [[events/{safe_event}]] ({date_str}) - Students suggested adjustments in this category.
+"""
+            self.write_wiki_file(f"suggestions/{s_safe}.md", s_md)
+
+        # 5. Update index & logs
+        self._update_wiki_indexes(speaker, date_str, safe_event, safe_speaker, c_name, s_name)
+
+    def _update_wiki_indexes(self, speaker: str, date_str: str, safe_event: str, safe_speaker: str, 
+                             concept: Optional[str], suggestion: Optional[str]):
+        """Add new entries into the central index.md and appends to log.md"""
+        # Update log.md
+        log_content = self.read_wiki_file('log.md') or "# Operation Log\n"
+        log_entry = f"## [{datetime.now().strftime('%Y-%m-%d')}] ingest | {speaker} ({date_str})\n- Compiled new event page [[events/{safe_event}]]\n- Updated speaker dossier [[speakers/{safe_speaker}]]\n"
+        if concept:
+            log_entry += f"- Created/Updated concept hub [[concepts/{concept.replace(' ', '_')}]]\n"
+        self.write_wiki_file('log.md', f"{log_content}\n{log_entry}")
+
+        # Update index.md
+        index_content = self.read_wiki_file('index.md') or "# AI Knowledge Wiki Index\n"
+        
+        # 1. Update Speaker list
+        sp_link = f"- [[speakers/{safe_speaker}]] - Profile for {speaker}."
+        if sp_link not in index_content:
+            if "*No speakers compiled yet.*" in index_content:
+                index_content = index_content.replace("*No speakers compiled yet.*", sp_link)
+            else:
+                index_content = index_content.replace("### 🎤 Speaker Profiles", f"### 🎤 Speaker Profiles\n{sp_link}")
+
+        # 2. Update Event list
+        ev_link = f"- [[events/{safe_event}]] - Session on {date_str}."
+        if ev_link not in index_content:
+            if "*No guest lectures compiled yet.*" in index_content:
+                index_content = index_content.replace("*No guest lectures compiled yet.*", ev_link)
+            else:
+                index_content = index_content.replace("### 📅 Guest Lectures", f"### 📅 Guest Lectures\n{ev_link}")
+
+        # 3. Update Concept list
+        if concept:
+            c_safe = concept.replace(' ', '_')
+            c_link = f"- [[concepts/{c_safe}]] - Student interest in {concept}."
+            if c_link not in index_content:
+                if "*No topics compiled yet.*" in index_content:
+                    index_content = index_content.replace("*No topics compiled yet.*", c_link)
+                else:
+                    index_content = index_content.replace("### 💡 Core Concept Hubs", f"### 💡 Core Concept Hubs\n{c_link}")
+
+        # 4. Update Suggestion list
+        if suggestion:
+            s_safe = suggestion.replace(' ', '_')
+            s_link = f"- [[suggestions/{s_safe}]] - Improvement track: {suggestion.replace('_', ' ')}."
+            if s_link not in index_content:
+                if "*No suggestions compiled yet.*" in index_content:
+                    index_content = index_content.replace("*No suggestions compiled yet.*", s_link)
+                else:
+                    index_content = index_content.replace("### 🛠️ Suggestion Categories", f"### 🛠️ Suggestion Categories\n{s_link}")
+
+        self.write_wiki_file('index.md', index_content)
+
+    # ─── BATCH INGESTION QUEUE (RPM THROTTLED) ───────────────────────────────
+
+    def start_batch_ingest_queue(self, sessions: List[Tuple[str, str]]) -> str:
+        """Start a background compilation queue processing sessions sequentially"""
+        global _ingest_progress, _ingest_logs
+        
+        with _queue_lock:
+            if _ingest_progress["status"] == "PROCESSING":
+                return "Queue already running."
+            
+            _ingest_logs = []
+            _ingest_progress = {
+                "status": "PROCESSING",
+                "current": 0,
+                "total": len(sessions),
+                "active_session": ""
+            }
+
+        def run_queue():
+            global _ingest_progress
+            logger.info(f"Starting Ingest queue for {len(sessions)} sessions...")
+            from backend.utils.db_helper import get_db_connection
+            
+            db_path = get_config()().DATABASE_PATH
+            
+            for idx, (speaker, date_str) in enumerate(sessions):
+                with _queue_lock:
+                    _ingest_progress["current"] = idx + 1
+                    _ingest_progress["active_session"] = f"{speaker} ({date_str})"
+                
+                try:
+                    # Fetch student responses for this session
+                    conn = get_db_connection(db_path)
+                    conn.row_factory = sqlite3.Row
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        SELECT * FROM dashboard_data 
+                        WHERE alumni_speaker_name = ? AND date_of_lecture = ?
+                    ''', (speaker, date_str))
+                    rows = [dict(r) for r in cursor.fetchall()]
+                    conn.close()
+
+                    if rows:
+                        self.compile_session(speaker, date_str, rows)
+                    else:
+                        self.log_compilation(f"Skipping: No database records found for '{speaker}' on '{date_str}'.")
+                except Exception as e:
+                    self.log_compilation(f"Error compiling session '{speaker}': {str(e)}")
+
+                # Throttling to respect Gemini 15 RPM free tier limits (sleep 4 seconds per session)
+                time.sleep(4.0)
+
+            with _queue_lock:
+                _ingest_progress["status"] = "COMPLETE"
+                _ingest_progress["active_session"] = ""
+            self.log_compilation("Ingestion queue completed successfully!")
+
+        threading.Thread(target=run_queue, daemon=True).start()
+        return "Queue started."
+
+    def log_compilation(self, text: str):
+        """Append log message to volatile queue log cache"""
+        global _ingest_logs
+        timestamp = datetime.now().strftime('%H:%M:%S')
+        msg = f"[{timestamp}] {text}"
+        logger.info(text)
+        _ingest_logs.append(msg)
+
+    def get_queue_status(self) -> Dict[str, Any]:
+        """Fetch current ingestion queue status and logs for the frontend console"""
+        global _ingest_progress, _ingest_logs
+        with _queue_lock:
+            return {
+                "progress": _ingest_progress.copy(),
+                "logs": list(_ingest_logs)
+            }
+
+    # ─── QUERY SYNTHESIZER (RAG ON WIKI) ──────────────────────────────────────
+
+    def query_wiki(self, question: str) -> Dict[str, Any]:
+        """
+        Query the compiled Wiki.
+        Performs vector-RAG, loads relevant files, and feeds them into the LLM context.
+        """
+        logger.info(f"RAG Wiki Query: '{question}'")
+        
+        # 1. Fetch relevant feedback hits via vector RAG
+        from backend.services.rag_service import RAGService
+        rag = RAGService()
+        similar_rows = rag.search_similar_feedback(question, limit=4)
+        
+        # 2. Extract matching entities (find matching markdown pages)
+        pages = self.list_wiki_pages()
+        matched_pages = []
+        
+        # Simple keyword matching on file paths
+        tokens = [t.lower() for t in question.split() if len(t) > 3]
+        for p in pages:
+            p_lower = p.lower()
+            if any(t in p_lower for t in tokens):
+                content = self.read_wiki_file(p)
+                if content:
+                    matched_pages.append((p, content))
+        
+        # Limit matched pages to 3 to prevent token overflow
+        matched_pages = matched_pages[:3]
+        
+        # ─── 3. SYNTESIZE RESPONSE ───────────────────────────────────────────
+        context_str = "=== RELEVANT WIKI PAGES ===\n"
+        for p_path, p_content in matched_pages:
+            context_str += f"File: [[{p_path}]]\n{p_content}\n\n"
+            
+        context_str += "=== STUDENT FEEDBACK DATA ===\n"
+        for r in similar_rows:
+            context_str += f"- Speaker: {r.get('alumni_speaker_name')}, Valuable: {r.get('aspect_most_valuable')}, Critique: {r.get('improvements_suggestions')}\n"
+
+        prompt = f"""
+You are the Alumni Feedback AI Observatory Assistant. Answer the user's question using the compiled Knowledge Base context below.
+Provide a premium, detailed, and highly analytical response.
+Refer to specific Wiki documents using standard WikiLinks (like [[speakers/John_Doe]] or [[events/2026-03-21_John_Doe]] or [[concepts/Machine_Learning]]) whenever you reference a topic, date, or speaker. This is vital so the user can click them!
+
+Context:
+{context_str}
+
+User Question: {question}
+"""
+        # Execute synthesis
+        if self.gemini_key:
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.gemini_key}"
+                req_data = json.dumps({
+                    "contents": [{"parts": [{"text": prompt}]}]
+                }).encode('utf-8')
+                
+                request = urllib.request.Request(url, data=req_data, headers={'Content-Type': 'application/json'})
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    res_body = json.loads(response.read().decode('utf-8'))
+                    synthesis = res_body['candidates'][0]['content']['parts'][0]['text']
+                    return {
+                        "answer": synthesis,
+                        "citations": [p[0] for p in matched_pages]
+                    }
+            except Exception as e:
+                logger.error(f"Generative Wiki query failed: {str(e)}")
+
+        # Offline heuristic fallback response
+        offline_answer = f"""### AI Assistant (Offline Heuristics)
+
+You asked: **"{question}"**
+
+I found the following associations in your Wiki database:
+- **Relevant Wiki Pages**: {', '.join([f'[[{p[0]}]]' for p in matched_pages]) if matched_pages else 'None'}
+- **Recent Student Feedback Matches**: {len(similar_rows)} feedback rows matched.
+
+*To activate complete synthesis, please enter a valid Google Gemini API Key in the settings.*
+"""
+        return {
+            "answer": offline_answer,
+            "citations": [p[0] for p in matched_pages]
+        }
+
+    # ─── WIKI LINTER (HEALTH CHECKS) ──────────────────────────────────────────
+
+    def run_wiki_linter(self) -> Dict[str, Any]:
+        """Scan the wiki files for broken wiki links, orphans, and empty files"""
+        pages = self.list_wiki_pages()
+        
+        broken_links = []
+        orphan_pages = []
+        empty_files = []
+        
+        # Trace link map
+        incoming_links = {p: [] for p in pages}
+        
+        # Regex to find links: [[file_name]]
+        link_pattern = re.compile(r'\[\[([^\]|]+)(?:\|[^\]]+)?\]\]')
+        
+        for p in pages:
+            content = self.read_wiki_file(p)
+            if not content or not content.strip():
+                empty_files.append(p)
+                continue
+            
+            # Find links
+            links = link_pattern.findall(content)
+            for link in links:
+                link = link.strip()
+                # Try relative paths
+                resolved = None
+                
+                # Check direct match
+                if link in pages:
+                    resolved = link
+                elif f"{link}.md" in pages:
+                    resolved = f"{link}.md"
+                else:
+                    # Check in folders
+                    for folder in ['events', 'speakers', 'concepts', 'suggestions']:
+                        check_path = f"{folder}/{link}".replace('//', '/')
+                        if check_path in pages:
+                            resolved = check_path
+                            break
+                        elif f"{check_path}.md" in pages:
+                            resolved = f"{check_path}.md"
+                            break
+                            
+                if resolved:
+                    incoming_links[resolved].append(p)
+                else:
+                    # Link is broken
+                    broken_links.append({
+                        "source_file": p,
+                        "broken_link": link
+                    })
+                    
+        # Find orphans (excluding index.md, log.md, and schema.md)
+        for p, sources in incoming_links.items():
+            if not sources and p not in ['index.md', 'log.md', 'schema.md']:
+                orphan_pages.append(p)
+                
+        return {
+            "status": "COMPLETED",
+            "total_pages": len(pages),
+            "broken_links": broken_links,
+            "orphan_pages": orphan_pages,
+            "empty_files": empty_files
+        }

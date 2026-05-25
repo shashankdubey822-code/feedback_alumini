@@ -21,3 +21,5 @@ torch==2.2.2
 sentence-transformers==3.0.1
 keybert==0.8.5
 bertopic==0.16.4
+supabase==2.4.0
+

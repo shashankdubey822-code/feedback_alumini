@@ -207,7 +207,29 @@
             </svg>
             <span>Speakers</span>
           </button>
+          <button
+            class="nav-item"
+            data-section="wiki-section"
+            id="nav-wiki"
+            title="AI Knowledge Wiki"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+            </svg>
+            <span>AI Knowledge Wiki</span>
+          </button>
         </div>
+
 
         <div class="sidebar-footer">
           <button class="nav-item" data-section="upload-section" id="btn-upload-data" title="Upload Past Data">
@@ -542,7 +564,210 @@
           ></div>
         </section>
 
+        <!-- ███ AI KNOWLEDGE WIKI SECTION ███ -->
+        <section class="dashboard-section" id="wiki-section">
+          <div class="section-header" style="justify-content: space-between; align-items: center;">
+            <h2 class="section-title">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+              </svg>
+              AI Knowledge Wiki
+            </h2>
+            
+            <!-- Wiki Subtabs -->
+            <div class="wiki-subtabs" style="display: flex; gap: 8px;">
+              <button class="wiki-subtab active" data-tab="wiki-tab-explore">Explorer &amp; Graph</button>
+              <button class="wiki-subtab" data-tab="wiki-tab-ingest">Compile Data</button>
+              <button class="wiki-subtab" data-tab="wiki-tab-settings">Wiki Settings</button>
+            </div>
+          </div>
+
+          <!-- SUBTAB 1: EXPLORER AND GRAPH (THE NEON OBSERVATORY) -->
+          <div class="wiki-tab-content active-content" id="wiki-tab-explore">
+            <div class="wiki-grid-layout" style="display: grid; grid-template-columns: 260px 1fr 340px; gap: 20px; min-height: 600px; margin-top: 16px;">
+              
+              <!-- Left Sidebar: Obsidian-style file tree -->
+              <div class="wiki-explorer-card" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; height: 600px;">
+                <h4 style="margin: 0 0 12px; font-size: 13px; text-transform: uppercase; color: #a855f7; letter-spacing: 1px; font-weight: 700;">Wiki Explorer</h4>
+                <input type="text" id="wiki-search-box" placeholder="Search pages..." style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #fff; font-size: 12px; outline: none; margin-bottom: 12px; box-sizing: border-box;" />
+                <div id="wiki-tree-container" style="flex: 1; overflow-y: auto; font-size: 13px; line-height: 1.6;">
+                  <!-- Dynamically populated page hierarchy -->
+                  <div style="color: #8b8b9e; text-align: center; padding: 20px;">Initializing tree...</div>
+                </div>
+              </div>
+
+              <!-- Center Reading Panel: Obsidian Reader -->
+              <div class="wiki-reader-card" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; height: 600px; box-sizing: border-box; position: relative;">
+                
+                <!-- Card HeaderCap (Stitch design system) -->
+                <div style="position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, #00ffff, #bf5fff); border-top-left-radius: 12px; border-top-right-radius: 12px;"></div>
+                
+                <div class="wiki-reader-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.07); padding-bottom: 12px; margin-bottom: 16px;">
+                  <h3 id="wiki-page-title" style="margin: 0; font-size: 20px; color: #fff; font-weight: 600;">Welcome.md</h3>
+                  <div style="display: flex; gap: 8px;">
+                    <button id="btn-wiki-edit" class="btn-clear" style="padding: 6px 12px; font-size: 12px; background: rgba(255,255,255,0.04); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); color: #8b8b9e; cursor: pointer; display: none;">Edit Page</button>
+                    <span id="wiki-badge-category" class="file-badge" style="background: rgba(0, 255, 255, 0.1); color: #00ffff; border: 1px solid rgba(0, 255, 255, 0.2);">System</span>
+                  </div>
+                </div>
+                
+                <!-- Markdown Content Viewport -->
+                <div id="wiki-page-content" class="wiki-markdown-body" style="flex: 1; overflow-y: auto; color: #d1d5db; line-height: 1.7; font-size: 14px; padding-right: 8px;">
+                  <!-- Rendered markdown/HTML -->
+                  <p>Select a file from the explorer to begin reading, or compile database sessions in the compilation manager.</p>
+                </div>
+                
+                <!-- Document Footer (Backlinks) -->
+                <div id="wiki-backlinks-panel" style="border-top: 1px solid rgba(255,255,255,0.07); padding-top: 12px; margin-top: 12px; display: none;">
+                  <h4 style="margin: 0 0 6px; font-size: 11px; text-transform: uppercase; color: #8b8b9e; font-weight: 600; letter-spacing: 0.5px;">Linked Backlinks</h4>
+                  <div id="wiki-backlinks-list" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+                </div>
+              </div>
+
+              <!-- Right Panel: Graph & RAG Chat -->
+              <div style="display: flex; flex-direction: column; gap: 20px; height: 600px;">
+                
+                <!-- Top Right: Force Graph visualizer -->
+                <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 16px; flex: 1; display: flex; flex-direction: column; min-height: 240px; box-sizing: border-box;">
+                  <h4 style="margin: 0 0 8px; font-size: 12px; text-transform: uppercase; color: #00ffff; letter-spacing: 0.5px; font-weight: 700;">Knowledge Graph Connections</h4>
+                  <div style="flex: 1; position: relative; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.03); overflow: hidden;">
+                    <canvas id="wiki-graph-canvas" style="display: block; width: 100%; height: 100%;"></canvas>
+                    <div style="position: absolute; bottom: 8px; left: 8px; font-size: 9px; color: #8b8b9e; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 4px;">Drag nodes to explore</div>
+                  </div>
+                </div>
+
+                <!-- Bottom Right: Wiki RAG Chat -->
+                <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 16px; flex: 1.2; display: flex; flex-direction: column; min-height: 280px; box-sizing: border-box;">
+                  <h4 style="margin: 0 0 8px; font-size: 12px; text-transform: uppercase; color: #bf5fff; letter-spacing: 0.5px; font-weight: 700;">Wiki RAG Assistant</h4>
+                  <div id="wiki-chat-box" style="flex: 1; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 8px; border: 1px solid rgba(255,255,255,0.03); margin-bottom: 8px; font-size: 12px; display: flex; flex-direction: column; gap: 8px; max-height: 190px;">
+                    <div class="chat-msg system" style="color: #8b8b9e; font-style: italic;">Ask questions regarding speakers, lectures, and improvement recommendations compiled in your wiki.</div>
+                  </div>
+                  <div style="display: flex; gap: 8px;">
+                    <input type="text" id="wiki-chat-input" placeholder="Ask the Wiki..." style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.4); color: #fff; font-size: 13px; outline: none;" />
+                    <button id="btn-wiki-chat-send" style="padding: 10px 16px; border-radius: 6px; background: linear-gradient(135deg, #6366f1, #a855f7); color: #fff; border: none; font-weight: 600; cursor: pointer; font-size: 13px;">Send</button>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+
+          <!-- SUBTAB 2: COMPILATION MANAGER (INGEST / QUEUE) -->
+          <div class="wiki-tab-content" id="wiki-tab-ingest" style="display: none; padding: 16px 0;">
+            <div style="display: grid; grid-template-columns: 1fr 400px; gap: 20px; min-height: 500px;">
+              
+              <!-- Sessions List -->
+              <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 20px; display: flex; flex-direction: column;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                  <div>
+                    <h3 style="margin:0; font-size: 16px; color: #fff;">Lecture Compilation Manager</h3>
+                    <p style="margin:4px 0 0; font-size:12px; color:#8b8b9e;">Select lecture sessions from the SQL database to compile into compounding Wiki Markdown files.</p>
+                  </div>
+                  <div style="display:flex; gap: 8px;">
+                    <button id="btn-wiki-select-all" class="browse-btn" style="padding: 6px 12px; font-size:12px; border-radius: 6px; cursor:pointer;">Select All</button>
+                    <button id="btn-wiki-compile-start" style="padding: 6px 16px; border-radius: 6px; background: #00ffff; color: #000; border: none; font-weight: bold; cursor: pointer; font-size: 12px;">Compile Selected</button>
+                  </div>
+                </div>
+
+                <div style="flex: 1; overflow-y: auto; max-height: 400px; border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; background: rgba(0,0,0,0.15);">
+                  <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;" id="wiki-sessions-table">
+                    <thead>
+                      <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02);">
+                        <th style="padding: 12px; width: 40px;">Select</th>
+                        <th style="padding: 12px;">Speaker Name</th>
+                        <th style="padding: 12px; width: 120px;">Lecture Date</th>
+                        <th style="padding: 12px; width: 80px; text-align: center;">Responses</th>
+                        <th style="padding: 12px; width: 120px; text-align: center;">Wiki Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="wiki-sessions-list-body">
+                      <!-- Dynamically populated list of sessions -->
+                      <tr>
+                        <td colspan="5" style="padding: 20px; text-align: center; color: #8b8b9e;">Querying database sessions...</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Terminal Logging & Progress -->
+              <div style="display: flex; flex-direction: column; gap: 20px;">
+                
+                <!-- Progress Box -->
+                <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 20px;">
+                  <h4 style="margin:0 0 12px; font-size:13px; text-transform:uppercase; color:#00ffff; letter-spacing:0.5px;">Compile Progress</h4>
+                  <div id="wiki-progress-empty" style="color: #8b8b9e; font-size: 13px; text-align: center; padding: 10px 0;">No active compilation queue.</div>
+                  
+                  <div id="wiki-progress-container" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; color: #fff; margin-bottom: 6px;">
+                      <span id="wiki-progress-status">COMPILING...</span>
+                      <span id="wiki-progress-ratio">0 / 0</span>
+                    </div>
+                    <div class="progress-bar" style="height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+                      <div id="wiki-progress-bar-fill" style="width: 0%; height: 100%; background: #00ffff; border-radius: 4px; transition: width 0.3s ease;"></div>
+                    </div>
+                    <div style="font-size: 12px; color: #8b8b9e;">
+                      Active: <span id="wiki-progress-active-file" style="color:#fff; font-family: monospace;">-</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Logs Box -->
+                <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 20px; flex: 1; display: flex; flex-direction: column; min-height: 280px; box-sizing: border-box;">
+                  <h4 style="margin:0 0 10px; font-size:13px; text-transform:uppercase; color:#bf5fff; letter-spacing:0.5px;">Compiler Console Logs</h4>
+                  <div id="wiki-console-logs" style="flex: 1; background: #000; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); padding: 12px; font-family: monospace; font-size: 11px; color: #34d399; overflow-y: auto; max-height: 240px; line-height: 1.5; white-space: pre-wrap;">
+                    [SYSTEM] Console ready.
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+
+          <!-- SUBTAB 3: CONFIGURATION / SETTINGS -->
+          <div class="wiki-tab-content" id="wiki-tab-settings" style="display: none; padding: 16px 0;">
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 30px; max-width: 600px; margin: 0 auto; position: relative;">
+              <!-- Header Cap -->
+              <div style="position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, #bf5fff, #ff716c); border-top-left-radius: 12px; border-top-right-radius: 12px;"></div>
+              
+              <h3 style="margin:0 0 6px; font-size: 18px; color: #fff; font-weight: 600;">Wiki Keys &amp; Storage Configuration</h3>
+              <p style="margin:0 0 24px; font-size: 13px; color: #8b8b9e;">Provide API keys to unlock advanced generative AI and persistent Supabase storage syncing.</p>
+
+              <div style="display: grid; gap: 16px;">
+                <div>
+                  <label style="display:block; font-size: 12px; color: #8b8b9e; margin-bottom: 6px; font-weight: 500;">Google Gemini API Key (AI Studio)</label>
+                  <input type="password" id="cfg-gemini-key" placeholder="Enter Gemini API Key..." class="filter-input" style="width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #fff;" />
+                  <p style="margin: 4px 0 0; font-size: 11px; color: #8b8b9e;">Runs the advanced Wiki Compiler and Chat generator. Completely free-of-charge.</p>
+                </div>
+
+                <div style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 16px; margin-top: 8px;">
+                  <h4 style="margin: 0 0 12px; font-size: 13px; color: #fff; font-weight: 600;">Supabase Storage Sync (Recommended for Hugging Face)</h4>
+                  
+                  <div style="display: grid; gap: 12px; margin-bottom: 12px;">
+                    <div>
+                      <label style="display:block; font-size: 11px; color: #8b8b9e; margin-bottom: 4px;">Supabase Project URL</label>
+                      <input type="text" id="cfg-supabase-url" placeholder="https://your-project.supabase.co" class="filter-input" style="width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #fff;" />
+                    </div>
+                    <div>
+                      <label style="display:block; font-size: 11px; color: #8b8b9e; margin-bottom: 4px;">Supabase Service Role Key (or Anon Key)</label>
+                      <input type="password" id="cfg-supabase-key" placeholder="Enter Supabase API Key..." class="filter-input" style="width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #fff;" />
+                    </div>
+                  </div>
+                  <p style="margin: 4px 0 0; font-size: 11px; color: #8b8b9e;">Saves Wiki Markdown pages to your Supabase bucket so they compound forever across cloud container restarts.</p>
+                </div>
+
+                <button id="btn-save-cfg" class="browse-btn" style="margin-top: 12px; padding: 12px; background: linear-gradient(135deg, #00ffff, #bf5fff); color: #000; border: none; font-weight: 700; cursor: pointer; border-radius: 6px;">Save Configuration</button>
+                <div id="cfg-status-msg" style="display:none; padding: 10px; border-radius: 6px; font-size:12px; text-align:center; font-weight:600;"></div>
+              </div>
+            </div>
+          </div>
+
+        </section>
+
       </main>
+
 
       <!-- ███ DATA MODAL ███ -->
       <div id="data-modal" class="modal-overlay hidden">
@@ -669,5 +894,7 @@
 
     <script src="/static/app.js"></script>
     <script src="/static/js/dl.js"></script>
+    <script src="/static/js/wiki.js"></script>
   </body>
 </html>
+
