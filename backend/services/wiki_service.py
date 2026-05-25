@@ -258,7 +258,7 @@ Format your response strictly as a JSON object with this schema:
 Ensure the markdown uses clean headings, bullet points, double-bracket wiki links (like [[speakers/{safe_speaker}]] and [[concepts/Machine_Learning]]), and feels extremely analytical.
 """
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.gemini_key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.gemini_key}"
             req_data = json.dumps({
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {"responseMimeType": "application/json"}
@@ -564,7 +564,7 @@ User Question: {question}
         # Execute synthesis
         if self.gemini_key:
             try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.gemini_key}"
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.gemini_key}"
                 req_data = json.dumps({
                     "contents": [{"parts": [{"text": prompt}]}]
                 }).encode('utf-8')
