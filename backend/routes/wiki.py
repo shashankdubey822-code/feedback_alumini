@@ -39,6 +39,7 @@ def get_wiki_status():
         
         return jsonify({
             'initialized': is_initialized,
+            'gemini_configured': bool(service.gemini_key),
             'total_pages': len(pages),
             'counts': {
                 'speakers': len(speakers),

@@ -216,13 +216,21 @@ const Wiki = {
     // ─── DATA LOADING ────────────────────────────────────────────────────────
 
     loadWikiStatus() {
+        const self = this;
         fetch('/api/v1/wiki/status')
             .then(res => res.json())
             .then(data => {
                 if (!data.initialized) {
                     // Auto-initialize if empty
                     fetch('/api/v1/wiki/initialize', { method: 'POST' })
-                        .then(() => this.loadWikiPages());
+                        .then(() => self.loadWikiPages());
+                }
+                
+                // Show API Key Status Pop-up
+                if (data.gemini_configured) {
+                    self.showConfigMsg("Google Gemini API is configured and ready!", "success");
+                } else {
+                    self.showConfigMsg("Gemini API key is missing. Add it in Wiki Settings.", "error");
                 }
             })
             .catch(err => console.error("Error loading wiki status:", err));
