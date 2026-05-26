@@ -54,6 +54,7 @@ const Wiki = {
         this.initGraphSimulation();
         this.loadWikiStatus();
         this.loadSessionsList();
+        this.loadSuggestedQuestions();
     },
 
     cacheElements() {
@@ -176,6 +177,29 @@ const Wiki = {
                 }
             });
         }
+
+        // Click to expand RAG Chat panel
+        const ragContainer = document.getElementById('wiki-rag-container');
+        if (ragContainer) {
+            ragContainer.addEventListener('click', function(e) {
+                e.stopPropagation(); // Avoid immediately triggering document click
+                if (!ragContainer.classList.contains('expanded')) {
+                    ragContainer.classList.add('expanded');
+                    if (self.elements.chatInput) {
+                        self.elements.chatInput.focus();
+                    }
+                }
+            });
+        }
+
+        // Click outside RAG Chat panel to collapse
+        document.addEventListener('click', function(e) {
+            if (ragContainer && ragContainer.classList.contains('expanded')) {
+                if (!ragContainer.contains(e.target)) {
+                    ragContainer.classList.remove('expanded');
+                }
+            }
+        });
 
         // Wiki link delegates in document reader
         this.elements.pageContent.addEventListener('click', function(e) {
@@ -483,6 +507,7 @@ const Wiki = {
                             clearInterval(self.ingestInterval);
                             self.loadSessionsList();
                             self.loadWikiPages();
+                            self.loadSuggestedQuestions();
                         }
                     }
                 })
@@ -571,6 +596,48 @@ const Wiki = {
         this.elements.chatBox.appendChild(div);
         this.elements.chatBox.scrollTop = this.elements.chatBox.scrollHeight;
         return div;
+    },
+
+    loadSuggestedQuestions() {
+        const container = document.getElementById('wiki-suggested-questions');
+        if (!container) return;
+        
+        container.innerHTML = '<div style="color: var(--text-muted); font-style: italic; font-size: 11px;">Generating smart options...</div>';
+        
+        const self = this;
+        fetch('/api/v1/wiki/suggest-questions')
+            .then(res => res.json())
+            .then(data => {
+                container.innerHTML = '';
+                const questions = data.questions || [];
+                if (questions.length === 0) {
+                    container.innerHTML = '<div style="color: var(--text-muted); font-style: italic; font-size: 11px;">No options available.</div>';
+                    return;
+                }
+                questions.forEach(q => {
+                    const chip = document.createElement('div');
+                    chip.className = 'wiki-suggest-chip';
+                    
+                    // Format WikiLink labels if present in question string
+                    let label = q;
+                    if (q.includes('[[') && q.includes(']]')) {
+                        label = q.replace(/\[\[.*?\/([^\]]+)\]\]/g, '$1').replace(/_/g, ' ');
+                    }
+                    
+                    chip.innerText = label;
+                    chip.title = q;
+                    chip.addEventListener('click', function(e) {
+                        e.stopPropagation(); // Stop parent click from expanding/collapsing container
+                        self.elements.chatInput.value = q;
+                        self.sendChatMessage();
+                    });
+                    container.appendChild(chip);
+                });
+            })
+            .catch(err => {
+                console.error("Error loading suggested questions:", err);
+                container.innerHTML = '';
+            });
     },
 
     // ─── CONFIGURATION MANAGEMENT ────────────────────────────────────────────

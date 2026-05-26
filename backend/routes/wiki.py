@@ -224,6 +224,19 @@ def execute_wiki_query():
         return jsonify({'error': str(e)}), 500
 
 
+@wiki_bp.route('/suggest-questions', methods=['GET'])
+@log_endpoint_access
+def get_suggest_questions():
+    """Retrieve dynamic query suggestion questions from DB and Gemini"""
+    try:
+        service = _get_wiki_service()
+        questions = service.suggest_questions()
+        return jsonify({'questions': questions}), 200
+    except Exception as e:
+        logger.error(f"Error getting suggestions: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 @wiki_bp.route('/lint', methods=['GET'])
 @log_endpoint_access
 def run_wiki_lint():

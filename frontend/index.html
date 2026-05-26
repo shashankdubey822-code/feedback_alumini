@@ -625,29 +625,33 @@
               </div>
 
               <!-- Right Panel: Graph & RAG Chat -->
-              <div style="display: flex; flex-direction: column; gap: 20px; height: 600px;">
+              <div id="wiki-right-panel" style="display: flex; flex-direction: column; gap: 20px; height: 600px; position: relative;">
                 
                 <!-- Top Right: Force Graph visualizer -->
-                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; flex: 1; display: flex; flex-direction: column; min-height: 240px; box-sizing: border-box;">
+                <div id="wiki-graph-container" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; flex: 1; display: flex; flex-direction: column; min-height: 240px; box-sizing: border-box; transition: all 0.3s ease;">
                   <h4 style="margin: 0 0 8px; font-size: 12px; text-transform: uppercase; color: var(--cyan); letter-spacing: 0.5px; font-weight: 700;">Knowledge Graph Connections</h4>
                   <div style="flex: 1; position: relative; background: var(--bg-input); border-radius: 8px; border: 1px solid var(--bg-card); overflow: hidden;">
                     <canvas id="wiki-graph-canvas" style="display: block; width: 100%; height: 100%;"></canvas>
                     <div style="position: absolute; bottom: 8px; left: 8px; font-size: 9px; color: var(--text-muted); background: var(--bg-glass); padding: 2px 6px; border-radius: 4px;">Drag nodes to explore</div>
                   </div>
                 </div>
-
+ 
                 <!-- Bottom Right: Wiki RAG Chat -->
-                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; flex: 1.2; display: flex; flex-direction: column; min-height: 280px; box-sizing: border-box;">
+                <div id="wiki-rag-container" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; flex: 1.2; display: flex; flex-direction: column; min-height: 280px; box-sizing: border-box; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative;">
                   <h4 style="margin: 0 0 8px; font-size: 12px; text-transform: uppercase; color: var(--purple); letter-spacing: 0.5px; font-weight: 700;">Wiki RAG Assistant</h4>
-                  <div id="wiki-chat-box" style="flex: 1; overflow-y: auto; background: var(--bg-input); border-radius: 8px; padding: 8px; border: 1px solid var(--bg-card); margin-bottom: 8px; font-size: 12px; display: flex; flex-direction: column; gap: 8px; max-height: 190px;">
+                  
+                  <!-- Dynamic AI Suggested Questions -->
+                  <div id="wiki-suggested-questions" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; font-size: 11px;"></div>
+
+                  <div id="wiki-chat-box" style="flex: 1; overflow-y: auto; background: var(--bg-input); border-radius: 8px; padding: 8px; border: 1px solid var(--bg-card); margin-bottom: 8px; font-size: 12px; display: flex; flex-direction: column; gap: 8px; max-height: 190px; transition: max-height 0.3s ease;">
                     <div class="chat-msg system" style="color: var(--text-muted); font-style: italic;">Ask questions regarding speakers, lectures, and improvement recommendations compiled in your wiki.</div>
                   </div>
                   <div style="display: flex; gap: 8px;">
                     <input type="text" id="wiki-chat-input" placeholder="Ask the Wiki..." style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-input); color: var(--text-primary); font-size: 13px; outline: none;" />
-                    <button id="btn-wiki-chat-send" style="padding: 10px 16px; border-radius: 6px; background: linear-gradient(135deg, #6366f1, #a855f7); color: var(--text-primary); border: none; font-weight: 600; cursor: pointer; font-size: 13px;">Send</button>
+                    <button id="btn-wiki-chat-send" style="padding: 10px 16px; border-radius: 6px; background: linear-gradient(135deg, #6366f1, #a855f7); color: #fff; border: none; font-weight: 600; cursor: pointer; font-size: 13px;">Send</button>
                   </div>
                 </div>
-
+ 
               </div>
 
             </div>

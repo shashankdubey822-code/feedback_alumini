@@ -684,3 +684,91 @@ I found the following associations in your Wiki database:
             "orphan_pages": orphan_pages,
             "empty_files": empty_files
         }
+
+    def suggest_questions(self) -> List[str]:
+        """Dynamically generate analytical query suggestions using SQLite metadata and optionally Gemini"""
+        config = get_config()()
+        db_path = config.DATABASE_PATH
+        
+        # 1. Fetch metadata from local DB
+        speakers = []
+        topics = []
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Fetch distinct speakers
+            cursor.execute('''
+                SELECT alumni_speaker_name, COUNT(*) as cnt 
+                FROM dashboard_data 
+                WHERE alumni_speaker_name IS NOT NULL AND alumni_speaker_name != ''
+                GROUP BY alumni_speaker_name 
+                ORDER BY cnt DESC 
+                LIMIT 5
+            ''')
+            speakers = [r[0] for r in cursor.fetchall()]
+            
+            # Fetch common topics
+            cursor.execute('''
+                SELECT future_topics 
+                FROM dashboard_data 
+                WHERE future_topics IS NOT NULL AND future_topics != '' 
+                LIMIT 15
+            ''')
+            topics = [r[0] for r in cursor.fetchall() if len(r[0].strip()) > 3]
+            
+            conn.close()
+        except Exception as e:
+            logger.error(f"Failed to query metadata for suggestions: {str(e)}")
+            
+        # Default offline fallback questions based on actual database entities
+        fallback_questions = [
+            "What is the overall sentiment of guest lectures?",
+            "Who are the top rated speakers and what makes them successful?"
+        ]
+        if speakers:
+            fallback_questions.append(f"What was the most valuable aspect of [[speakers/{speakers[0].replace(' ', '_')}]]'s lecture?")
+            if len(speakers) > 1:
+                fallback_questions.append(f"Compare the student feedback for [[speakers/{speakers[0].replace(' ', '_')}]] and [[speakers/{speakers[1].replace(' ', '_')}]]")
+            else:
+                fallback_questions.append(f"What were the key improvement areas suggested for [[speakers/{speakers[0].replace(' ', '_')}]]?")
+        
+        if not self.gemini_key:
+            return fallback_questions
+            
+        # 2. Try generating via Gemini using the metadata context
+        try:
+            prompt = f"""
+You are the Alumni Feedback AI assistant. Generate exactly 4 distinct, analytical, and highly specific suggested questions that a university administrator might want to ask about our guest lecture feedback database.
+Use the actual speakers and topics list below to construct these questions.
+Format your output as a strict JSON list of strings (no markdown fences, just the JSON).
+
+Metadata:
+- Speakers: {json.dumps(speakers)}
+- Sample Student Topic Requests: {json.dumps(topics[:10])}
+
+Example Output:
+[
+  "What improvements were suggested for SpeakerName's session?",
+  "Did students find the Resume Writing topic valuable?",
+  "What is the historical performance trend of SpeakerName?"
+]
+"""
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.gemini_key}"
+            req_data = json.dumps({
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"responseMimeType": "application/json"}
+            }).encode('utf-8')
+            
+            request = urllib.request.Request(url, data=req_data, headers={'Content-Type': 'application/json'})
+            with urllib.request.urlopen(request, timeout=10) as response:
+                res_body = json.loads(response.read().decode('utf-8'))
+                text_out = res_body['candidates'][0]['content']['parts'][0]['text']
+                questions = json.loads(text_out)
+                if isinstance(questions, list) and len(questions) >= 3:
+                    return [str(q) for q in questions]
+        except Exception as e:
+            logger.error(f"Generative question suggestion failed: {str(e)}")
+            
+        return fallback_questions
+
