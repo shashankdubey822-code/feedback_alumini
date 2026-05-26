@@ -2247,39 +2247,53 @@ class SmartCalendar {
                     const formId = btn.dataset.form;
                     const eventId = btn.dataset.eventId;
                     const speakerName = btn.dataset.speaker || 'this form';
-                    if (!formId && !eventId) return;
 
-                    // Custom confirmation
+                    console.log('[CLOSE] clicked - formId:', formId, '| eventId:', eventId);
+
+                    // Sanitize Python None → "null" string
+                    const cleanFormId = (formId && formId !== 'null' && formId !== 'None') ? formId : null;
+                    const cleanEventId = (eventId && eventId !== 'null' && eventId !== 'None') ? eventId : null;
+
+                    console.log('[CLOSE] clean values - cleanFormId:', cleanFormId, '| cleanEventId:', cleanEventId);
+
+                    if (!cleanFormId && !cleanEventId) {
+                        console.error('[CLOSE] ABORT: both form_id and event_id are null/missing!');
+                        alert('Error: Cannot identify which form to close. Please refresh the page.');
+                        return;
+                    }
+
                     const confirmed = window.confirm(
-                        `⚠️ Close "${speakerName}" form?\n\nThis will immediately stop accepting new responses. Students currently filling the form will NOT be able to submit.\n\nAre you sure?`
+                        `⚠️ Close "${speakerName}" form?\n\nThis will immediately stop accepting new responses.\n\nAre you sure?`
                     );
                     if (!confirmed) return;
 
-                    const originalText = btn.textContent;
                     btn.textContent = 'Closing...';
                     btn.disabled = true;
                     btn.style.opacity = '0.6';
                     try {
-                        // Python None becomes string "null" in template literals — sanitize it
-                        const cleanFormId = (formId && formId !== 'null' && formId !== 'None') ? formId : null;
-                        const cleanEventId = (eventId && eventId !== 'null' && eventId !== 'None') ? eventId : null;
+                        const payload = { form_id: cleanFormId, event_id: cleanEventId };
+                        console.log('[CLOSE] sending payload:', JSON.stringify(payload));
                         const r = await fetch(`${API_BASE}/api/admin/close-form`, {
                             method: 'POST', headers: authHeaders(),
-                            body: JSON.stringify({ form_id: cleanFormId, event_id: cleanEventId })
+                            body: JSON.stringify(payload)
                         });
                         const d = await r.json();
+                        console.log('[CLOSE] response:', r.status, d);
                         const isSuccess = d.status === 'closed' || (d.message && d.message.toLowerCase().includes('closed'));
                         if (isSuccess) {
                             btn.textContent = '✓ Closed!';
                             btn.style.background = 'rgba(34,197,94,0.15)';
                             btn.style.color = '#4ade80';
                             btn.style.borderColor = 'rgba(34,197,94,0.3)';
-                            setTimeout(() => loadEvents(), 1500); // Reload list to update badge
+                            setTimeout(() => loadEvents(), 1500);
                         } else {
+                            console.error('[CLOSE] server returned failure:', d);
                             btn.textContent = 'Error';
+                            alert('Close failed: ' + (d.error || d.message || 'Unknown error'));
                             setTimeout(() => { btn.textContent = 'Close'; btn.disabled = false; btn.style.opacity = '1'; }, 2000);
                         }
                     } catch (e) {
+                        console.error('[CLOSE] fetch exception:', e);
                         btn.textContent = 'Error';
                         setTimeout(() => { btn.textContent = 'Close'; btn.disabled = false; btn.style.opacity = '1'; }, 2000);
                     }
