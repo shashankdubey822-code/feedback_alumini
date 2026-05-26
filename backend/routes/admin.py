@@ -535,39 +535,51 @@ def close_form():
     try:
         data = request.json
         form_id = data.get('form_id')
+        event_id = data.get('event_id')
 
-        if not form_id:
-            return jsonify({'error': 'Form ID is required'}), 400
+        if not form_id and not event_id:
+            return jsonify({'error': 'form_id or event_id is required'}), 400
 
         db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
         from backend.utils.db_helper import get_db_connection
         conn = get_db_connection(db_path)
         cursor = conn.cursor()
 
-        # Update the status to 'closed'
-        cursor.execute("UPDATE events SET status = 'closed' WHERE form_id = ?", (form_id,))
+        # If only event_id given, look up the real form_id from DB
+        if not form_id and event_id:
+            cursor.execute("SELECT form_id FROM events WHERE id = ?", (event_id,))
+            row = cursor.fetchone()
+            if row:
+                form_id = row[0]
+
+        # Update status — match by form_id if available, else fallback to event id
+        if form_id:
+            cursor.execute("UPDATE events SET status = 'closed' WHERE form_id = ?", (form_id,))
+        else:
+            cursor.execute("UPDATE events SET status = 'closed' WHERE id = ?", (event_id,))
+
         if cursor.rowcount == 0:
             conn.close()
             return jsonify({'error': 'Form not found'}), 404
 
         conn.commit()
         conn.close()
-        
-        # ACTUALLY CALL GOOGLE APPS SCRIPT TO ENFORCE STRICT CLOSURE
-        apps_script_url = os.getenv('APPS_SCRIPT_URL')
-        if apps_script_url:
-            secret = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
-            payload = {
-                'secret': secret,
-                'action': 'close_form',
-                'form_id': form_id
-            }
-            # Fire and forget closure command - we don't fail the API if Google complains
-            success, _, err = _call_google_apps_script(apps_script_url, payload)
-            if not success:
-                logger.warning(f"Google Script Form Closure failed for {form_id}: {err}")
 
-        logger.info(f"Form '{form_id}' successfully closed by admin.")
+        # Call Google Apps Script to strictly lock the Google Form
+        if form_id:
+            apps_script_url = os.getenv('APPS_SCRIPT_URL')
+            if apps_script_url:
+                secret = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
+                payload = {
+                    'secret': secret,
+                    'action': 'close_form',
+                    'form_id': form_id
+                }
+                success, _, err = _call_google_apps_script(apps_script_url, payload)
+                if not success:
+                    logger.warning(f"Google Script Form Closure failed for {form_id}: {err}")
+
+        logger.info(f"Form '{form_id or event_id}' successfully closed by admin.")
         return jsonify({'message': 'Form closed successfully (Google Form locked)', 'status': 'closed'})
 
     except Exception as e:

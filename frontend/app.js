@@ -2144,7 +2144,7 @@ class SmartCalendar {
                             style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Copy</button>
                         <button data-open-url="${ev.form_url}" class="btn-open-event-url"
                             style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Open</button>
-                        <button data-form="${ev.form_id}" data-speaker="${esc(ev.speaker_name)}" class="btn-close-form"
+                        <button data-form="${ev.form_id}" data-event-id="${ev.id}" data-speaker="${esc(ev.speaker_name)}" class="btn-close-form"
                             style="flex:1;padding:6px;border-radius:6px;background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Close</button>
                         <button data-event-id="${ev.id}" class="btn-sync-responses"
                             style="flex:1;padding:6px;border-radius:6px;background:rgba(168,85,247,0.15);color:#c084fc;border:1px solid rgba(168,85,247,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Sync</button>
@@ -2243,8 +2243,9 @@ class SmartCalendar {
             list.querySelectorAll('.btn-close-form').forEach(btn => {
                 btn.addEventListener('click', async () => {
                     const formId = btn.dataset.form;
+                    const eventId = btn.dataset.eventId;
                     const speakerName = btn.dataset.speaker || 'this form';
-                    if (!formId) return;
+                    if (!formId && !eventId) return;
 
                     // Custom confirmation
                     const confirmed = window.confirm(
@@ -2259,7 +2260,7 @@ class SmartCalendar {
                     try {
                         const r = await fetch(`${API_BASE}/api/admin/close-form`, {
                             method: 'POST', headers: authHeaders(),
-                            body: JSON.stringify({ form_id: formId })
+                            body: JSON.stringify({ form_id: formId || null, event_id: eventId || null })
                         });
                         const d = await r.json();
                         const isSuccess = d.status === 'closed' || (d.message && d.message.toLowerCase().includes('closed'));
