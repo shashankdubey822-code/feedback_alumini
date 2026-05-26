@@ -97,7 +97,7 @@ class RAGService:
             # Simple fallback: retrieve rows that have keywords or run a simple cosine
             # similarity search if we have embeddings stored locally in the JSON payload
             cursor.execute('''
-                SELECT id, alumni_speaker_name, aspect_most_valuable, improvements_suggestions, future_topics, session_rating, dl_keywords
+                SELECT id, name_of_student, alumni_speaker_name, aspect_most_valuable, improvements_suggestions, future_topics, session_rating, dl_keywords
                 FROM dashboard_data
                 LIMIT 500
             ''')
@@ -150,9 +150,8 @@ class RAGService:
             if not tokens:
                 tokens = [f"%{query_text.lower()}%"]
                 
-            # Search in text fields
             query = '''
-                SELECT id, alumni_speaker_name, aspect_most_valuable, improvements_suggestions, future_topics, session_rating
+                SELECT id, name_of_student, alumni_speaker_name, aspect_most_valuable, improvements_suggestions, future_topics, session_rating
                 FROM dashboard_data
                 WHERE (aspect_most_valuable LIKE ? OR improvements_suggestions LIKE ? OR future_topics LIKE ?)
                 LIMIT ?

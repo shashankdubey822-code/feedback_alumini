@@ -49,6 +49,13 @@ const Wiki = {
 
     init() {
         console.log("Initializing AI Knowledge Wiki Module...");
+        
+        // Generate/load persistent local session ID for Supabase bucket storage memory
+        if (!localStorage.getItem('wiki_session_id')) {
+            localStorage.setItem('wiki_session_id', 'session_' + Math.random().toString(36).substring(2, 11));
+        }
+        this.sessionId = localStorage.getItem('wiki_session_id');
+
         this.cacheElements();
         this.bindEvents();
         this.initGraphSimulation();
@@ -560,7 +567,8 @@ const Wiki = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 question: text,
-                history: this.chatHistory
+                history: this.chatHistory,
+                session_id: this.sessionId
             })
         })
         .then(res => res.json())
@@ -582,10 +590,31 @@ const Wiki = {
 
     clearChatMemory() {
         this.chatHistory = [];
+        const self = this;
+        
         if (this.elements.chatBox) {
-            this.elements.chatBox.innerHTML = '<div class="chat-msg system" style="color: var(--text-muted); font-style: italic;">Brain memory cleared. Ask new questions regarding compiled speakers and sessions!</div>';
+            this.elements.chatBox.innerHTML = '<div class="chat-msg system" style="color: var(--text-muted); font-style: italic;">Clearing memory from cloud...</div>';
         }
-        if (window.showNotification) window.showNotification("AI memory cleared successfully.", "success");
+        
+        fetch('/api/v1/wiki/clear-memory', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: this.sessionId })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (self.elements.chatBox) {
+                self.elements.chatBox.innerHTML = '<div class="chat-msg system" style="color: var(--text-muted); font-style: italic;">Brain memory cleared. Ask new questions regarding compiled speakers and sessions!</div>';
+            }
+            if (window.showNotification) window.showNotification("AI memory cleared successfully.", "success");
+        })
+        .catch(err => {
+            console.error("Error clearing memory:", err);
+            if (self.elements.chatBox) {
+                self.elements.chatBox.innerHTML = '<div class="chat-msg system" style="color: var(--text-muted); font-style: italic;">Local memory cleared, but cloud sync failed. Ready for new questions.</div>';
+            }
+            if (window.showNotification) window.showNotification("Memory cleared locally only.", "warning");
+        });
     },
 
     appendChatMessage(sender, text) {

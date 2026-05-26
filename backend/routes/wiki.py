@@ -217,15 +217,31 @@ def execute_wiki_query():
         body = request.get_json() or {}
         question = body.get('question', '').strip()
         history = body.get('history', [])
+        session_id = body.get('session_id', 'default_session').strip()
         
         if not question:
             return jsonify({'error': 'Question cannot be empty.'}), 400
             
         service = _get_wiki_service()
-        result = service.query_wiki(question, history)
+        result = service.query_wiki(question, history, session_id)
         return jsonify(result), 200
     except Exception as e:
         logger.error(f"Error executing wiki query: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@wiki_bp.route('/clear-memory', methods=['POST'])
+@log_endpoint_access
+def execute_wiki_clear_memory():
+    """Delete chat history for a session from the Supabase bucket"""
+    try:
+        body = request.get_json() or {}
+        session_id = body.get('session_id', 'default_session').strip()
+        service = _get_wiki_service()
+        success = service.clear_memory(session_id)
+        return jsonify({'success': success}), 200
+    except Exception as e:
+        logger.error(f"Error clearing memory: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 

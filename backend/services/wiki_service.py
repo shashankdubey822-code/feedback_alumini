@@ -638,14 +638,30 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
 
     # ─── QUERY SYNTHESIZER (RAG ON WIKI) ──────────────────────────────────────
 
-    def query_wiki(self, question: str, history: List[Dict[str, str]] = None) -> Dict[str, Any]:
+    def query_wiki(self, question: str, history: List[Dict[str, str]] = None, session_id: str = None) -> Dict[str, Any]:
         """
         Query the compiled Wiki.
         Performs vector-RAG, loads relevant files, and feeds them into the LLM context.
         """
-        logger.info(f"RAG Wiki Query: '{question}' with history length {len(history) if history else 0}")
+        logger.info(f"RAG Wiki Query: '{question}' with history length {len(history) if history else 0}, session_id: {session_id}")
         
-        # 1. To make conversational RAG work with follow-ups, merge current question with recent history
+        # 1. Cloud Memory integration (Supabase bucket)
+        cloud_history = []
+        if is_supabase_active() and session_id:
+            try:
+                path = f"memory/{session_id}.json"
+                file_bytes = supabase_download_file(self.bucket, path)
+                if file_bytes:
+                    cloud_history = json.loads(file_bytes.decode('utf-8'))
+                    logger.info(f"Loaded {len(cloud_history)} history messages from Supabase bucket.")
+            except Exception as e:
+                logger.error(f"Error downloading history from Supabase storage: {str(e)}")
+
+        # Prefer provided history if it contains items, otherwise use cloud history
+        if not history and cloud_history:
+            history = cloud_history
+
+        # 2. To make conversational RAG work with follow-ups, merge current question with recent history
         search_query = question
         if history:
             user_msgs = [h.get('content', '') for h in history if h.get('role') == 'user']
@@ -653,12 +669,12 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
                 # Include the last 2 user messages to enrich search tokens
                 search_query += " " + " ".join(user_msgs[-2:])
         
-        # 2. Fetch relevant feedback hits via vector RAG
+        # 3. Fetch relevant feedback hits via vector RAG
         from backend.services.rag_service import RAGService
         rag = RAGService()
-        similar_rows = rag.search_similar_feedback(search_query, limit=4)
+        similar_rows = rag.search_similar_feedback(search_query, limit=5) # increased slightly to get more context
         
-        # 3. Extract matching entities (find matching markdown pages)
+        # 4. Extract matching entities (find matching markdown pages)
         pages = self.list_wiki_pages()
         matched_pages = []
         
@@ -674,7 +690,7 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
         # Limit matched pages to 3 to prevent token overflow
         matched_pages = matched_pages[:3]
         
-        # ─── 4. SYNTHESIZE RESPONSE ───────────────────────────────────────────
+        # ─── 5. SYNTHESIZE RESPONSE ───────────────────────────────────────────
         context_str = ""
         if matched_pages:
             context_str += "=== RELEVANT WIKI PAGES ===\n"
@@ -684,7 +700,8 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
         if similar_rows:
             context_str += "=== STUDENT FEEDBACK DATA ===\n"
             for r in similar_rows:
-                context_str += f"- Speaker: {r.get('alumni_speaker_name')}, Valuable: {r.get('aspect_most_valuable')}, Critique: {r.get('improvements_suggestions')}\n"
+                student_name = r.get('name_of_student') or 'Anonymous'
+                context_str += f"- Student: {student_name}, Speaker: {r.get('alumni_speaker_name')}, Valuable aspect: {r.get('aspect_most_valuable')}, Critique/Suggestions: {r.get('improvements_suggestions')}\n"
 
         if not context_str.strip():
             context_str = "No compiled wiki pages or feedback records matched this query in the database."
@@ -694,9 +711,10 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
 
 CRITICAL FACTUAL INTEGRITY RULES:
 1. NEVER guess, assume, or hallucinate. You only have access to the data provided below in the "AVAILABLE DATA" section.
-2. If the user asks about a speaker, date, event, topic, or feedback that is NOT explicitly mentioned or documented in the "AVAILABLE DATA" below, you MUST say exactly: "I do not have access to that feedback data. It has not been compiled or ingested yet."
+2. If the user asks about a speaker, student, date, event, topic, or feedback that is NOT explicitly mentioned or documented in the "AVAILABLE DATA" below, you MUST say exactly: "I do not have access to that feedback data. It has not been compiled or ingested yet."
 3. If the user asks general-knowledge questions (e.g., how to code, general trivia, math), decline politely: "I am your alumni feedback assistant. I only have access to the guest lecture data. Please ask questions about the compiled sessions."
 4. If the data is empty or says "No compiled wiki pages...", do not generate any stats or feedback analysis. Just tell the user to compile the lectures first.
+5. If the user asks to "name the students" or "name them", inspect the "Student:" prefix in the AVAILABLE DATA. Only name the specific students listed there. If no student names are listed there, say: "The survey feedback available in the context is anonymous or does not list student names."
 
 CONVERSATIONAL MEMORY & TONE:
 1. You have conversational history. Be helpful, direct, and conversational (use "I", "you", "we").
@@ -723,6 +741,8 @@ CONVERSATIONAL MEMORY & TONE:
         else:
             messages.append({"role": "user", "content": question})
 
+        synthesis = None
+
         # Execute synthesis — Try Groq first, then Gemini
         if self.groq_key:
             try:
@@ -730,7 +750,7 @@ CONVERSATIONAL MEMORY & TONE:
                 req_data = json.dumps({
                     "model": "llama-3.3-70b-versatile",
                     "messages": messages,
-                    "temperature": 0.3,
+                    "temperature": 0.1,  # Lower temperature to ensure strict factual compliance
                     "max_tokens": 500
                 }).encode('utf-8')
                 request = urllib.request.Request(url, data=req_data, headers={
@@ -741,45 +761,74 @@ CONVERSATIONAL MEMORY & TONE:
                 with urllib.request.urlopen(request, timeout=30) as response:
                     res_body = json.loads(response.read().decode('utf-8'))
                     synthesis = res_body['choices'][0]['message']['content']
-                    return {"answer": synthesis, "citations": [p[0] for p in matched_pages]}
             except Exception as e:
                 logger.warning(f"Groq conversational query failed: {str(e)}")
 
         # Combined prompt for Gemini / simple fallbacks
-        history_str = ""
-        if history:
-            for h in history:
-                role = "User" if h.get('role') == 'user' else "AI"
-                history_str += f"{role}: {h.get('content')}\n"
-        else:
-            history_str = f"User: {question}\n"
+        if not synthesis:
+            history_str = ""
+            if history:
+                for h in history:
+                    role = "User" if h.get('role') == 'user' else "AI"
+                    history_str += f"{role}: {h.get('content')}\n"
+            else:
+                history_str = f"User: {question}\n"
 
-        combined_prompt = f"""{system_instruction}
+            combined_prompt = f"""{system_instruction}
 
 === CONVERSATION HISTORY ===
 {history_str}
 AI:"""
 
-        if self.gemini_key:
-            try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.gemini_key}"
-                req_data = json.dumps({"contents": [{"parts": [{"text": combined_prompt}]}]}).encode('utf-8')
-                request = urllib.request.Request(url, data=req_data, headers={'Content-Type': 'application/json'})
-                with urllib.request.urlopen(request, timeout=30) as response:
-                    res_body = json.loads(response.read().decode('utf-8'))
-                    synthesis = res_body['candidates'][0]['content']['parts'][0]['text']
-                    return {"answer": synthesis, "citations": [p[0] for p in matched_pages]}
-            except Exception as e:
-                logger.error(f"Gemini conversational query also failed: {str(e)}")
+            if self.gemini_key:
+                try:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.gemini_key}"
+                    req_data = json.dumps({"contents": [{"parts": [{"text": combined_prompt}]}]}).encode('utf-8')
+                    request = urllib.request.Request(url, data=req_data, headers={'Content-Type': 'application/json'})
+                    with urllib.request.urlopen(request, timeout=30) as response:
+                        res_body = json.loads(response.read().decode('utf-8'))
+                        synthesis = res_body['candidates'][0]['content']['parts'][0]['text']
+                except Exception as e:
+                    logger.error(f"Gemini conversational query also failed: {str(e)}")
 
-        # Offline fallback
-        offline_answer = f"""No AI available. Here's what the database shows for your query:
+        # Offline fallback if both failed
+        if not synthesis:
+            synthesis = f"""No AI available. Here's what the database shows for your query:
 
 - **Matching Wiki Pages**: {', '.join([f'[[{p[0]}]]' for p in matched_pages]) if matched_pages else 'None'}
 - **Feedback rows matched**: {len(similar_rows)}
 
 Add GROQ_API_KEY to Hugging Face Secrets to enable full conversational memory."""
-        return {"answer": offline_answer, "citations": [p[0] for p in matched_pages]}
+
+        # 6. Save updated history back to Supabase Storage Bucket
+        updated_history = list(history) if history else []
+        # Ensure user question is in history if not already there
+        if not any(h.get('role') == 'user' and h.get('content') == question for h in updated_history):
+            updated_history.append({"role": "user", "content": question})
+        updated_history.append({"role": "assistant", "content": synthesis})
+
+        if is_supabase_active() and session_id:
+            try:
+                history_bytes = json.dumps(updated_history, indent=2).encode('utf-8')
+                path = f"memory/{session_id}.json"
+                supabase_upload_file(self.bucket, path, history_bytes, "application/json")
+                logger.info(f"Saved chat history to Supabase bucket at '{path}'")
+            except Exception as e:
+                logger.error(f"Error saving chat history to Supabase: {str(e)}")
+
+        return {"answer": synthesis, "citations": [p[0] for p in matched_pages]}
+
+    def clear_memory(self, session_id: str) -> bool:
+        """Delete chat history for the given session ID from Supabase bucket"""
+        if is_supabase_active() and session_id:
+            try:
+                path = f"memory/{session_id}.json"
+                supabase_delete_file(self.bucket, path)
+                logger.info(f"Deleted memory for session '{session_id}' from Supabase bucket.")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to delete memory from Supabase bucket: {e}")
+        return False
 
     # ─── WIKI LINTER (HEALTH CHECKS) ──────────────────────────────────────────
 
