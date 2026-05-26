@@ -750,13 +750,19 @@ CONVERSATIONAL MEMORY & TONE:
 {context_str}
 """
 
-        # Setup LangChain LLM
+        # Setup LangChain LLM with fallback support for API limits
         llm = None
-        if self.groq_key:
-            llm = ChatGroq(api_key=self.groq_key, model="llama-3.3-70b-versatile", temperature=0.1)
-        elif self.gemini_key:
-            llm = ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.1)
+        gemini_fallback = None
+        
+        if self.gemini_key:
+            gemini_fallback = ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.1, max_retries=1)
             
+        if self.groq_key:
+            llm = ChatGroq(api_key=self.groq_key, model="llama-3.3-70b-versatile", temperature=0.1, max_retries=1)
+            if gemini_fallback:
+                llm = llm.with_fallbacks([gemini_fallback])
+        elif gemini_fallback:
+            llm = gemini_fallback
         if llm:
             prompt = ChatPromptTemplate.from_messages([
                 ("system", system_instruction),
