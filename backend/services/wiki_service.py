@@ -12,6 +12,7 @@ from typing import List, Dict, Any, Tuple, Optional
 from datetime import datetime
 import urllib.request
 import urllib.parse
+import urllib.error
 from backend.config import get_config
 from backend.utils.logger import get_section_logger
 from backend.utils.supabase_helper import (
@@ -212,12 +213,13 @@ Append-only history of Wiki operations.
         # ─── TRIGGER COMPILER EXECUTION ───────────────────────────────────────
         if self.gemini_key:
             # Execute Generative AI compilation
-            success = self._run_generative_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
+            success, err_msg = self._run_generative_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
             if success:
                 self.log_compilation(f"Successfully compiled '{speaker}' ({date_str}) using Gemini AI.")
                 return safe_event
             else:
-                self.log_compilation(f"AI Ingestion failed for '{speaker}'. Falling back to local offline heuristics.")
+                self.log_compilation(f"AI Ingestion failed for '{speaker}'. Reason: {err_msg}")
+                self.log_compilation(f"Falling back to local offline heuristics.")
         
         # Execute Offline Heuristics compilation
         self._run_offline_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
@@ -226,7 +228,7 @@ Append-only history of Wiki operations.
 
     def _run_generative_ingest(self, safe_event: str, safe_speaker: str, speaker: str, date_str: str, 
                                total: int, avg_rating: float, shu: Dict[str, int], 
-                               val: List[str], crit: List[str], req: List[str]) -> bool:
+                               val: List[str], crit: List[str], req: List[str]) -> Tuple[bool, str]:
         """Call Gemini API to generate professional interlinked markdown pages"""
         prompt = f"""
 [SYSTEM INITIALIZATION] 
@@ -311,10 +313,30 @@ Strict JSON object only. No markdown fences outside the JSON values.
 
                 # Update index.md and log.md
                 self._update_wiki_indexes(speaker, date_str, safe_event, safe_speaker, c_name, s_name)
-                return True
+                return True, "Success"
+        except urllib.error.HTTPError as e:
+            try:
+                err_body = e.read().decode('utf-8')
+                err_json = json.loads(err_body)
+                exact_msg = err_json.get('error', {}).get('message', err_body)
+            except:
+                exact_msg = str(e)
+            
+            error_msg = f"HTTP {e.code}: {exact_msg}"
+            logger.error(f"Generative ingest HTTPError: {error_msg}")
+            
+            # Log specifically to gemini errors
+            from backend.utils.logger import log_gemini_error
+            log_gemini_error("Compile", speaker, error_msg, err_body if 'err_body' in locals() else str(e))
+            return False, error_msg
+            
         except Exception as e:
-            logger.error(f"Generative ingest failed: {str(e)}")
-            return False
+            error_msg = str(e)
+            logger.error(f"Generative ingest failed: {error_msg}")
+            
+            from backend.utils.logger import log_gemini_error
+            log_gemini_error("Compile", speaker, error_msg, str(e))
+            return False, error_msg
 
     def _run_offline_ingest(self, safe_event: str, safe_speaker: str, speaker: str, date_str: str, 
                              total: int, avg_rating: float, shu: Dict[str, int], 

@@ -91,14 +91,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ========== TOAST NOTIFICATIONS ==========
 function showNotification(message, type = 'info') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.cssText = 'position: fixed; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 99999; pointer-events: none;';
+        document.body.appendChild(container);
+    }
+
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.textContent = message;
-    document.body.appendChild(toast);
+    toast.style.position = 'relative'; 
+    toast.style.top = '0';
+    toast.style.right = '0';
+    toast.style.pointerEvents = 'auto';
+    
+    container.appendChild(toast);
 
     setTimeout(() => {
         toast.classList.add('hiding');
-        setTimeout(() => toast.remove(), 280);
+        setTimeout(() => {
+            toast.remove();
+            if (container.childNodes.length === 0) container.remove();
+        }, 280);
     }, 3200);
 }
 

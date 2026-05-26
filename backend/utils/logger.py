@@ -117,3 +117,31 @@ def get_section_logger(section_name: str) -> logging.Logger:
         logger.propagate = False
         
     return logger
+
+
+def log_gemini_error(action: str, target: str, error_msg: str, raw_response: str = ""):
+    """
+    Specifically logs Gemini API errors into a dedicated JSONL error log for deep analysis.
+    """
+    import json
+    
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    error_dir = os.path.join(project_root, 'data', 'errors')
+    os.makedirs(error_dir, exist_ok=True)
+    
+    log_file = os.path.join(error_dir, 'gemini_errors.log')
+    
+    error_entry = {
+        "timestamp": datetime.now().isoformat(),
+        "action": action,
+        "target": target,
+        "error_message": error_msg,
+        "raw_response": raw_response
+    }
+    
+    try:
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(error_entry) + '\n')
+    except Exception as e:
+        logger = get_section_logger('wiki')
+        logger.error(f"Failed to write to gemini_errors.log: {str(e)}")
