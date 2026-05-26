@@ -1432,10 +1432,11 @@ function buildTableBody() {
         state.columns.forEach(col => {
             const td = document.createElement('td');
             const raw = row[col] || '';
-            // Timestamp column: show only the date part (DD-MM-YYYY), keep full value in tooltip
+            // Timestamp column: show only the time part (HH:MM:SS), keep full value in tooltip
             if (col === 'timestamp_original' && raw) {
-                // Format is DD-MM-YYYY HH:MM:SS → take first 10 chars
-                td.textContent = raw.length >= 10 ? raw.substring(0, 10) : raw;
+                // Format is DD-MM-YYYY HH:MM:SS → split by space and take the second part
+                const timePart = raw.includes(' ') ? raw.split(' ')[1] : raw;
+                td.textContent = timePart;
                 td.title = raw; // Full timestamp on hover
                 td.style.whiteSpace = 'nowrap';
             } else {
