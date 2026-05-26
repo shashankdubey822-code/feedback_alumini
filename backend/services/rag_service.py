@@ -60,6 +60,12 @@ class RAGService:
         Execute semantic search for feedback matching the query text.
         Routes to Supabase RPC 'match_feedback' if active, otherwise runs local SQL search.
         """
+        # If Supabase is not active, skip generating the embedding (which loads the slow SentenceTransformer model)
+        # and go straight to the fast fallback keyword search.
+        if not is_supabase_active():
+            logger.info("Supabase not active. Skipping slow local embedding generation and using fast keyword search.")
+            return self._fallback_keyword_search(query_text, limit)
+
         query_vector = self.generate_embedding(query_text)
         if not query_vector:
             # Fallback to simple keyword search
