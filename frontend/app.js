@@ -2130,7 +2130,7 @@ class SmartCalendar {
                 card.innerHTML = `
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
                         <div>
-                            <div style="font-size:13px;font-weight:600;color:#f0f0f5;">${esc(ev.speaker_name)}</div>
+                            <div style="font-size:13px;font-weight:800;color:#000000;">${esc(ev.speaker_name)}</div>
                             <div style="font-size:11px;color:#8b8b9e;margin-top:2px;">${esc(ev.venue_date)} &nbsp;·&nbsp; ${ev.responses} response${ev.responses !== 1 ? 's' : ''}</div>
                             ${formStatusHtml}
                         </div>
