@@ -346,7 +346,7 @@ def create_event_and_form():
             }), 400
         
         # Validate Google Apps Script configuration
-        apps_script_url = os.getenv('APPS_SCRIPT_URL')
+        apps_script_url = current_app.config.get('APPS_SCRIPT_URL') or os.getenv('APPS_SCRIPT_URL')
         is_valid, error_msg = _validate_google_apps_script_url(apps_script_url)
         if not is_valid:
             logger.error(f"Google Apps Script validation failed: {error_msg}")
@@ -366,7 +366,7 @@ def create_event_and_form():
         logger.info(f"Created event #{event_id} (not committed yet)")
         
         # Step 2: Call Google Apps Script to create form
-        secret = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
+        secret = current_app.config.get('APPS_SCRIPT_SECRET') or os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
         base_url = os.environ.get('PUBLIC_URL') or request.host_url
         webhook_url = base_url.rstrip('/') + '/api/v1/webhook/forms/submit'
         
@@ -608,7 +608,7 @@ def generate_form():
             return jsonify({'success': False, 'error': 'event_id is required'}), 400
         
         # Validate Google Apps Script URL
-        apps_script_url = os.getenv('APPS_SCRIPT_URL')
+        apps_script_url = current_app.config.get('APPS_SCRIPT_URL') or os.getenv('APPS_SCRIPT_URL')
         is_valid, error_msg = _validate_google_apps_script_url(apps_script_url)
         if not is_valid:
             return jsonify({'success': False, 'error': error_msg}), 400
@@ -627,7 +627,7 @@ def generate_form():
             return jsonify({'success': False, 'error': 'Event not found'}), 404
         
         # Call Google Apps Script
-        secret = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
+        secret = current_app.config.get('APPS_SCRIPT_SECRET') or os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
         base_url = os.environ.get('PUBLIC_URL') or request.host_url
         webhook_url = base_url.rstrip('/') + '/api/v1/webhook/forms/submit'
         
@@ -706,14 +706,14 @@ def sync_responses():
             return jsonify({'success': False, 'error': 'Form not yet generated for this event'}), 400
         
         # Validate Google Apps Script URL
-        apps_script_url = os.getenv('APPS_SCRIPT_URL')
+        apps_script_url = current_app.config.get('APPS_SCRIPT_URL') or os.getenv('APPS_SCRIPT_URL')
         is_valid, error_msg = _validate_google_apps_script_url(apps_script_url)
         if not is_valid:
             conn.close()
             return jsonify({'success': False, 'error': error_msg}), 400
         
         # Call Google Apps Script to get responses
-        secret = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
+        secret = current_app.config.get('APPS_SCRIPT_SECRET') or os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
         payload = {
             'secret': secret,
             'action': 'get_responses',

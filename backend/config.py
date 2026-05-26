@@ -75,6 +75,12 @@ class Config:
     # Groq Settings
     GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
 
+    # Google Apps Script Settings
+    # Set APPS_SCRIPT_URL and APPS_SCRIPT_SECRET as secrets in Hugging Face / Render.
+    # Do NOT hardcode these values here.
+    APPS_SCRIPT_URL = os.getenv('APPS_SCRIPT_URL', '')
+    APPS_SCRIPT_SECRET = os.getenv('APPS_SCRIPT_SECRET', '')
+
 
 
 class DevelopmentConfig(Config):

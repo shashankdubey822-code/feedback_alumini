@@ -398,3 +398,43 @@
     margin-bottom: 8px;
     font-weight: 500;
 }
+
+/* === FEEDBACK FORM MANAGER MODAL — Force black text on white card === */
+#feedback-modal .modal-content {
+    background: #ffffff;
+}
+#feedback-modal .modal-header {
+    border-bottom: 1px solid #e5e7eb;
+}
+#feedback-modal .modal-title,
+#feedback-modal h3,
+#feedback-modal h4 {
+    color: #111827 !important;
+}
+#feedback-modal p,
+#feedback-modal label,
+#feedback-modal span {
+    color: #374151 !important;
+}
+#feedback-modal input[type="text"],
+#feedback-modal input[type="date"] {
+    background: #f9fafb !important;
+    color: #111827 !important;
+    border: 1px solid #d1d5db !important;
+}
+#feedback-modal input::placeholder {
+    color: #9ca3af !important;
+}
+#feedback-modal .modal-close {
+    color: #6b7280;
+}
+#feedback-modal .modal-close:hover {
+    color: #111827;
+    background: #f3f4f6;
+}
+#feedback-modal #btn-refresh-events {
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    color: #374151;
+}
+
