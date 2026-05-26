@@ -22,6 +22,12 @@ from backend.utils.supabase_helper import (
     supabase_delete_file,
     is_supabase_active
 )
+from langchain_core.chat_history import BaseChatMessageHistory
+from langchain_core.messages import BaseMessage, messages_from_dict, messages_to_dict
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 logger = get_section_logger('wiki')
 
@@ -29,6 +35,42 @@ logger = get_section_logger('wiki')
 _ingest_logs: List[str] = []
 _ingest_progress: Dict[str, Any] = {"status": "IDLE", "current": 0, "total": 0, "active_session": ""}
 _queue_lock = threading.Lock()
+
+class SupabaseChatMessageHistory(BaseChatMessageHistory):
+    """Custom LangChain memory class for Supabase Storage"""
+    def __init__(self, session_id: str, bucket: str):
+        self.session_id = session_id
+        self.bucket = bucket
+        self.path = f"memory/{session_id}.json"
+        
+    @property
+    def messages(self) -> List[BaseMessage]:
+        if not is_supabase_active():
+            return []
+        try:
+            file_bytes = supabase_download_file(self.bucket, self.path)
+            if file_bytes:
+                items = json.loads(file_bytes.decode('utf-8'))
+                return messages_from_dict(items)
+        except Exception:
+            pass
+        return []
+
+    def add_messages(self, messages: List[BaseMessage]) -> None:
+        if not is_supabase_active():
+            return
+        try:
+            current_messages = self.messages
+            current_messages.extend(messages)
+            items = messages_to_dict(current_messages)
+            history_bytes = json.dumps(items, indent=2).encode('utf-8')
+            supabase_upload_file(self.bucket, self.path, history_bytes, "application/json")
+        except Exception as e:
+            logger.error(f"Error saving chat history to Supabase: {str(e)}")
+
+    def clear(self) -> None:
+        if is_supabase_active():
+            supabase_delete_file(self.bucket, self.path)
 
 
 class WikiService:
@@ -645,40 +687,20 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
         """
         logger.info(f"RAG Wiki Query: '{question}' with history length {len(history) if history else 0}, session_id: {session_id}")
         
-        # 1. Cloud Memory integration (Supabase bucket)
-        cloud_history = []
-        if is_supabase_active() and session_id:
-            try:
-                path = f"memory/{session_id}.json"
-                file_bytes = supabase_download_file(self.bucket, path)
-                if file_bytes:
-                    cloud_history = json.loads(file_bytes.decode('utf-8'))
-                    logger.info(f"Loaded {len(cloud_history)} history messages from Supabase bucket.")
-            except Exception as e:
-                logger.error(f"Error downloading history from Supabase storage: {str(e)}")
-
-        # Prefer provided history if it contains items, otherwise use cloud history
-        if not history and cloud_history:
-            history = cloud_history
-
-        # 2. To make conversational RAG work with follow-ups, merge current question with recent history
+        # 1. Fetch relevant feedback hits via vector RAG
         search_query = question
         if history:
             user_msgs = [h.get('content', '') for h in history if h.get('role') == 'user']
             if user_msgs:
-                # Include the last 2 user messages to enrich search tokens
                 search_query += " " + " ".join(user_msgs[-2:])
-        
-        # 3. Fetch relevant feedback hits via vector RAG
+                
         from backend.services.rag_service import RAGService
         rag = RAGService()
-        similar_rows = rag.search_similar_feedback(search_query, limit=5) # increased slightly to get more context
+        similar_rows = rag.search_similar_feedback(search_query, limit=5)
         
-        # 4. Extract matching entities (find matching markdown pages)
+        # 2. Extract matching entities (find matching markdown pages)
         pages = self.list_wiki_pages()
         matched_pages = []
-        
-        # Simple keyword matching on file paths
         tokens = [t.lower() for t in search_query.split() if len(t) > 3]
         for p in pages:
             p_lower = p.lower()
@@ -686,11 +708,9 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
                 content = self.read_wiki_file(p)
                 if content:
                     matched_pages.append((p, content))
-        
-        # Limit matched pages to 3 to prevent token overflow
         matched_pages = matched_pages[:3]
         
-        # ─── 5. SYNTHESIZE RESPONSE ───────────────────────────────────────────
+        # 3. SYNTHESIZE RESPONSE
         context_str = ""
         if matched_pages:
             context_str += "=== RELEVANT WIKI PAGES ===\n"
@@ -706,7 +726,7 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
         if not context_str.strip():
             context_str = "No compiled wiki pages or feedback records matched this query in the database."
 
-        # Strict Prompt for Factual Integrity and Humanlike conversational capability
+        # Strict Prompt for Factual Integrity and Counter-Questioning
         system_instruction = f"""You are a smart, direct, and humanlike AI analyst for a college alumni feedback dashboard. 
 
 CRITICAL FACTUAL INTEGRITY RULES:
@@ -715,10 +735,11 @@ CRITICAL FACTUAL INTEGRITY RULES:
 3. If the user asks general-knowledge questions (e.g., how to code, general trivia, math), decline politely: "I am your alumni feedback assistant. I only have access to the guest lecture data. Please ask questions about the compiled sessions."
 4. If the data is empty or says "No compiled wiki pages...", do not generate any stats or feedback analysis. Just tell the user to compile the lectures first.
 5. If the user asks to "name the students" or "name them", inspect the "Student:" prefix in the AVAILABLE DATA. Only name the specific students listed there. If no student names are listed there, say: "The survey feedback available in the context is anonymous or does not list student names."
+6. COUNTER-QUESTIONING: If the user's question is ambiguous, unclear, or you do not understand what they are asking for, DO NOT guess. Instead, ask a clarifying counter-question to understand their intent better.
 
 CONVERSATIONAL MEMORY & TONE:
 1. You have conversational history. Be helpful, direct, and conversational (use "I", "you", "we").
-2. Put the direct answer or main statistic FIRST on line 1.
+2. Put the direct answer or main statistic FIRST on line 1 (unless counter-questioning).
 3. Use 2-3 bullet points for supporting details if needed.
 4. Only use double-bracket WikiLinks (e.g. [[speakers/Name]]) when referring to compiled files that actually exist in the AVAILABLE DATA.
 5. Maximum length: 150 words.
@@ -727,94 +748,45 @@ CONVERSATIONAL MEMORY & TONE:
 {context_str}
 """
 
-        # For Groq: construct structured messages list
-        messages = [
-            {"role": "system", "content": system_instruction}
-        ]
-        
-        if history:
-            for h in history:
-                role = h.get('role', 'user')
-                if role in ('model', 'ai', 'assistant'):
-                    role = 'assistant'
-                messages.append({"role": role, "content": h.get('content', '')})
-        else:
-            messages.append({"role": "user", "content": question})
-
-        synthesis = None
-
-        # Execute synthesis — Try Groq first, then Gemini
+        # Setup LangChain LLM
+        llm = None
         if self.groq_key:
+            llm = ChatGroq(api_key=self.groq_key, model="llama-3.3-70b-versatile", temperature=0.1)
+        elif self.gemini_key:
+            llm = ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.1)
+            
+        if llm:
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", system_instruction),
+                MessagesPlaceholder(variable_name="history"),
+                ("human", "{question}")
+            ])
+            
+            chain = prompt | llm
+            
+            # Use RunnableWithMessageHistory for real AI memory
+            with_message_history = RunnableWithMessageHistory(
+                chain,
+                lambda sid: SupabaseChatMessageHistory(sid, self.bucket),
+                input_messages_key="question",
+                history_messages_key="history",
+            )
+            
             try:
-                url = "https://api.groq.com/openai/v1/chat/completions"
-                req_data = json.dumps({
-                    "model": "llama-3.3-70b-versatile",
-                    "messages": messages,
-                    "temperature": 0.1,  # Lower temperature to ensure strict factual compliance
-                    "max_tokens": 500
-                }).encode('utf-8')
-                request = urllib.request.Request(url, data=req_data, headers={
-                    'Authorization': f'Bearer {self.groq_key}',
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'DataLens/1.0'
-                })
-                with urllib.request.urlopen(request, timeout=30) as response:
-                    res_body = json.loads(response.read().decode('utf-8'))
-                    synthesis = res_body['choices'][0]['message']['content']
+                # If no session_id is provided, generate a fallback local session ID for this request
+                effective_session_id = session_id if session_id else "default_session"
+                response = with_message_history.invoke(
+                    {"question": question},
+                    config={"configurable": {"session_id": effective_session_id}}
+                )
+                synthesis = response.content
             except Exception as e:
-                logger.warning(f"Groq conversational query failed: {str(e)}")
-
-        # Combined prompt for Gemini / simple fallbacks
-        if not synthesis:
-            history_str = ""
-            if history:
-                for h in history:
-                    role = "User" if h.get('role') == 'user' else "AI"
-                    history_str += f"{role}: {h.get('content')}\n"
-            else:
-                history_str = f"User: {question}\n"
-
-            combined_prompt = f"""{system_instruction}
-
-=== CONVERSATION HISTORY ===
-{history_str}
-AI:"""
-
-            if self.gemini_key:
-                try:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.gemini_key}"
-                    req_data = json.dumps({"contents": [{"parts": [{"text": combined_prompt}]}]}).encode('utf-8')
-                    request = urllib.request.Request(url, data=req_data, headers={'Content-Type': 'application/json'})
-                    with urllib.request.urlopen(request, timeout=30) as response:
-                        res_body = json.loads(response.read().decode('utf-8'))
-                        synthesis = res_body['candidates'][0]['content']['parts'][0]['text']
-                except Exception as e:
-                    logger.error(f"Gemini conversational query also failed: {str(e)}")
-
-        # Offline fallback if both failed
-        if not synthesis:
-            synthesis = f"""No AI available. Here's what the database shows for your query:
-
+                logger.error(f"LangChain Runnable error: {str(e)}")
+                synthesis = f"Error generating response: {str(e)}"
+        else:
+            synthesis = f"""No AI available (API keys missing). Here's what the database shows for your query:
 - **Matching Wiki Pages**: {', '.join([f'[[{p[0]}]]' for p in matched_pages]) if matched_pages else 'None'}
-- **Feedback rows matched**: {len(similar_rows)}
-
-Add GROQ_API_KEY to Hugging Face Secrets to enable full conversational memory."""
-
-        # 6. Save updated history back to Supabase Storage Bucket
-        updated_history = list(history) if history else []
-        # Ensure user question is in history if not already there
-        if not any(h.get('role') == 'user' and h.get('content') == question for h in updated_history):
-            updated_history.append({"role": "user", "content": question})
-        updated_history.append({"role": "assistant", "content": synthesis})
-
-        if is_supabase_active() and session_id:
-            try:
-                history_bytes = json.dumps(updated_history, indent=2).encode('utf-8')
-                path = f"memory/{session_id}.json"
-                supabase_upload_file(self.bucket, path, history_bytes, "application/json")
-                logger.info(f"Saved chat history to Supabase bucket at '{path}'")
-            except Exception as e:
-                logger.error(f"Error saving chat history to Supabase: {str(e)}")
+- **Feedback rows matched**: {len(similar_rows)}"""
 
         return {"answer": synthesis, "citations": [p[0] for p in matched_pages]}
 
