@@ -727,7 +727,7 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
             context_str = "No compiled wiki pages or feedback records matched this query in the database."
 
         # Strict Prompt for Factual Integrity and Counter-Questioning
-        system_instruction = f"""You are a smart, direct, and humanlike AI analyst for a college alumni feedback dashboard. 
+        system_instruction = """You are a smart, direct, and humanlike AI analyst for a college alumni feedback dashboard. 
 
 CRITICAL FACTUAL INTEGRITY RULES:
 1. NEVER guess, assume, or hallucinate. You only have access to the data provided below in the "AVAILABLE DATA" section.
@@ -736,6 +736,8 @@ CRITICAL FACTUAL INTEGRITY RULES:
 4. If the data is empty or says "No compiled wiki pages...", do not generate any stats or feedback analysis. Just tell the user to compile the lectures first.
 5. If the user asks to "name the students" or "name them", inspect the "Student:" prefix in the AVAILABLE DATA. Only name the specific students listed there. If no student names are listed there, say: "The survey feedback available in the context is anonymous or does not list student names."
 6. COUNTER-QUESTIONING: If the user's question is ambiguous, unclear, or you do not understand what they are asking for, DO NOT guess. Instead, ask a clarifying counter-question to understand their intent better.
+7. SPECIFICITY: If the user asks about a specific person (like Shruti Bhardwaj), DO NOT include feedback about other people (like Yogesh) even if they are in the available data. Filter your response to match their query exactly.
+8. FORMATTING: Use proper Markdown formatting. For bullet points, ALWAYS put them on a new line (e.g., `\n* Point 1\n* Point 2`). DO NOT put multiple bullet points on the same line.
 
 CONVERSATIONAL MEMORY & TONE:
 1. You have conversational history. Be helpful, direct, and conversational (use "I", "you", "we").
@@ -776,7 +778,10 @@ CONVERSATIONAL MEMORY & TONE:
                 # If no session_id is provided, generate a fallback local session ID for this request
                 effective_session_id = session_id if session_id else "default_session"
                 response = with_message_history.invoke(
-                    {"question": question},
+                    {
+                        "question": question,
+                        "context_str": context_str
+                    },
                     config={"configurable": {"session_id": effective_session_id}}
                 )
                 synthesis = response.content
