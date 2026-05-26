@@ -4,6 +4,7 @@ Wiki Service - Manages Karpathy's LLM Wiki (Ingest, Query, Lint, and Supabase St
 
 import os
 import re
+import sqlite3
 import json
 import time
 import threading
@@ -778,3 +779,45 @@ Example Output:
             
         return fallback_questions
 
+    def get_graph_data(self) -> Dict[str, Any]:
+        """Parse all markdown files to build nodes and links for the D3 force graph"""
+        pages = self.list_wiki_pages()
+        nodes = []
+        links = []
+        
+        # Link extraction regex (e.g., [[speakers/John_Doe]])
+        link_pattern = re.compile(r'\[\[([^\]|]+)(?:\|[^\]]+)?\]\]')
+        
+        for p in pages:
+            # Add node
+            nodes.append({"id": p})
+            
+            # Read content to find edges
+            content = self.read_wiki_file(p)
+            if not content:
+                continue
+                
+            matches = link_pattern.findall(content)
+            for linked in matches:
+                linked = linked.strip()
+                resolved = None
+                
+                # Resolve link to an actual page path
+                if linked in pages:
+                    resolved = linked
+                elif f"{linked}.md" in pages:
+                    resolved = f"{linked}.md"
+                else:
+                    for folder in ['events', 'speakers', 'concepts', 'suggestions']:
+                        test_p = f"{folder}/{linked}".replace('//', '/')
+                        if test_p in pages:
+                            resolved = test_p
+                            break
+                        elif f"{test_p}.md" in pages:
+                            resolved = f"{test_p}.md"
+                            break
+                
+                if resolved and resolved != p:
+                    links.append({"source": p, "target": resolved})
+                    
+        return {"nodes": nodes, "links": links}

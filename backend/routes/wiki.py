@@ -7,6 +7,7 @@ from backend.services.wiki_service import WikiService
 from backend.utils.logger import get_section_logger, log_endpoint_access
 import sqlite3
 import os
+import re
 
 logger = get_section_logger('wiki_routes')
 
@@ -277,5 +278,16 @@ def save_wiki_config():
             
         return jsonify({'message': 'Configuration updated successfully.'}), 200
     except Exception as e:
-        logger.error(f"Error updating config: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@wiki_bp.route('/graph', methods=['GET'])
+@log_endpoint_access
+def get_graph():
+    """Get nodes and links for the Wiki D3 force graph"""
+    try:
+        service = _get_wiki_service()
+        graph_data = service.get_graph_data()
+        return jsonify(graph_data), 200
+    except Exception as e:
+        logger.error(f"Error generating graph data: {str(e)}")
         return jsonify({'error': str(e)}), 500

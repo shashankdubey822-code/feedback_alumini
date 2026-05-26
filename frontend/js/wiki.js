@@ -784,99 +784,73 @@ const Wiki = {
 
     buildGraphData() {
         const self = this;
-        
-        // Clear
-        const oldNodes = new Map(this.graph.nodes.map(n => [n.id, n]));
-        this.graph.nodes = [];
-        this.graph.links = [];
-
-        // Identify node entities
-        const uniqueNodes = new Set();
-        const rawLinks = [];
-
-        this.pages.forEach(p => {
-            uniqueNodes.add(p);
-            
-            // Parse Markdown links to create visual edges
-            const content = this.read_wiki_file(p);
-            if (content) {
-                const linkPattern = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
-                let match;
-                while ((match = linkPattern.exec(content)) !== null) {
-                    const linked = match.group(1).strip();
-                    let resolved = null;
-                    
-                    // Simple path resolver
-                    if (self.pages.includes(linked)) resolved = linked;
-                    else if (self.pages.includes(`${linked}.md`)) resolved = `${linked}.md`;
-                    else {
-                        for (const folder of ['events', 'speakers', 'concepts', 'suggestions']) {
-                            const test_p = `${folder}/${linked}`.replace('//', '/');
-                            if (self.pages.includes(test_p)) resolved = test_p;
-                            else if (self.pages.includes(`${test_p}.md`)) resolved = `${test_p}.md`;
-                        }
-                    }
-
-                    if (resolved && resolved !== p) {
-                        rawLinks.push({ source: p, target: resolved });
-                    }
+        fetch('/api/v1/wiki/graph')
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    console.error("Graph fetch error:", data.error);
+                    return;
                 }
-            }
-        });
+                const oldNodes = new Map(self.graph.nodes.map(n => [n.id, n]));
+                self.graph.nodes = [];
+                self.graph.links = [];
 
-        // Instantiate Node Physics properties
-        uniqueNodes.forEach(nid => {
-            const existing = oldNodes.get(nid);
-            
-            // Assign custom radii and colors based on group type
-            let type = "core";
-            let color = "#fff";
-            let radius = 6;
-            if (nid.startsWith('events/')) {
-                type = "event";
-                color = "#34d399"; // Emerald
-                radius = 7;
-            } else if (nid.startsWith('speakers/')) {
-                type = "speaker";
-                color = "#ca7bff"; // Violet
-                radius = 10;
-            } else if (nid.startsWith('concepts/')) {
-                type = "concept";
-                color = "#00ffff"; // Cyan
-                radius = 8;
-            } else if (nid.startsWith('suggestions/')) {
-                type = "suggestion";
-                color = "#ff716c"; // Rose
-                radius = 7;
-            }
+                data.nodes.forEach(nData => {
+                    const nid = nData.id;
+                    const existing = oldNodes.get(nid);
+                    
+                    let type = "core";
+                    let color = "#fff";
+                    let radius = 6;
+                    if (nid.startsWith('events/')) {
+                        type = "event";
+                        color = "#34d399";
+                        radius = 7;
+                    } else if (nid.startsWith('speakers/')) {
+                        type = "speaker";
+                        color = "#ca7bff";
+                        radius = 10;
+                    } else if (nid.startsWith('concepts/')) {
+                        type = "concept";
+                        color = "#00ffff";
+                        radius = 8;
+                    } else if (nid.startsWith('suggestions/')) {
+                        type = "suggestion";
+                        color = "#ff716c";
+                        radius = 7;
+                    }
 
-            this.graph.nodes.push({
-                id: nid,
-                type: type,
-                color: color,
-                radius: radius,
-                x: existing ? existing.x : Math.random() * 300 + 50,
-                y: existing ? existing.y : Math.random() * 200 + 50,
-                vx: existing ? existing.vx : 0,
-                vy: existing ? existing.vy : 0,
-                label: nid.split('/').pop().replace('.md', '').replace('_', ' '),
-                highlighted: existing ? existing.highlighted : false
-            });
-        });
-
-        // Resolve link references
-        rawLinks.forEach(rl => {
-            const sNode = this.graph.nodes.find(n => n.id === rl.source);
-            const tNode = this.graph.nodes.find(n => n.id === rl.target);
-            if (sNode && tNode) {
-                this.graph.links.push({
-                    source: sNode,
-                    target: tNode,
-                    sourceId: rl.source,
-                    targetId: rl.target
+                    self.graph.nodes.push({
+                        id: nid,
+                        type: type,
+                        color: color,
+                        radius: radius,
+                        x: existing ? existing.x : Math.random() * 300 + 50,
+                        y: existing ? existing.y : Math.random() * 200 + 50,
+                        vx: existing ? existing.vx : 0,
+                        vy: existing ? existing.vy : 0,
+                        label: nid.split('/').pop().replace('.md', '').replace(/_/g, ' '),
+                        highlighted: existing ? existing.highlighted : false
+                    });
                 });
-            }
-        });
+
+                data.links.forEach(rl => {
+                    const sNode = self.graph.nodes.find(n => n.id === rl.source);
+                    const tNode = self.graph.nodes.find(n => n.id === rl.target);
+                    if (sNode && tNode) {
+                        self.graph.links.push({
+                            source: sNode,
+                            target: tNode,
+                            sourceId: rl.source,
+                            targetId: rl.target
+                        });
+                    }
+                });
+                
+                // Restart physics simulation with new nodes
+                self.drawGraph();
+            })
+            .catch(err => console.error("Error loading graph data:", err));
     },
 
     updateForces() {
