@@ -56,6 +56,43 @@ def get_wiki_status():
         return jsonify({'error': str(e)}), 500
 
 
+@wiki_bp.route('/groq-limits', methods=['GET'])
+@log_endpoint_access
+def get_groq_limits():
+    """Fetch real-time Groq API rate limits using a cheap ping."""
+    from backend.services.wiki_service import WikiService
+    service = WikiService()
+    if not service.groq_key:
+        return jsonify({'error': 'No Groq API key configured'}), 404
+        
+    try:
+        import urllib.request, json
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        req_data = json.dumps({
+            "model": "llama-3.3-70b-versatile", 
+            "messages": [{"role": "user", "content": "ping"}], 
+            "max_tokens": 1
+        }).encode('utf-8')
+        request = urllib.request.Request(url, data=req_data, headers={
+            'Authorization': f'Bearer {service.groq_key}',
+            'Content-Type': 'application/json',
+            'User-Agent': 'DataLens/1.0'
+        })
+        
+        with urllib.request.urlopen(request, timeout=10) as response:
+            headers = dict(response.headers)
+            remaining = headers.get('x-ratelimit-remaining-requests-today') or headers.get('x-ratelimit-remaining-requests', 'Unknown')
+            return jsonify({'remaining_requests': remaining})
+            
+    except Exception as e:
+        # Check if the error contains HTTP headers (e.g. 429 Too Many Requests)
+        if hasattr(e, 'headers'):
+            headers = dict(e.headers)
+            remaining = headers.get('x-ratelimit-remaining-requests-today') or headers.get('x-ratelimit-remaining-requests', '0')
+            return jsonify({'remaining_requests': remaining})
+        return jsonify({'error': str(e)}), 500
+
+
 @wiki_bp.route('/initialize', methods=['POST'])
 @log_endpoint_access
 def initialize_wiki():

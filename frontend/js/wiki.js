@@ -244,9 +244,21 @@ const Wiki = {
                 // Show AI provider status popup
                 const provider = data.ai_provider || 'offline';
                 if (provider === 'groq') {
-                    if (window.showNotification) window.showNotification("⚡ Groq AI (Llama 3.3 70B) — 14,400 free calls/day", "success");
+                    // Fetch real-time limits instead of hardcoding
+                    fetch('/api/v1/wiki/groq-limits')
+                        .then(r => r.json())
+                        .then(limitData => {
+                            if (limitData.remaining_requests && limitData.remaining_requests !== 'Unknown') {
+                                if (window.showNotification) window.showNotification(`⚡ Groq AI (Llama 3.3 70B) — ${limitData.remaining_requests} API calls remaining today`, "success");
+                            } else {
+                                if (window.showNotification) window.showNotification("⚡ Groq AI (Llama 3.3 70B) Active", "success");
+                            }
+                        })
+                        .catch(() => {
+                            if (window.showNotification) window.showNotification("⚡ Groq AI (Llama 3.3 70B) Active", "success");
+                        });
                 } else if (provider === 'gemini') {
-                    if (window.showNotification) window.showNotification("✅ Gemini AI active (Groq not configured)", "success");
+                    if (window.showNotification) window.showNotification("✅ Gemini AI active (Groq not configured or rate limited)", "success");
                 } else {
                     if (window.showNotification) window.showNotification("⚠️ No AI key found — add GROQ_API_KEY to HF Secrets", "error");
                 }
