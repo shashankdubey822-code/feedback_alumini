@@ -1623,8 +1623,8 @@ class SmartCalendar {
                 card.innerHTML = `
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
                         <div>
-                            <div style="font-size:13px;font-weight:600;color:#f0f0f5;">${esc(ev.speaker_name)}</div>
-                            <div style="font-size:11px;color:#8b8b9e;margin-top:2px;">${esc(ev.venue_date)} &nbsp;·&nbsp; ${ev.responses} response${ev.responses !== 1 ? 's' : ''}</div>
+                            <div style="font-size:13px;font-weight:600;color:#111827;">${esc(ev.speaker_name)}</div>
+                            <div style="font-size:11px;color:#555b6e;margin-top:2px;">${esc(ev.venue_date)} &nbsp;·&nbsp; ${ev.responses} response${ev.responses !== 1 ? 's' : ''}</div>
                         </div>
                         <span style="font-size:10px;padding:3px 8px;border-radius:12px;font-weight:600;${hasForm ? (isExpired ? 'background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.2);' : 'background:rgba(34,211,102,0.1);color:#34d399;border:1px solid rgba(34,211,102,0.2);') : 'background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.2);'}">
                             ${hasForm ? (isExpired ? 'Expired' : 'Active') : 'No Form'}
@@ -1636,8 +1636,8 @@ class SmartCalendar {
                             style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Copy</button>
                         <button data-open-url="${ev.form_url}" class="btn-open-event-url"
                             style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Open</button>
-                        ${!isExpired ? `<button data-form="${ev.form_id}" class="btn-close-form"
-                            style="flex:1;padding:6px;border-radius:6px;background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Close Form</button>` : ''}
+                        ${!isExpired ? `<button data-form="${ev.form_id}" data-speaker="${esc(ev.speaker_name)}" class="btn-close-form"
+                            style="flex:1;padding:6px;border-radius:6px;background:rgba(239,68,68,0.15);color:#dc2626;border:1px solid rgba(239,68,68,0.3);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Toggle</button>` : ''}
                         ${timeRemainingStr}
                     </div>` : `
                     <button data-event-id="${ev.id}" class="btn-generate-existing"
@@ -1671,29 +1671,47 @@ class SmartCalendar {
                 });
             });
 
-            // Close form status buttons
             list.querySelectorAll('.btn-close-form').forEach(btn => {
                 btn.addEventListener('click', async () => {
-                    if (!confirm("Are you sure you want to close this form immediately? No further responses will be accepted.")) return;
                     const formId = btn.dataset.form;
+                    const speakerName = btn.dataset.speaker || 'this form';
                     if (!formId) return;
-                    btn.textContent = '...';
+
+                    // Custom confirmation instead of native confirm()
+                    const confirmed = window.confirm(
+                        `⚠️ Close "${speakerName}" form?\n\nThis will immediately stop accepting new responses. Students currently filling the form will NOT be able to submit.\n\nAre you sure?`
+                    );
+                    if (!confirmed) return;
+
+                    const originalText = btn.textContent;
+                    btn.textContent = 'Closing...';
                     btn.disabled = true;
+                    btn.style.opacity = '0.6';
                     try {
                         const r = await fetch(`${API_BASE}/api/admin/close-form`, {
                             method: 'POST', headers: authHeaders(),
                             body: JSON.stringify({ form_id: formId })
                         });
                         const d = await r.json();
-                        btn.textContent = d.message ? 'Closed!' : 'Error';
-                        if (d.status === 'closed') {
+                        // Success if status is 'closed' OR message says closed
+                        const isSuccess = d.status === 'closed' || (d.message && d.message.toLowerCase().includes('closed'));
+                        if (isSuccess) {
+                            btn.textContent = '✓ Closed!';
+                            btn.style.background = 'rgba(34,197,94,0.15)';
+                            btn.style.color = '#16a34a';
+                            btn.style.border = '1px solid rgba(34,197,94,0.3)';
                             setTimeout(() => loadEvents(), 1500);
                         } else {
-                            setTimeout(() => { btn.textContent = 'Close Form'; btn.disabled = false; }, 2000);
+                            btn.textContent = 'Error';
+                            btn.style.color = '#ef4444';
+                            console.error('[TOGGLE] Close form failed:', d);
+                            setTimeout(() => { btn.textContent = originalText; btn.disabled = false; btn.style.opacity = '1'; btn.style.color = '#dc2626'; }, 2500);
                         }
                     } catch (e) {
+                        console.error('[TOGGLE] Network error:', e);
                         btn.textContent = 'Error';
-                        setTimeout(() => { btn.textContent = 'Close Form'; btn.disabled = false; }, 2000);
+                        btn.style.color = '#ef4444';
+                        setTimeout(() => { btn.textContent = originalText; btn.disabled = false; btn.style.opacity = '1'; btn.style.color = '#dc2626'; }, 2500);
                     }
                 });
             });

@@ -195,6 +195,27 @@ def store_webhook_submission(db_path: str, payload: dict) -> int:
         
         # Roll Number normalization (already done for roll_no variable above)
         
+        # ── Auto-enrich speaker & date from events table ──────────────────────
+        # The student form has no "speaker name" question — it's stored in the
+        # events table. Look it up by form_id so the Compilation tab shows it.
+        event_speaker_name = responses.get('alumni_speaker_name', '')
+        event_date_of_lecture = responses.get('date_of_lecture', '')
+
+        if form_id and form_id != 'WEBHOOK_FORM':
+            try:
+                cursor.execute(
+                    "SELECT speaker_name, venue_date FROM events WHERE form_id = ?",
+                    (form_id,)
+                )
+                ev_row = cursor.fetchone()
+                if ev_row:
+                    if ev_row[0]:
+                        event_speaker_name = ev_row[0]
+                    if ev_row[1] and not event_date_of_lecture:
+                        event_date_of_lecture = ev_row[1]
+            except Exception as lookup_err:
+                logger.warning(f"Could not enrich speaker from events: {lookup_err}")
+
         values = (
             timestamp,
             timestamp_normalized,
@@ -203,8 +224,8 @@ def store_webhook_submission(db_path: str, payload: dict) -> int:
             dept_cleaned,
             roll_no,  # Original (uppercased)
             roll_no,  # Cleaned (same as original for now)
-            responses.get('date_of_lecture', ''),
-            responses.get('alumni_speaker_name', ''),
+            event_date_of_lecture,
+            event_speaker_name,
             responses.get('session_help_understanding', ''),
             responses.get('session_rating', None),
             responses.get('session_technical_clarity', None),
