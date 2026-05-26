@@ -228,34 +228,45 @@ Append-only history of Wiki operations.
                                val: List[str], crit: List[str], req: List[str]) -> bool:
         """Call Gemini API to generate professional interlinked markdown pages"""
         prompt = f"""
-You are the AI Knowledge Base compiler. You are tasked with analyzing student survey feedback for an alumni guest lecture and updating a compounding Wiki.
-Session details:
-- Speaker Name: {speaker}
-- Lecture Date: {date_str}
-- Number of student forms: {total}
-- Average rating: {avg_rating}/5
-- Session Impact understanding: {json.dumps(shu)}
+[SYSTEM INITIALIZATION] 
+ROLE: Chief Pedagogical Data Scientist & Alumni Relations Expert
+CAPABILITY: Extreme Deep Data Analysis, Psychological Sentiment Profiling, and Actionable Intelligence Synthesis.
 
-Here are selected student text entries:
-- What aspects they found most valuable: {json.dumps(val[:30])}
-- Specific critiques/suggestions for improvements: {json.dumps(crit[:30])}
-- Topics requested for future sessions: {json.dumps(req[:30])}
+You are analyzing raw student survey data from an alumni guest lecture. Do NOT just summarize. You must uncover hidden correlations, diagnose pedagogical friction points (why students struggled or excelled), and generate highly structured, authoritative executive reports.
 
-Your job is to generate the contents of THREE target wiki files:
-1. `events/{safe_event}.md`: Summarize this specific guest lecture event. Detail the positive aspects, the critiques, the ratings, and link back to `[[speakers/{safe_speaker}]]` and key concepts like `[[concepts/Machine_Learning]]` if applicable.
-2. `speakers/{safe_speaker}.md`: Create or update this speaker dossier. Summarize their performance, aggregate their ratings, note if they improved over previous sessions, and add a historical log.
-3. `concepts/New_Concept.md` / `suggestions/New_Critique.md`: Extract the dominant core topic request (e.g. `[[concepts/Artificial_Intelligence]]`) and the dominant critique category (e.g. `[[suggestions/More_Interaction]]`).
+[SESSION DATA STREAM]
+- Target Entity (Speaker): {speaker}
+- Chronology: {date_str}
+- Sample Size: {total} student responses
+- Quantitative Baseline (Avg Rating): {avg_rating}/5
+- Pedagogical Impact Matrix (Understanding Levels): {json.dumps(shu)}
+- High-Value Anchors (What worked): {json.dumps(val[:30])}
+- Friction Points & Critiques (What failed): {json.dumps(crit[:30])}
+- Forward Trajectory (Requested topics): {json.dumps(req[:30])}
 
-Format your response strictly as a JSON object with this schema:
+[MISSION DIRECTIVE]
+Generate THREE high-density intelligence dossiers formatted in strict Markdown. You must liberally use double-bracket WikiLinks (e.g. `[[speakers/{safe_speaker}]]`, `[[concepts/Advanced_AI]]`, `[[suggestions/Pacing_Control]]`) to weave a massive, interconnected knowledge graph.
+
+1. `events/{safe_event}.md`:
+   - Must contain: Executive Summary, Quantitative Breakdown, Deep Sentiment Analysis, Pedagogical Successes, and Critical Failure Points. Connect all findings to specific student quotes or trends.
+
+2. `speakers/{safe_speaker}.md`:
+   - Must contain: Speaker Archetype & Style Profile, Aggregate Historical Performance, Core Strengths, and Actionable Directives for their next lecture. If rating is below 3.5, provide a "Risk Mitigation Strategy". 
+
+3. `concepts/New_Concept.md` or `suggestions/New_Critique.md`:
+   - Identify the single most critical recurring systemic issue (suggestion) OR the highest-velocity emerging interest (concept). Write an abstract defining this and its impact on the curriculum.
+
+[OUTPUT SCHEMA]
+Strict JSON object only. No markdown fences outside the JSON values.
 {{
   "event_page": "markdown text for events/{safe_event}.md",
   "speaker_page": "markdown text for speakers/{safe_speaker}.md",
   "new_concept_name": "Name_of_Concept",
   "new_concept_page": "markdown text for concepts/Name_of_Concept.md",
   "new_suggestion_name": "Name_of_Suggestion",
-  "new_suggestion_page": "markdown text for suggestions/Name_of_Suggestion.md"
+  "new_suggestion_page": "markdown text for suggestions/Name_of_Suggestion.md",
+  "speaker_update_summary": "1 sentence executive tl;dr for the speaker's log"
 }}
-Ensure the markdown uses clean headings, bullet points, double-bracket wiki links (like [[speakers/{safe_speaker}]] and [[concepts/Machine_Learning]]), and feels extremely analytical.
 """
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.gemini_key}"
@@ -552,14 +563,25 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
             context_str += f"- Speaker: {r.get('alumni_speaker_name')}, Valuable: {r.get('aspect_most_valuable')}, Critique: {r.get('improvements_suggestions')}\n"
 
         prompt = f"""
-You are the Alumni Feedback AI Observatory Assistant. Answer the user's question using the compiled Knowledge Base context below.
-Provide a premium, detailed, and highly analytical response.
-Refer to specific Wiki documents using standard WikiLinks (like [[speakers/John_Doe]] or [[events/2026-03-21_John_Doe]] or [[concepts/Machine_Learning]]) whenever you reference a topic, date, or speaker. This is vital so the user can click them!
+[SYSTEM INITIALIZATION]
+ROLE: Senior Alumni Data Consultant & RAG Intelligence Agent
+OBJECTIVE: Provide extreme-value, deeply analytical insights based strictly on the provided Context.
 
-Context:
+You are interacting with the administration regarding their alumni guest lecture feedback. You must answer their questions with massive intellectual authority, structuring your response like a high-end McKinsey consultancy report.
+Do NOT give generic answers. Cross-reference data points within the context, highlight contradictory feedback if it exists, and draw definitive pedagogical conclusions.
+
+MANDATORY RULES:
+1. You MUST liberally cite your sources using WikiLinks (e.g. `[[speakers/John_Doe]]`, `[[events/2026-03-21_Jane]]`, `[[concepts/Pacing]]`). This is required so the user can click through the Knowledge Graph.
+2. Structure your response with bold headings, bullet points, and an "Executive Summary" at the top if the answer is long.
+3. If the context does not contain the answer, state what data is missing instead of hallucinating.
+
+=== CONTEXT STREAM ===
 {context_str}
 
-User Question: {question}
+=== USER QUERY ===
+{question}
+
+=== YOUR EXPERT ANALYSIS ===
 """
         # Execute synthesis
         if self.gemini_key:
