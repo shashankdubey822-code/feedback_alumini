@@ -638,24 +638,32 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
 
     # ─── QUERY SYNTHESIZER (RAG ON WIKI) ──────────────────────────────────────
 
-    def query_wiki(self, question: str) -> Dict[str, Any]:
+    def query_wiki(self, question: str, history: List[Dict[str, str]] = None) -> Dict[str, Any]:
         """
         Query the compiled Wiki.
         Performs vector-RAG, loads relevant files, and feeds them into the LLM context.
         """
-        logger.info(f"RAG Wiki Query: '{question}'")
+        logger.info(f"RAG Wiki Query: '{question}' with history length {len(history) if history else 0}")
         
-        # 1. Fetch relevant feedback hits via vector RAG
+        # 1. To make conversational RAG work with follow-ups, merge current question with recent history
+        search_query = question
+        if history:
+            user_msgs = [h.get('content', '') for h in history if h.get('role') == 'user']
+            if user_msgs:
+                # Include the last 2 user messages to enrich search tokens
+                search_query += " " + " ".join(user_msgs[-2:])
+        
+        # 2. Fetch relevant feedback hits via vector RAG
         from backend.services.rag_service import RAGService
         rag = RAGService()
-        similar_rows = rag.search_similar_feedback(question, limit=4)
+        similar_rows = rag.search_similar_feedback(search_query, limit=4)
         
-        # 2. Extract matching entities (find matching markdown pages)
+        # 3. Extract matching entities (find matching markdown pages)
         pages = self.list_wiki_pages()
         matched_pages = []
         
         # Simple keyword matching on file paths
-        tokens = [t.lower() for t in question.split() if len(t) > 3]
+        tokens = [t.lower() for t in search_query.split() if len(t) > 3]
         for p in pages:
             p_lower = p.lower()
             if any(t in p_lower for t in tokens):
@@ -666,51 +674,64 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
         # Limit matched pages to 3 to prevent token overflow
         matched_pages = matched_pages[:3]
         
-        # ─── 3. SYNTESIZE RESPONSE ───────────────────────────────────────────
-        context_str = "=== RELEVANT WIKI PAGES ===\n"
-        for p_path, p_content in matched_pages:
-            context_str += f"File: [[{p_path}]]\n{p_content}\n\n"
-            
-        context_str += "=== STUDENT FEEDBACK DATA ===\n"
-        for r in similar_rows:
-            context_str += f"- Speaker: {r.get('alumni_speaker_name')}, Valuable: {r.get('aspect_most_valuable')}, Critique: {r.get('improvements_suggestions')}\n"
+        # ─── 4. SYNTHESIZE RESPONSE ───────────────────────────────────────────
+        context_str = ""
+        if matched_pages:
+            context_str += "=== RELEVANT WIKI PAGES ===\n"
+            for p_path, p_content in matched_pages:
+                context_str += f"File: [[{p_path}]]\n{p_content}\n\n"
+        
+        if similar_rows:
+            context_str += "=== STUDENT FEEDBACK DATA ===\n"
+            for r in similar_rows:
+                context_str += f"- Speaker: {r.get('alumni_speaker_name')}, Valuable: {r.get('aspect_most_valuable')}, Critique: {r.get('improvements_suggestions')}\n"
 
-        prompt = f"""You are a smart, direct AI analyst for a college alumni feedback dashboard. Answer questions about student feedback data clearly and conversationally.
+        if not context_str.strip():
+            context_str = "No compiled wiki pages or feedback records matched this query in the database."
 
-CRITICAL RULES:
-1. ALWAYS lead with a direct answer - put the key number or fact FIRST in one line.
-2. Then provide 2-3 bullet points of supporting analysis. Keep it concise.
-3. Use plain, friendly language - NOT corporate jargon or formal consultant-speak.
-4. Only use WikiLinks like [[speakers/Name]] when referencing compiled dossiers.
-5. If data is insufficient, say so briefly in one sentence.
-6. Maximum 150 words unless the question genuinely needs more detail.
+        # Strict Prompt for Factual Integrity and Humanlike conversational capability
+        system_instruction = f"""You are a smart, direct, and humanlike AI analyst for a college alumni feedback dashboard. 
 
-EXAMPLE - BAD (never do this):
-"Greetings. As the Senior Alumni Data Consultant, I am prepared to provide..."
+CRITICAL FACTUAL INTEGRITY RULES:
+1. NEVER guess, assume, or hallucinate. You only have access to the data provided below in the "AVAILABLE DATA" section.
+2. If the user asks about a speaker, date, event, topic, or feedback that is NOT explicitly mentioned or documented in the "AVAILABLE DATA" below, you MUST say exactly: "I do not have access to that feedback data. It has not been compiled or ingested yet."
+3. If the user asks general-knowledge questions (e.g., how to code, general trivia, math), decline politely: "I am your alumni feedback assistant. I only have access to the guest lecture data. Please ask questions about the compiled sessions."
+4. If the data is empty or says "No compiled wiki pages...", do not generate any stats or feedback analysis. Just tell the user to compile the lectures first.
 
-EXAMPLE - GOOD (always do this):
-"3 students want AI/ML topics for future sessions.
-- Most popular request: practical industry applications
-- Shruti Bhardwaj's session highlighted need for diverse alumni backgrounds
-- Recommend inviting alumni with average academic backgrounds too"
+CONVERSATIONAL MEMORY & TONE:
+1. You have conversational history. Be helpful, direct, and conversational (use "I", "you", "we").
+2. Put the direct answer or main statistic FIRST on line 1.
+3. Use 2-3 bullet points for supporting details if needed.
+4. Only use double-bracket WikiLinks (e.g. [[speakers/Name]]) when referring to compiled files that actually exist in the AVAILABLE DATA.
+5. Maximum length: 150 words.
 
 === AVAILABLE DATA ===
 {context_str}
-
-=== USER QUESTION ===
-{question}
-
-=== YOUR ANSWER ===
 """
+
+        # For Groq: construct structured messages list
+        messages = [
+            {"role": "system", "content": system_instruction}
+        ]
+        
+        if history:
+            for h in history:
+                role = h.get('role', 'user')
+                if role in ('model', 'ai', 'assistant'):
+                    role = 'assistant'
+                messages.append({"role": role, "content": h.get('content', '')})
+        else:
+            messages.append({"role": "user", "content": question})
+
         # Execute synthesis — Try Groq first, then Gemini
         if self.groq_key:
             try:
                 url = "https://api.groq.com/openai/v1/chat/completions"
                 req_data = json.dumps({
                     "model": "llama-3.3-70b-versatile",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.5,
-                    "max_tokens": 600
+                    "messages": messages,
+                    "temperature": 0.3,
+                    "max_tokens": 500
                 }).encode('utf-8')
                 request = urllib.request.Request(url, data=req_data, headers={
                     'Authorization': f'Bearer {self.groq_key}',
@@ -722,25 +743,42 @@ EXAMPLE - GOOD (always do this):
                     synthesis = res_body['choices'][0]['message']['content']
                     return {"answer": synthesis, "citations": [p[0] for p in matched_pages]}
             except Exception as e:
-                logger.warning(f"Groq chat failed, trying Gemini: {str(e)}")
+                logger.warning(f"Groq conversational query failed: {str(e)}")
+
+        # Combined prompt for Gemini / simple fallbacks
+        history_str = ""
+        if history:
+            for h in history:
+                role = "User" if h.get('role') == 'user' else "AI"
+                history_str += f"{role}: {h.get('content')}\n"
+        else:
+            history_str = f"User: {question}\n"
+
+        combined_prompt = f"""{system_instruction}
+
+=== CONVERSATION HISTORY ===
+{history_str}
+AI:"""
 
         if self.gemini_key:
             try:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.gemini_key}"
-                req_data = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode('utf-8')
+                req_data = json.dumps({"contents": [{"parts": [{"text": combined_prompt}]}]}).encode('utf-8')
                 request = urllib.request.Request(url, data=req_data, headers={'Content-Type': 'application/json'})
                 with urllib.request.urlopen(request, timeout=30) as response:
                     res_body = json.loads(response.read().decode('utf-8'))
                     synthesis = res_body['candidates'][0]['content']['parts'][0]['text']
                     return {"answer": synthesis, "citations": [p[0] for p in matched_pages]}
             except Exception as e:
-                logger.error(f"Gemini chat also failed: {str(e)}")
+                logger.error(f"Gemini conversational query also failed: {str(e)}")
 
         # Offline fallback
-        offline_answer = f"""No AI available. Here's what the data shows for: **"{question}"**
-- Matching Wiki Pages: {', '.join([f'[[{p[0]}]]' for p in matched_pages]) if matched_pages else 'None'}
-- Feedback rows matched: {len(similar_rows)}
-Add GROQ_API_KEY to Hugging Face Secrets to enable full AI responses."""
+        offline_answer = f"""No AI available. Here's what the database shows for your query:
+
+- **Matching Wiki Pages**: {', '.join([f'[[{p[0]}]]' for p in matched_pages]) if matched_pages else 'None'}
+- **Feedback rows matched**: {len(similar_rows)}
+
+Add GROQ_API_KEY to Hugging Face Secrets to enable full conversational memory."""
         return {"answer": offline_answer, "citations": [p[0] for p in matched_pages]}
 
     # ─── WIKI LINTER (HEALTH CHECKS) ──────────────────────────────────────────

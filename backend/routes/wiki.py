@@ -216,12 +216,13 @@ def execute_wiki_query():
     try:
         body = request.get_json() or {}
         question = body.get('question', '').strip()
+        history = body.get('history', [])
         
         if not question:
             return jsonify({'error': 'Question cannot be empty.'}), 400
             
         service = _get_wiki_service()
-        result = service.query_wiki(question)
+        result = service.query_wiki(question, history)
         return jsonify(result), 200
     except Exception as e:
         logger.error(f"Error executing wiki query: {str(e)}")

@@ -78,6 +78,7 @@ const Wiki = {
         this.elements.chatBox = document.getElementById('wiki-chat-box');
         this.elements.chatInput = document.getElementById('wiki-chat-input');
         this.elements.chatSendBtn = document.getElementById('btn-wiki-chat-send');
+        this.elements.chatClearBtn = document.getElementById('btn-wiki-chat-clear');
         this.elements.canvas = document.getElementById('wiki-graph-canvas');
         
         // Settings elements
@@ -167,6 +168,13 @@ const Wiki = {
         if (this.elements.chatSendBtn) {
             this.elements.chatSendBtn.addEventListener('click', function() {
                 self.sendChatMessage();
+            });
+        }
+
+        if (this.elements.chatClearBtn) {
+            this.elements.chatClearBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                self.clearChatMemory();
             });
         }
 
@@ -532,11 +540,16 @@ const Wiki = {
     // ─── CHAT / RAG ASSISTANT ────────────────────────────────────────────────
 
     sendChatMessage() {
+        if (!this.chatHistory) this.chatHistory = [];
+        
         const text = this.elements.chatInput.value.trim();
         if (!text) return;
 
         this.elements.chatInput.value = '';
         this.appendChatMessage('user', text);
+        
+        // Push user message to history
+        this.chatHistory.push({ role: 'user', content: text });
 
         const self = this;
         // Show indicator
@@ -545,7 +558,10 @@ const Wiki = {
         fetch('/api/v1/wiki/query', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question: text })
+            body: JSON.stringify({ 
+                question: text,
+                history: this.chatHistory
+            })
         })
         .then(res => res.json())
         .then(data => {
@@ -554,11 +570,22 @@ const Wiki = {
             
             // Render result with parsed links
             self.appendChatMessage('ai', data.answer);
+            
+            // Push assistant response to history
+            self.chatHistory.push({ role: 'assistant', content: data.answer });
         })
         .catch(err => {
             console.error("Error sending query:", err);
             loadingDiv.innerText = "Error: Failed to fetch answer from service.";
         });
+    },
+
+    clearChatMemory() {
+        this.chatHistory = [];
+        if (this.elements.chatBox) {
+            this.elements.chatBox.innerHTML = '<div class="chat-msg system" style="color: var(--text-muted); font-style: italic;">Brain memory cleared. Ask new questions regarding compiled speakers and sessions!</div>';
+        }
+        if (window.showNotification) window.showNotification("AI memory cleared successfully.", "success");
     },
 
     appendChatMessage(sender, text) {
