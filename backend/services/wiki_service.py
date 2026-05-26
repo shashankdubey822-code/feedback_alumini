@@ -1297,18 +1297,31 @@ FORMATTING AND LENGTH RULES (CRITICAL):
 """
 
         # Setup LangChain LLM with fallback support for API limits
+        # Setting max_retries=0 prevents LangChain from automatically sleeping for minutes when hitting 429 rate limits.
         llm = None
-        gemini_fallback = None
+        fallbacks = []
         
+        # Build the fallback chain from bottom to top
+        if self.cohere_key:
+            from langchain_cohere import ChatCohere
+            fallbacks.append(ChatCohere(cohere_api_key=self.cohere_key, model="command-r-plus", temperature=0.1, max_retries=0))
+            
+        if self.mistral_key:
+            from langchain_mistralai import ChatMistralAI
+            fallbacks.append(ChatMistralAI(api_key=self.mistral_key, model="mistral-large-latest", temperature=0.1, max_retries=0))
+
         if self.gemini_key:
-            gemini_fallback = ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.1, max_retries=1)
+            fallbacks.append(ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.1, max_retries=0))
             
         if self.groq_key:
-            llm = ChatGroq(api_key=self.groq_key, model="llama-3.3-70b-versatile", temperature=0.1, max_retries=1)
-            if gemini_fallback:
-                llm = llm.with_fallbacks([gemini_fallback])
-        elif gemini_fallback:
-            llm = gemini_fallback
+            llm = ChatGroq(api_key=self.groq_key, model="llama-3.3-70b-versatile", temperature=0.1, max_retries=0)
+            if fallbacks:
+                llm = llm.with_fallbacks(fallbacks[::-1]) # Reverse so Gemini is first fallback, then Mistral, then Cohere
+        elif fallbacks:
+            llm = fallbacks[-1]
+            if len(fallbacks) > 1:
+                llm = llm.with_fallbacks(fallbacks[:-1][::-1])
+
         if llm:
             prompt = ChatPromptTemplate.from_messages([
                 ("system", system_instruction),
