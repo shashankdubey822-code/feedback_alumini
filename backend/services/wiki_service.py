@@ -265,23 +265,23 @@ Append-only history of Wiki operations.
         safe_event = f"{date_str}_{safe_speaker}"
 
         # ─── TRIGGER COMPILER EXECUTION: 3-LAYER FALLBACK ────────────────────────
-        # Layer 1: Groq (Llama 3.3 70B) — 14,400 free calls/day
-        if self.groq_key:
-            success, err_msg = self._run_groq_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
-            if success:
-                self.log_compilation(f"✅ Compiled '{speaker}' ({date_str}) via Groq Llama 3.3 70B.")
-                return safe_event
-            else:
-                self.log_compilation(f"⚠️ Groq failed: {err_msg}. Trying Gemini...")
-
-        # Layer 2: Gemini Flash — backup if Groq is unavailable
+        # Layer 1: Gemini Flash — 15 RPM, 1 million tokens/min free tier
         if self.gemini_key:
             success, err_msg = self._run_generative_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
             if success:
                 self.log_compilation(f"✅ Compiled '{speaker}' ({date_str}) via Gemini AI.")
                 return safe_event
             else:
-                self.log_compilation(f"⚠️ Gemini failed: {err_msg}. Using offline heuristics...")
+                self.log_compilation(f"⚠️ Gemini failed: {err_msg}. Trying Groq...")
+
+        # Layer 2: Groq (Llama 3.3 70B) — backup if Gemini is unavailable
+        if self.groq_key:
+            success, err_msg = self._run_groq_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
+            if success:
+                self.log_compilation(f"✅ Compiled '{speaker}' ({date_str}) via Groq Llama 3.3 70B.")
+                return safe_event
+            else:
+                self.log_compilation(f"⚠️ Groq failed: {err_msg}. Using offline heuristics...")
         
         # Execute Offline Heuristics compilation
         self._run_offline_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
