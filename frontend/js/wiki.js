@@ -819,8 +819,12 @@ const Wiki = {
             }
         });
 
-        canvas.addEventListener('mousedown', function() {
+        canvas.addEventListener('mousedown', function(e) {
             isMouseDown = true;
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+            
             // Detect if clicked node
             self.graph.draggedNode = self.findNodeAt(mouseX, mouseY);
             if (self.graph.draggedNode) {
@@ -887,7 +891,7 @@ const Wiki = {
                     const existing = oldNodes.get(nid);
                     
                     let type = "core";
-                    let color = "#fff";
+                    let color = "#3b82f6";
                     let radius = 6;
                     if (nid.startsWith('events/')) {
                         type = "event";
@@ -935,7 +939,7 @@ const Wiki = {
                 });
                 
                 // Restart physics simulation with new nodes
-                self.drawGraph();
+                self.drawGraph(self.elements.canvas.getContext('2d'));
             })
             .catch(err => console.error("Error loading graph data:", err));
     },
@@ -1060,7 +1064,7 @@ const Wiki = {
             ctx.stroke();
 
             // Label text drawing
-            ctx.fillStyle = n.highlighted ? '#fff' : '#a6abbb';
+            ctx.fillStyle = n.highlighted ? '#1e293b' : '#475569';
             ctx.font = n.highlighted ? 'bold 10px Inter' : '9px Inter';
             ctx.textAlign = 'center';
             ctx.fillText(n.label, n.x, n.y - n.radius - 4);
