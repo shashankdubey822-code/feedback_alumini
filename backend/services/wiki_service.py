@@ -675,61 +675,73 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
         for r in similar_rows:
             context_str += f"- Speaker: {r.get('alumni_speaker_name')}, Valuable: {r.get('aspect_most_valuable')}, Critique: {r.get('improvements_suggestions')}\n"
 
-        prompt = f"""
-[SYSTEM INITIALIZATION]
-ROLE: Senior Alumni Data Consultant & RAG Intelligence Agent
-OBJECTIVE: Provide extreme-value, deeply analytical insights based strictly on the provided Context.
+        prompt = f"""You are a smart, direct AI analyst for a college alumni feedback dashboard. Answer questions about student feedback data clearly and conversationally.
 
-You are interacting with the administration regarding their alumni guest lecture feedback. You must answer their questions with massive intellectual authority, structuring your response like a high-end McKinsey consultancy report.
-Do NOT give generic answers. Cross-reference data points within the context, highlight contradictory feedback if it exists, and draw definitive pedagogical conclusions.
+CRITICAL RULES:
+1. ALWAYS lead with a direct answer - put the key number or fact FIRST in one line.
+2. Then provide 2-3 bullet points of supporting analysis. Keep it concise.
+3. Use plain, friendly language - NOT corporate jargon or formal consultant-speak.
+4. Only use WikiLinks like [[speakers/Name]] when referencing compiled dossiers.
+5. If data is insufficient, say so briefly in one sentence.
+6. Maximum 150 words unless the question genuinely needs more detail.
 
-MANDATORY RULES:
-1. You MUST liberally cite your sources using WikiLinks (e.g. `[[speakers/John_Doe]]`, `[[events/2026-03-21_Jane]]`, `[[concepts/Pacing]]`). This is required so the user can click through the Knowledge Graph.
-2. Structure your response with bold headings, bullet points, and an "Executive Summary" at the top if the answer is long.
-3. If the context does not contain the answer, state what data is missing instead of hallucinating.
+EXAMPLE - BAD (never do this):
+"Greetings. As the Senior Alumni Data Consultant, I am prepared to provide..."
 
-=== CONTEXT STREAM ===
+EXAMPLE - GOOD (always do this):
+"3 students want AI/ML topics for future sessions.
+- Most popular request: practical industry applications
+- Shruti Bhardwaj's session highlighted need for diverse alumni backgrounds
+- Recommend inviting alumni with average academic backgrounds too"
+
+=== AVAILABLE DATA ===
 {context_str}
 
-=== USER QUERY ===
+=== USER QUESTION ===
 {question}
 
-=== YOUR EXPERT ANALYSIS ===
+=== YOUR ANSWER ===
 """
-        # Execute synthesis
+        # Execute synthesis — Try Groq first, then Gemini
+        if self.groq_key:
+            try:
+                url = "https://api.groq.com/openai/v1/chat/completions"
+                req_data = json.dumps({
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.5,
+                    "max_tokens": 600
+                }).encode('utf-8')
+                request = urllib.request.Request(url, data=req_data, headers={
+                    'Authorization': f'Bearer {self.groq_key}',
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'DataLens/1.0'
+                })
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    res_body = json.loads(response.read().decode('utf-8'))
+                    synthesis = res_body['choices'][0]['message']['content']
+                    return {"answer": synthesis, "citations": [p[0] for p in matched_pages]}
+            except Exception as e:
+                logger.warning(f"Groq chat failed, trying Gemini: {str(e)}")
+
         if self.gemini_key:
             try:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.gemini_key}"
-                req_data = json.dumps({
-                    "contents": [{"parts": [{"text": prompt}]}]
-                }).encode('utf-8')
-                
+                req_data = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode('utf-8')
                 request = urllib.request.Request(url, data=req_data, headers={'Content-Type': 'application/json'})
                 with urllib.request.urlopen(request, timeout=30) as response:
                     res_body = json.loads(response.read().decode('utf-8'))
                     synthesis = res_body['candidates'][0]['content']['parts'][0]['text']
-                    return {
-                        "answer": synthesis,
-                        "citations": [p[0] for p in matched_pages]
-                    }
+                    return {"answer": synthesis, "citations": [p[0] for p in matched_pages]}
             except Exception as e:
-                logger.error(f"Generative Wiki query failed: {str(e)}")
+                logger.error(f"Gemini chat also failed: {str(e)}")
 
-        # Offline heuristic fallback response
-        offline_answer = f"""### AI Assistant (Offline Heuristics)
-
-You asked: **"{question}"**
-
-I found the following associations in your Wiki database:
-- **Relevant Wiki Pages**: {', '.join([f'[[{p[0]}]]' for p in matched_pages]) if matched_pages else 'None'}
-- **Recent Student Feedback Matches**: {len(similar_rows)} feedback rows matched.
-
-*To activate complete synthesis, please enter a valid Google Gemini API Key in the settings.*
-"""
-        return {
-            "answer": offline_answer,
-            "citations": [p[0] for p in matched_pages]
-        }
+        # Offline fallback
+        offline_answer = f"""No AI available. Here's what the data shows for: **"{question}"**
+- Matching Wiki Pages: {', '.join([f'[[{p[0]}]]' for p in matched_pages]) if matched_pages else 'None'}
+- Feedback rows matched: {len(similar_rows)}
+Add GROQ_API_KEY to Hugging Face Secrets to enable full AI responses."""
+        return {"answer": offline_answer, "citations": [p[0] for p in matched_pages]}
 
     # ─── WIKI LINTER (HEALTH CHECKS) ──────────────────────────────────────────
 
