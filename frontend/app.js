@@ -2042,6 +2042,16 @@ class SmartCalendar {
             urlEl.textContent = _currentFormUrl || 'Error: URL not returned';
             urlEl.style.color = '#ffffff';
             
+            // Set up timer in the success box
+            const timerEl = document.getElementById('fb-result-timer');
+            if (timerEl) {
+                const expiryTime = Date.now() + (24 * 60 * 60 * 1000);
+                timerEl.dataset.expiry = expiryTime;
+                timerEl.dataset.formId = data.form_id;
+                timerEl.className = 'form-timer';
+                timerEl.style.display = 'block';
+            }
+            
             document.getElementById('fb-result').style.display = 'block';
 
             btn.textContent = 'Generate Another Form';
