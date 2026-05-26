@@ -75,6 +75,12 @@ class Config:
     # Groq Settings
     GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
 
+    # Additional AI fallback settings
+    HF_API_KEY = os.getenv('HF_API_KEY', os.getenv('HF_TOKEN', ''))
+    COHERE_API_KEY = os.getenv('COHERE_API_KEY', '')
+    OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
+    MISTRAL_API_KEY = os.getenv('MISTRAL_API_KEY', '')
+
     # Google Apps Script Settings
     # Set APPS_SCRIPT_URL and APPS_SCRIPT_SECRET as secrets in Hugging Face / Render.
     # Do NOT hardcode these values here.

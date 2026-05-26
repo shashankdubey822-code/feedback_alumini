@@ -95,6 +95,12 @@ class WikiService:
         self.gemini_key = config.GEMINI_API_KEY
         self.groq_key = config.GROQ_API_KEY
         
+        # Additional Fallback Keys
+        self.hf_key = config.HF_API_KEY
+        self.cohere_key = config.COHERE_API_KEY
+        self.openrouter_key = config.OPENROUTER_API_KEY
+        self.mistral_key = config.MISTRAL_API_KEY
+        
         # Local dir creation safety
         os.makedirs(self.wiki_dir, exist_ok=True)
         os.makedirs(self.pages_dir, exist_ok=True)
@@ -264,7 +270,7 @@ Append-only history of Wiki operations.
         safe_speaker = speaker.replace(' ', '_').replace('.', '')
         safe_event = f"{date_str}_{safe_speaker}"
 
-        # ─── TRIGGER COMPILER EXECUTION: 3-LAYER FALLBACK ────────────────────────
+        # ─── TRIGGER COMPILER EXECUTION: MULTI-LAYER FALLBACK ────────────────────
         # Layer 1: Gemini Flash — 15 RPM, 1 million tokens/min free tier
         if self.gemini_key:
             success, err_msg = self._run_generative_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
@@ -281,7 +287,43 @@ Append-only history of Wiki operations.
                 self.log_compilation(f"✅ Compiled '{speaker}' ({date_str}) via Groq Llama 3.3 70B.")
                 return safe_event
             else:
-                self.log_compilation(f"⚠️ Groq failed: {err_msg}. Using offline heuristics...")
+                self.log_compilation(f"⚠️ Groq failed: {err_msg}. Trying HuggingFace Serverless...")
+
+        # Layer 3: Hugging Face Serverless Inference API — backup if Groq is unavailable
+        if self.hf_key:
+            success, err_msg = self._run_hf_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
+            if success:
+                self.log_compilation(f"✅ Compiled '{speaker}' ({date_str}) via HuggingFace Serverless Inference.")
+                return safe_event
+            else:
+                self.log_compilation(f"⚠️ HuggingFace failed: {err_msg}. Trying Cohere...")
+
+        # Layer 4: Cohere API — backup if HuggingFace is unavailable
+        if self.cohere_key:
+            success, err_msg = self._run_cohere_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
+            if success:
+                self.log_compilation(f"✅ Compiled '{speaker}' ({date_str}) via Cohere.")
+                return safe_event
+            else:
+                self.log_compilation(f"⚠️ Cohere failed: {err_msg}. Trying OpenRouter...")
+
+        # Layer 5: OpenRouter — backup if Cohere is unavailable
+        if self.openrouter_key:
+            success, err_msg = self._run_openrouter_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
+            if success:
+                self.log_compilation(f"✅ Compiled '{speaker}' ({date_str}) via OpenRouter.")
+                return safe_event
+            else:
+                self.log_compilation(f"⚠️ OpenRouter failed: {err_msg}. Trying Mistral...")
+
+        # Layer 6: Mistral AI — backup if OpenRouter is unavailable
+        if self.mistral_key:
+            success, err_msg = self._run_mistral_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
+            if success:
+                self.log_compilation(f"✅ Compiled '{speaker}' ({date_str}) via Mistral AI.")
+                return safe_event
+            else:
+                self.log_compilation(f"⚠️ Mistral failed: {err_msg}. Using offline heuristics...")
         
         # Execute Offline Heuristics compilation
         self._run_offline_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
@@ -313,7 +355,7 @@ Append-only history of Wiki operations.
 
             with urllib.request.urlopen(request, timeout=60) as response:
                 res_body = json.loads(response.read().decode('utf-8'))
-                data = json.loads(res_body['choices'][0]['message']['content'])
+                data = self._safe_parse_json(res_body['choices'][0]['message']['content'])
                 return self._write_wiki_pages(safe_event, safe_speaker, speaker, date_str, avg_rating, data)
 
         except urllib.error.HTTPError as e:
@@ -330,6 +372,198 @@ Append-only history of Wiki operations.
         except Exception as e:
             from backend.utils.logger import log_gemini_error
             log_gemini_error("Groq-Compile", speaker, str(e))
+            return False, str(e)
+
+    def _safe_parse_json(self, text: str) -> dict:
+        """Robust JSON parser that can strip markdown block syntax if present"""
+        try:
+            return json.loads(text.strip())
+        except:
+            pass
+        cleaned = text.strip()
+        if cleaned.startswith("```"):
+            first_nl = cleaned.find("\n")
+            if first_nl != -1:
+                cleaned = cleaned[first_nl:]
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3]
+        return json.loads(cleaned.strip())
+
+    def _run_hf_ingest(self, safe_event: str, safe_speaker: str, speaker: str, date_str: str,
+                       total: int, avg_rating: float, shu: Dict[str, int],
+                       val: List[str], crit: List[str], req: List[str]) -> Tuple[bool, str]:
+        """Call Hugging Face Serverless Inference API (Qwen 2.5 72B Instruct)"""
+        prompt = self._build_wiki_prompt(safe_event, safe_speaker, speaker, date_str, total, avg_rating, shu, val, crit, req)
+        try:
+            # Using Qwen 2.5 72B Instruct which is exceptional at code, structured JSON output, and RAG compilation
+            url = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-72B-Instruct/v1/chat/completions"
+            req_data = json.dumps({
+                "model": "Qwen/Qwen2.5-72B-Instruct",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.7
+            }).encode('utf-8')
+
+            request = urllib.request.Request(
+                url, data=req_data,
+                headers={
+                    'Authorization': f'Bearer {self.hf_key}',
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'DataLens/1.0'
+                }
+            )
+
+            with urllib.request.urlopen(request, timeout=60) as response:
+                res_body = json.loads(response.read().decode('utf-8'))
+                raw_content = res_body['choices'][0]['message']['content']
+                data = self._safe_parse_json(raw_content)
+                return self._write_wiki_pages(safe_event, safe_speaker, speaker, date_str, avg_rating, data)
+
+        except urllib.error.HTTPError as e:
+            try:
+                err_body = e.read().decode('utf-8')
+                err_json = json.loads(err_body)
+                exact_msg = err_json.get('error', {}).get('message', err_body)
+            except:
+                exact_msg = str(e)
+            error_msg = f"HTTP {e.code}: {exact_msg}"
+            from backend.utils.logger import log_gemini_error
+            log_gemini_error("HF-Compile", speaker, error_msg)
+            return False, error_msg
+        except Exception as e:
+            from backend.utils.logger import log_gemini_error
+            log_gemini_error("HF-Compile", speaker, str(e))
+            return False, str(e)
+
+    def _run_cohere_ingest(self, safe_event: str, safe_speaker: str, speaker: str, date_str: str,
+                           total: int, avg_rating: float, shu: Dict[str, int],
+                           val: List[str], crit: List[str], req: List[str]) -> Tuple[bool, str]:
+        """Call Cohere API (Command-R-Plus)"""
+        prompt = self._build_wiki_prompt(safe_event, safe_speaker, speaker, date_str, total, avg_rating, shu, val, crit, req)
+        try:
+            url = "https://api.cohere.ai/v1/chat"
+            req_data = json.dumps({
+                "message": prompt,
+                "model": "command-r-plus",
+                "response_format": {"type": "json_object"}
+            }).encode('utf-8')
+
+            request = urllib.request.Request(
+                url, data=req_data,
+                headers={
+                    'Authorization': f'Bearer {self.cohere_key}',
+                    'Content-Type': 'application/json'
+                }
+            )
+
+            with urllib.request.urlopen(request, timeout=60) as response:
+                res_body = json.loads(response.read().decode('utf-8'))
+                data = self._safe_parse_json(res_body['text'])
+                return self._write_wiki_pages(safe_event, safe_speaker, speaker, date_str, avg_rating, data)
+
+        except urllib.error.HTTPError as e:
+            try:
+                err_body = e.read().decode('utf-8')
+                err_json = json.loads(err_body)
+                exact_msg = err_json.get('message', err_body)
+            except:
+                exact_msg = str(e)
+            error_msg = f"HTTP {e.code}: {exact_msg}"
+            from backend.utils.logger import log_gemini_error
+            log_gemini_error("Cohere-Compile", speaker, error_msg)
+            return False, error_msg
+        except Exception as e:
+            from backend.utils.logger import log_gemini_error
+            log_gemini_error("Cohere-Compile", speaker, str(e))
+            return False, str(e)
+
+    def _run_openrouter_ingest(self, safe_event: str, safe_speaker: str, speaker: str, date_str: str,
+                               total: int, avg_rating: float, shu: Dict[str, int],
+                               val: List[str], crit: List[str], req: List[str]) -> Tuple[bool, str]:
+        """Call OpenRouter API (Mistral 7B Instruct Free)"""
+        prompt = self._build_wiki_prompt(safe_event, safe_speaker, speaker, date_str, total, avg_rating, shu, val, crit, req)
+        try:
+            url = "https://openrouter.ai/api/v1/chat/completions"
+            req_data = json.dumps({
+                "model": "mistralai/mistral-7b-instruct:free",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.7
+            }).encode('utf-8')
+
+            request = urllib.request.Request(
+                url, data=req_data,
+                headers={
+                    'Authorization': f'Bearer {self.openrouter_key}',
+                    'Content-Type': 'application/json',
+                    'HTTP-Referer': 'https://huggingface.co/spaces/vrfefavr/alumini_feedback',
+                    'X-Title': 'Alumni Feedback System'
+                }
+            )
+
+            with urllib.request.urlopen(request, timeout=60) as response:
+                res_body = json.loads(response.read().decode('utf-8'))
+                raw_content = res_body['choices'][0]['message']['content']
+                data = self._safe_parse_json(raw_content)
+                return self._write_wiki_pages(safe_event, safe_speaker, speaker, date_str, avg_rating, data)
+
+        except urllib.error.HTTPError as e:
+            try:
+                err_body = e.read().decode('utf-8')
+                err_json = json.loads(err_body)
+                exact_msg = err_json.get('error', {}).get('message', err_body)
+            except:
+                exact_msg = str(e)
+            error_msg = f"HTTP {e.code}: {exact_msg}"
+            from backend.utils.logger import log_gemini_error
+            log_gemini_error("OpenRouter-Compile", speaker, error_msg)
+            return False, error_msg
+        except Exception as e:
+            from backend.utils.logger import log_gemini_error
+            log_gemini_error("OpenRouter-Compile", speaker, str(e))
+            return False, str(e)
+
+    def _run_mistral_ingest(self, safe_event: str, safe_speaker: str, speaker: str, date_str: str,
+                            total: int, avg_rating: float, shu: Dict[str, int],
+                            val: List[str], crit: List[str], req: List[str]) -> Tuple[bool, str]:
+        """Call Mistral API (Mistral Nemo / Mistral Small)"""
+        prompt = self._build_wiki_prompt(safe_event, safe_speaker, speaker, date_str, total, avg_rating, shu, val, crit, req)
+        try:
+            url = "https://api.mistral.ai/v1/chat/completions"
+            req_data = json.dumps({
+                "model": "open-mistral-nemo",
+                "messages": [{"role": "user", "content": prompt}],
+                "response_format": {"type": "json_object"},
+                "temperature": 0.7
+            }).encode('utf-8')
+
+            request = urllib.request.Request(
+                url, data=req_data,
+                headers={
+                    'Authorization': f'Bearer {self.mistral_key}',
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'DataLens/1.0'
+                }
+            )
+
+            with urllib.request.urlopen(request, timeout=60) as response:
+                res_body = json.loads(response.read().decode('utf-8'))
+                raw_content = res_body['choices'][0]['message']['content']
+                data = self._safe_parse_json(raw_content)
+                return self._write_wiki_pages(safe_event, safe_speaker, speaker, date_str, avg_rating, data)
+
+        except urllib.error.HTTPError as e:
+            try:
+                err_body = e.read().decode('utf-8')
+                err_json = json.loads(err_body)
+                exact_msg = err_json.get('error', {}).get('message', err_body)
+            except:
+                exact_msg = str(e)
+            error_msg = f"HTTP {e.code}: {exact_msg}"
+            from backend.utils.logger import log_gemini_error
+            log_gemini_error("Mistral-Compile", speaker, error_msg)
+            return False, error_msg
+        except Exception as e:
+            from backend.utils.logger import log_gemini_error
+            log_gemini_error("Mistral-Compile", speaker, str(e))
             return False, str(e)
 
     def _build_wiki_prompt(self, safe_event: str, safe_speaker: str, speaker: str, date_str: str,
