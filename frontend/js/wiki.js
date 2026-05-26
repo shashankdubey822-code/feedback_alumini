@@ -666,6 +666,7 @@ const Wiki = {
             self.chatHistory.push({ role: 'assistant', content: data.answer });
         })
         .catch(err => {
+            clearTimeout(waitTimeout);
             console.error("Error sending query:", err);
             loadingDiv.innerText = "Error: Failed to fetch answer from service.";
         });
