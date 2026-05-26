@@ -2260,9 +2260,12 @@ class SmartCalendar {
                     btn.disabled = true;
                     btn.style.opacity = '0.6';
                     try {
+                        // Python None becomes string "null" in template literals — sanitize it
+                        const cleanFormId = (formId && formId !== 'null' && formId !== 'None') ? formId : null;
+                        const cleanEventId = (eventId && eventId !== 'null' && eventId !== 'None') ? eventId : null;
                         const r = await fetch(`${API_BASE}/api/admin/close-form`, {
                             method: 'POST', headers: authHeaders(),
-                            body: JSON.stringify({ form_id: formId || null, event_id: eventId || null })
+                            body: JSON.stringify({ form_id: cleanFormId, event_id: cleanEventId })
                         });
                         const d = await r.json();
                         const isSuccess = d.status === 'closed' || (d.message && d.message.toLowerCase().includes('closed'));
