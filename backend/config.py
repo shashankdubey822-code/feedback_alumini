@@ -72,6 +72,9 @@ class Config:
     # Gemini Settings
     GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 
+    # Groq Settings
+    GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
+
 
 
 class DevelopmentConfig(Config):

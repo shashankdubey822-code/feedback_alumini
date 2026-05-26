@@ -40,6 +40,7 @@ class WikiService:
         self.pages_dir = os.path.join(self.wiki_dir, 'pages')
         self.bucket = config.SUPABASE_BUCKET
         self.gemini_key = config.GEMINI_API_KEY
+        self.groq_key = config.GROQ_API_KEY
         
         # Local dir creation safety
         os.makedirs(self.wiki_dir, exist_ok=True)
@@ -210,21 +211,135 @@ Append-only history of Wiki operations.
         safe_speaker = speaker.replace(' ', '_').replace('.', '')
         safe_event = f"{date_str}_{safe_speaker}"
 
-        # ─── TRIGGER COMPILER EXECUTION ───────────────────────────────────────
-        if self.gemini_key:
-            # Execute Generative AI compilation
-            success, err_msg = self._run_generative_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
+        # ─── TRIGGER COMPILER EXECUTION: 3-LAYER FALLBACK ────────────────────────
+        # Layer 1: Groq (Llama 3.3 70B) — 14,400 free calls/day
+        if self.groq_key:
+            success, err_msg = self._run_groq_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
             if success:
-                self.log_compilation(f"Successfully compiled '{speaker}' ({date_str}) using Gemini AI.")
+                self.log_compilation(f"✅ Compiled '{speaker}' ({date_str}) via Groq Llama 3.3 70B.")
                 return safe_event
             else:
-                self.log_compilation(f"AI Ingestion failed for '{speaker}'. Reason: {err_msg}")
-                self.log_compilation(f"Falling back to local offline heuristics.")
+                self.log_compilation(f"⚠️ Groq failed: {err_msg}. Trying Gemini...")
+
+        # Layer 2: Gemini Flash — backup if Groq is unavailable
+        if self.gemini_key:
+            success, err_msg = self._run_generative_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
+            if success:
+                self.log_compilation(f"✅ Compiled '{speaker}' ({date_str}) via Gemini AI.")
+                return safe_event
+            else:
+                self.log_compilation(f"⚠️ Gemini failed: {err_msg}. Using offline heuristics...")
         
         # Execute Offline Heuristics compilation
         self._run_offline_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
         self.log_compilation(f"Successfully compiled '{speaker}' ({date_str}) using Local Offline Heuristic Compiler.")
         return safe_event
+
+    def _run_groq_ingest(self, safe_event: str, safe_speaker: str, speaker: str, date_str: str,
+                         total: int, avg_rating: float, shu: Dict[str, int],
+                         val: List[str], crit: List[str], req: List[str]) -> Tuple[bool, str]:
+        """Call Groq API (Llama 3.3 70B) - Primary AI: 14,400 free calls/day"""
+        prompt = self._build_wiki_prompt(safe_event, safe_speaker, speaker, date_str, total, avg_rating, shu, val, crit, req)
+        try:
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            req_data = json.dumps({
+                "model": "llama-3.3-70b-versatile",
+                "messages": [{"role": "user", "content": prompt}],
+                "response_format": {"type": "json_object"},
+                "temperature": 0.7
+            }).encode('utf-8')
+
+            request = urllib.request.Request(
+                url, data=req_data,
+                headers={
+                    'Authorization': f'Bearer {self.groq_key}',
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'DataLens/1.0'
+                }
+            )
+
+            with urllib.request.urlopen(request, timeout=60) as response:
+                res_body = json.loads(response.read().decode('utf-8'))
+                data = json.loads(res_body['choices'][0]['message']['content'])
+                return self._write_wiki_pages(safe_event, safe_speaker, speaker, date_str, avg_rating, data)
+
+        except urllib.error.HTTPError as e:
+            try:
+                err_body = e.read().decode('utf-8')
+                err_json = json.loads(err_body)
+                exact_msg = err_json.get('error', {}).get('message', err_body)
+            except:
+                exact_msg = str(e)
+            error_msg = f"HTTP {e.code}: {exact_msg}"
+            from backend.utils.logger import log_gemini_error
+            log_gemini_error("Groq-Compile", speaker, error_msg)
+            return False, error_msg
+        except Exception as e:
+            from backend.utils.logger import log_gemini_error
+            log_gemini_error("Groq-Compile", speaker, str(e))
+            return False, str(e)
+
+    def _build_wiki_prompt(self, safe_event: str, safe_speaker: str, speaker: str, date_str: str,
+                           total: int, avg_rating: float, shu: Dict[str, int],
+                           val: List[str], crit: List[str], req: List[str]) -> str:
+        """Shared prompt builder for all AI providers"""
+        return f"""
+[SYSTEM INITIALIZATION] 
+ROLE: Chief Pedagogical Data Scientist & Alumni Relations Expert
+CAPABILITY: Extreme Deep Data Analysis, Psychological Sentiment Profiling, and Actionable Intelligence Synthesis.
+
+You are analyzing raw student survey data from an alumni guest lecture. Do NOT just summarize. You must uncover hidden correlations, diagnose pedagogical friction points, and generate highly structured, authoritative executive reports.
+
+[SESSION DATA STREAM]
+- Target Entity (Speaker): {speaker}
+- Chronology: {date_str}
+- Sample Size: {total} student responses
+- Quantitative Baseline (Avg Rating): {avg_rating}/5
+- Pedagogical Impact Matrix (Understanding Levels): {json.dumps(shu)}
+- High-Value Anchors (What worked): {json.dumps(val[:30])}
+- Friction Points & Critiques (What failed): {json.dumps(crit[:30])}
+- Forward Trajectory (Requested topics): {json.dumps(req[:30])}
+
+[MISSION DIRECTIVE]
+Generate THREE high-density intelligence dossiers formatted in strict Markdown. Use double-bracket WikiLinks (e.g. `[[speakers/{safe_speaker}]]`, `[[concepts/Advanced_AI]]`) liberally.
+
+1. `events/{safe_event}.md`: Executive Summary, Quantitative Breakdown, Deep Sentiment Analysis, Pedagogical Successes, Critical Failure Points.
+2. `speakers/{safe_speaker}.md`: Speaker Archetype & Style Profile, Aggregate Historical Performance, Core Strengths, Actionable Directives. If rating below 3.5, include "Risk Mitigation Strategy".
+3. `concepts/New_Concept.md` or `suggestions/New_Critique.md`: Identify the single most critical recurring systemic issue (suggestion) OR highest-velocity emerging interest (concept).
+
+[OUTPUT SCHEMA]
+Strict JSON object only. No markdown fences outside the JSON values.
+{{
+  "event_page": "markdown text for events/{safe_event}.md",
+  "speaker_page": "markdown text for speakers/{safe_speaker}.md",
+  "new_concept_name": "Name_of_Concept",
+  "new_concept_page": "markdown text for concepts/Name_of_Concept.md",
+  "new_suggestion_name": "Name_of_Suggestion",
+  "new_suggestion_page": "markdown text for suggestions/Name_of_Suggestion.md",
+  "speaker_update_summary": "1 sentence executive tl;dr for the speaker's log"
+}}
+"""
+
+    def _write_wiki_pages(self, safe_event: str, safe_speaker: str, speaker: str,
+                          date_str: str, avg_rating: float, data: dict) -> Tuple[bool, str]:
+        """Shared page-writing logic used by all AI providers"""
+        self.write_wiki_file(f"events/{safe_event}.md", data['event_page'])
+
+        existing_speaker = self.read_wiki_file(f"speakers/{safe_speaker}.md")
+        speaker_content = data['speaker_page']
+        if existing_speaker:
+            speaker_content = f"{existing_speaker}\n\n## Update: Session on {date_str}\n- Aggregated score: {avg_rating}/5\n- {data.get('speaker_update_summary', 'Lecture processed.')}"
+        self.write_wiki_file(f"speakers/{safe_speaker}.md", speaker_content)
+
+        c_name = data.get('new_concept_name')
+        if c_name:
+            self.write_wiki_file(f"concepts/{c_name.replace(' ', '_')}.md", data['new_concept_page'])
+        s_name = data.get('new_suggestion_name')
+        if s_name:
+            self.write_wiki_file(f"suggestions/{s_name.replace(' ', '_')}.md", data['new_suggestion_page'])
+
+        self._update_wiki_indexes(speaker, date_str, safe_event, safe_speaker, c_name, s_name)
+        return True, "Success"
 
     def _run_generative_ingest(self, safe_event: str, safe_speaker: str, speaker: str, date_str: str, 
                                total: int, avg_rating: float, shu: Dict[str, int], 
@@ -288,32 +403,7 @@ Strict JSON object only. No markdown fences outside the JSON values.
                 res_body = json.loads(response.read().decode('utf-8'))
                 text_out = res_body['candidates'][0]['content']['parts'][0]['text']
                 data = json.loads(text_out)
-                
-                # Write event summary
-                self.write_wiki_file(f"events/{safe_event}.md", data['event_page'])
-                
-                # Update/Write speaker dossier
-                existing_speaker = self.read_wiki_file(f"speakers/{safe_speaker}.md")
-                speaker_content = data['speaker_page']
-                if existing_speaker:
-                    # Merge logic: Append latest performance to existing
-                    speaker_content = f"{existing_speaker}\n\n## Update: Session on {date_str}\n- Aggregated score for this lecture: {avg_rating}/5\n- Comments: {data.get('speaker_update_summary', 'Lecture processed successfully.')}"
-                self.write_wiki_file(f"speakers/{safe_speaker}.md", speaker_content)
-                
-                # Write concept and suggestion
-                c_name = data.get('new_concept_name')
-                if c_name:
-                    c_safe = c_name.replace(' ', '_')
-                    self.write_wiki_file(f"concepts/{c_safe}.md", data['new_concept_page'])
-                
-                s_name = data.get('new_suggestion_name')
-                if s_name:
-                    s_safe = s_name.replace(' ', '_')
-                    self.write_wiki_file(f"suggestions/{s_safe}.md", data['new_suggestion_page'])
-
-                # Update index.md and log.md
-                self._update_wiki_indexes(speaker, date_str, safe_event, safe_speaker, c_name, s_name)
-                return True, "Success"
+                return self._write_wiki_pages(safe_event, safe_speaker, speaker, date_str, avg_rating, data)
         except urllib.error.HTTPError as e:
             try:
                 err_body = e.read().decode('utf-8')
