@@ -1616,7 +1616,7 @@ class SmartCalendar {
                         const h = Math.floor(diff / (1000 * 60 * 60)).toString().padStart(2, '0');
                         const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)).toString().padStart(2, '0');
                         const s = Math.floor((diff % (1000 * 60)) / 1000).toString().padStart(2, '0');
-                        timeRemainingStr = `<span class="form-timer" data-expiry="${expiryDate.getTime()}" style="color:#fca5a5;font-family:monospace;font-size:12px;background:rgba(239,68,68,0.1);padding:4px 8px;border-radius:6px;border:1px solid rgba(239,68,68,0.2);">⏱ ${h}h ${m}m ${s}s</span>`;
+                        timeRemainingStr = `<span class="form-timer" data-expiry="${expiryDate.getTime()}" data-form-id="${ev.form_id}" style="color:#f97316;font-family:monospace;font-size:13px;font-weight:700;background:rgba(249,115,22,0.1);padding:5px 10px;border-radius:8px;border:1px solid rgba(249,115,22,0.3);min-width:110px;display:inline-block;text-align:center;">⏱ ${h}:${m}:${s}</span>`;
                     }
                 }
 
@@ -1826,6 +1826,24 @@ class SmartCalendar {
     });
 
     // ── Global Form Timer Updater ────────────────────────────
+    // Runs every second. When timer hits 0 → auto-closes form via API
+    // regardless of whether admin is logged in or has the modal open.
+    async function _autoCloseForm(formId) {
+        if (!formId) return;
+        try {
+            const token = localStorage.getItem('adminToken') || '';
+            const r = await fetch(`${API_BASE}/api/admin/close-form`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ form_id: formId })
+            });
+            const d = await r.json();
+            console.log(`[TIMER] Auto-closed form ${formId}:`, d.status || d.error);
+        } catch (e) {
+            console.warn(`[TIMER] Auto-close failed for ${formId}:`, e);
+        }
+    }
+
     setInterval(() => {
         const timers = document.querySelectorAll('.form-timer');
         let needsReload = false;
@@ -1836,24 +1854,39 @@ class SmartCalendar {
 
             const diff = expiry - Date.now();
             if (diff <= 0) {
-                timer.textContent = 'Expired';
-                timer.classList.remove('form-timer');
+                const formId = timer.dataset.formId;
+                timer.textContent = '⛔ Closed';
+                timer.style.color = '#ef4444';
+                timer.style.background = 'rgba(239,68,68,0.1)';
+                timer.style.border = '1px solid rgba(239,68,68,0.3)';
+                timer.classList.remove('form-timer'); // stop re-triggering
                 needsReload = true;
+                if (formId) _autoCloseForm(formId); // auto-close via API
             } else {
                 const h = Math.floor(diff / (1000 * 60 * 60)).toString().padStart(2, '0');
                 const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)).toString().padStart(2, '0');
                 const s = Math.floor((diff % (1000 * 60)) / 1000).toString().padStart(2, '0');
-                timer.textContent = `⏱ ${h}h ${m}m ${s}s`;
+                timer.textContent = `⏱ ${h}:${m}:${s}`;
+                // Change colour as time runs low
+                if (diff < 3600000) {           // < 1 hour → red urgent
+                    timer.style.color = '#ef4444';
+                    timer.style.background = 'rgba(239,68,68,0.12)';
+                    timer.style.border = '1px solid rgba(239,68,68,0.3)';
+                } else if (diff < 7200000) {    // < 2 hours → orange warning
+                    timer.style.color = '#f97316';
+                    timer.style.background = 'rgba(249,115,22,0.1)';
+                    timer.style.border = '1px solid rgba(249,115,22,0.3)';
+                }
             }
         });
 
         if (needsReload) {
-            // Give it a moment to avoid hammering
             setTimeout(() => loadEvents(), 2000);
         }
     }, 1000);
 
     // ── Global Dashboard Auto-Polling ────────────────────────
+
     // Polling every 30 seconds to fetch new webhook data live
     setInterval(() => {
         // Only refresh if the admin is logged in and theoretically looking at the dashboard

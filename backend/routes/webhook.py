@@ -22,8 +22,10 @@ ROLL_NO_PATTERN = re.compile(r"^2[Kk]\d{2}[A-Za-z]{3,12}\d{5}$")
 
 def format_submission_timestamp_like_csv(iso_str: str) -> tuple:
     """
-    Store timestamps like the CSV column 'Timestamp': M/D/YYYY H:MM:SS in Asia/Kolkata (institution local).
+    Store timestamps as DD-MM-YYYY HH:MM:SS in Asia/Kolkata local time.
     Returns (display_timestamp, normalized_sql_timestamp).
+    display_timestamp  →  e.g. "26-05-2026 17:39:40"   (DD-MM-YYYY HH:MM:SS)
+    normalized_sql    →  e.g. "2026-05-26 17:39:40"   (SQL-sortable YYYY-MM-DD)
     """
     dt_utc = None
     raw = (iso_str or "").strip()
@@ -45,7 +47,8 @@ def format_submission_timestamp_like_csv(iso_str: str) -> tuple:
         from datetime import timedelta
         local = dt_utc + timedelta(hours=5, minutes=30)
 
-    display = f"{local.month}/{local.day}/{local.year} {local.hour}:{local.minute:02d}:{local.second:02d}"
+    # Format: DD-MM-YYYY HH:MM:SS  (day-month-year, 24-hour clock, zero-padded)
+    display = local.strftime("%d-%m-%Y %H:%M:%S")
     normalized = local.strftime("%Y-%m-%d %H:%M:%S")
     return display, normalized
 

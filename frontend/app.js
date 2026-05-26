@@ -1431,10 +1431,20 @@ function buildTableBody() {
         const tr = document.createElement('tr');
         state.columns.forEach(col => {
             const td = document.createElement('td');
-            td.textContent = row[col] || '';
-            td.title = row[col] || '';
+            const raw = row[col] || '';
+            // Timestamp column: show only the date part (DD-MM-YYYY), keep full value in tooltip
+            if (col === 'timestamp_original' && raw) {
+                // Format is DD-MM-YYYY HH:MM:SS → take first 10 chars
+                td.textContent = raw.length >= 10 ? raw.substring(0, 10) : raw;
+                td.title = raw; // Full timestamp on hover
+                td.style.whiteSpace = 'nowrap';
+            } else {
+                td.textContent = raw;
+                td.title = raw;
+            }
             tr.appendChild(td);
         });
+
         tbody.appendChild(tr);
     });
 }
