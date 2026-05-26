@@ -2241,44 +2241,48 @@ class SmartCalendar {
                 });
             });
 
-            // Close form buttons
+            // Close form buttons — two-click confirm (window.confirm blocked in HF iframe)
             list.querySelectorAll('.btn-close-form').forEach(btn => {
                 btn.addEventListener('click', async () => {
                     const formId = btn.dataset.form;
                     const eventId = btn.dataset.eventId;
                     const speakerName = btn.dataset.speaker || 'this form';
 
-                    console.log('[CLOSE] clicked - formId:', formId, '| eventId:', eventId);
-
-                    // Sanitize Python None → "null" string
                     const cleanFormId = (formId && formId !== 'null' && formId !== 'None') ? formId : null;
                     const cleanEventId = (eventId && eventId !== 'null' && eventId !== 'None') ? eventId : null;
 
-                    console.log('[CLOSE] clean values - cleanFormId:', cleanFormId, '| cleanEventId:', cleanEventId);
+                    if (!cleanFormId && !cleanEventId) return;
 
-                    if (!cleanFormId && !cleanEventId) {
-                        console.error('[CLOSE] ABORT: both form_id and event_id are null/missing!');
-                        alert('Error: Cannot identify which form to close. Please refresh the page.');
+                    // Two-click confirm: first click shows warning, second click executes
+                    if (!btn.dataset.confirming) {
+                        btn.dataset.confirming = '1';
+                        btn.textContent = '⚠️ Confirm?';
+                        btn.style.background = 'rgba(251,191,36,0.2)';
+                        btn.style.color = '#fbbf24';
+                        // Auto-reset after 4s if user doesn't confirm
+                        setTimeout(() => {
+                            if (btn.dataset.confirming) {
+                                delete btn.dataset.confirming;
+                                btn.textContent = 'Close';
+                                btn.style.background = 'rgba(239,68,68,0.15)';
+                                btn.style.color = '#fca5a5';
+                            }
+                        }, 4000);
                         return;
                     }
 
-                    const confirmed = window.confirm(
-                        `⚠️ Close "${speakerName}" form?\n\nThis will immediately stop accepting new responses.\n\nAre you sure?`
-                    );
-                    if (!confirmed) return;
-
+                    // Second click — confirmed, proceed
+                    delete btn.dataset.confirming;
                     btn.textContent = 'Closing...';
                     btn.disabled = true;
                     btn.style.opacity = '0.6';
                     try {
                         const payload = { form_id: cleanFormId, event_id: cleanEventId };
-                        console.log('[CLOSE] sending payload:', JSON.stringify(payload));
                         const r = await fetch(`${API_BASE}/api/admin/close-form`, {
                             method: 'POST', headers: authHeaders(),
                             body: JSON.stringify(payload)
                         });
                         const d = await r.json();
-                        console.log('[CLOSE] response:', r.status, d);
                         const isSuccess = d.status === 'closed' || (d.message && d.message.toLowerCase().includes('closed'));
                         if (isSuccess) {
                             btn.textContent = '✓ Closed!';
@@ -2287,13 +2291,11 @@ class SmartCalendar {
                             btn.style.borderColor = 'rgba(34,197,94,0.3)';
                             setTimeout(() => loadEvents(), 1500);
                         } else {
-                            console.error('[CLOSE] server returned failure:', d);
-                            btn.textContent = 'Error';
-                            alert('Close failed: ' + (d.error || d.message || 'Unknown error'));
+                            btn.textContent = 'Failed!';
+                            btn.style.color = '#f87171';
                             setTimeout(() => { btn.textContent = 'Close'; btn.disabled = false; btn.style.opacity = '1'; }, 2000);
                         }
                     } catch (e) {
-                        console.error('[CLOSE] fetch exception:', e);
                         btn.textContent = 'Error';
                         setTimeout(() => { btn.textContent = 'Close'; btn.disabled = false; btn.style.opacity = '1'; }, 2000);
                     }
