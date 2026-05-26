@@ -1623,11 +1623,14 @@ class SmartCalendar {
                 card.innerHTML = `
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
                         <div>
-                            <div style="font-size:13px;font-weight:600;color:#111827;">${esc(ev.speaker_name)}</div>
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <div style="font-size:13px;font-weight:800;color:#000000;">${esc(ev.speaker_name)}</div>
+                                ${timeRemainingStr}
+                            </div>
                             <div style="font-size:11px;color:#555b6e;margin-top:2px;">${esc(ev.venue_date)} &nbsp;·&nbsp; ${ev.responses} response${ev.responses !== 1 ? 's' : ''}</div>
                         </div>
                         <span style="font-size:10px;padding:3px 8px;border-radius:12px;font-weight:600;${hasForm ? (isExpired ? 'background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.2);' : 'background:rgba(34,211,102,0.1);color:#34d399;border:1px solid rgba(34,211,102,0.2);') : 'background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.2);'}">
-                            ${hasForm ? (isExpired ? 'Expired' : 'Active') : 'No Form'}
+                            ${hasForm ? (isExpired ? 'Expired' : 'Ready') : 'No Form'}
                         </span>
                     </div>
                     ${hasForm ? `
@@ -1637,8 +1640,7 @@ class SmartCalendar {
                         <button data-open-url="${ev.form_url}" class="btn-open-event-url"
                             style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Open</button>
                         ${!isExpired ? `<button data-form="${ev.form_id}" data-speaker="${esc(ev.speaker_name)}" class="btn-close-form"
-                            style="flex:1;padding:6px;border-radius:6px;background:rgba(239,68,68,0.15);color:#dc2626;border:1px solid rgba(239,68,68,0.3);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Toggle</button>` : ''}
-                        ${timeRemainingStr}
+                            style="flex:1;padding:6px;border-radius:6px;background:rgba(239,68,68,0.15);color:#dc2626;border:1px solid rgba(239,68,68,0.3);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Close Form</button>` : ''}
                     </div>` : `
                     <button data-event-id="${ev.id}" class="btn-generate-existing"
                         style="width:100%;margin-top:8px;padding:6px;border-radius:6px;background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.2);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Generate Form</button>`}

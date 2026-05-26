@@ -354,7 +354,8 @@ def create_event_and_form():
         
         # Step 1: Create event in database (but don't commit yet)
         db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
-        conn = sqlite3.connect(db_path)
+        from backend.utils.db_helper import get_db_connection
+        conn = get_db_connection(db_path)
         cursor = conn.cursor()
         
         cursor.execute(
@@ -539,7 +540,8 @@ def close_form():
             return jsonify({'error': 'Form ID is required'}), 400
 
         db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
-        conn = sqlite3.connect(db_path)
+        from backend.utils.db_helper import get_db_connection
+        conn = get_db_connection(db_path)
         cursor = conn.cursor()
 
         # Update the status to 'closed'
