@@ -246,6 +246,19 @@ def get_ingest_status():
         return jsonify({'error': str(e)}), 500
 
 
+@wiki_bp.route('/ingest/abort', methods=['POST'])
+@log_endpoint_access
+def abort_ingestion():
+    """Abort the current background ingestion process"""
+    try:
+        service = _get_wiki_service()
+        service.abort_batch_ingest()
+        return jsonify({'message': 'Abort request sent to ingestion compiler.'}), 200
+    except Exception as e:
+        logger.error(f"Error aborting batch ingest: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 @wiki_bp.route('/query', methods=['POST'])
 @log_endpoint_access
 def execute_wiki_query():

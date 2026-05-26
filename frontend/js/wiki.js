@@ -98,6 +98,8 @@ const Wiki = {
         // Buttons
         this.elements.selectAllBtn = document.getElementById('btn-wiki-select-all');
         this.elements.compileStartBtn = document.getElementById('btn-wiki-compile-start');
+        this.elements.compileAbortBtn = document.getElementById('btn-wiki-compile-abort');
+        this.elements.compileAbortMiniBtn = document.getElementById('btn-wiki-compile-abort-mini');
     },
 
     bindEvents() {
@@ -169,6 +171,43 @@ const Wiki = {
             this.elements.compileStartBtn.addEventListener('click', function() {
                 self.triggerSelectedCompilation();
             });
+        }
+
+        const handleAbort = function() {
+            if (self.elements.compileAbortBtn) {
+                self.elements.compileAbortBtn.disabled = true;
+                self.elements.compileAbortBtn.innerText = "Aborting...";
+            }
+            if (self.elements.compileAbortMiniBtn) {
+                self.elements.compileAbortMiniBtn.disabled = true;
+                self.elements.compileAbortMiniBtn.innerText = "Aborting...";
+            }
+            
+            fetch('/api/v1/wiki/ingest/abort', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (window.showNotification) {
+                        window.showNotification("🛑 Abort request sent to compiler queue", "warning");
+                    }
+                })
+                .catch(err => {
+                    console.error("Error aborting ingestion:", err);
+                    if (self.elements.compileAbortBtn) {
+                        self.elements.compileAbortBtn.disabled = false;
+                        self.elements.compileAbortBtn.innerText = "Abort Ingestion";
+                    }
+                    if (self.elements.compileAbortMiniBtn) {
+                        self.elements.compileAbortMiniBtn.disabled = false;
+                        self.elements.compileAbortMiniBtn.innerText = "Abort";
+                    }
+                });
+        };
+
+        if (this.elements.compileAbortBtn) {
+            this.elements.compileAbortBtn.addEventListener('click', handleAbort);
+        }
+        if (this.elements.compileAbortMiniBtn) {
+            this.elements.compileAbortMiniBtn.addEventListener('click', handleAbort);
         }
 
         // Chat Input actions
@@ -528,24 +567,48 @@ const Wiki = {
                         self.elements.consoleLogs.scrollTop = self.elements.consoleLogs.scrollHeight;
                     }
 
-                    if (prog.status === 'PROCESSING') {
+                    if (prog.status === 'PROCESSING' || prog.status === 'ABORTING') {
                         self.elements.progressEmpty.style.display = 'none';
                         self.elements.progressContainer.style.display = 'block';
                         
+                        if (self.elements.compileAbortBtn) {
+                            self.elements.compileAbortBtn.style.display = 'inline-block';
+                            self.elements.compileAbortBtn.disabled = (prog.status === 'ABORTING');
+                            self.elements.compileAbortBtn.innerText = prog.status === 'ABORTING' ? "Aborting..." : "Abort Ingestion";
+                        }
+                        if (self.elements.compileAbortMiniBtn) {
+                            self.elements.compileAbortMiniBtn.disabled = (prog.status === 'ABORTING');
+                            self.elements.compileAbortMiniBtn.innerText = prog.status === 'ABORTING' ? "Aborting..." : "Abort";
+                        }
+
                         const pct = Math.round((prog.current / prog.total) * 100);
                         self.elements.progressBarFill.style.width = `${pct}%`;
                         self.elements.progressRatio.innerText = `${prog.current} / ${prog.total}`;
-                        self.elements.progressStatus.innerText = "COMPILING CHANNELS...";
+                        self.elements.progressStatus.innerText = prog.status === 'ABORTING' ? "ABORTING QUEUE..." : "COMPILING CHANNELS...";
                         self.elements.progressActiveFile.innerText = prog.active_session;
                     } else {
                         self.elements.progressEmpty.style.display = 'block';
                         self.elements.progressContainer.style.display = 'none';
                         
-                        if (prog.status === 'COMPLETE') {
+                        if (self.elements.compileAbortBtn) {
+                            self.elements.compileAbortBtn.style.display = 'none';
+                        }
+                        
+                        if (prog.status === 'COMPLETE' || prog.status === 'ABORTED') {
                             clearInterval(self.ingestInterval);
                             self.loadSessionsList();
                             self.loadWikiPages();
                             self.loadSuggestedQuestions();
+                            
+                            if (prog.status === 'ABORTED') {
+                                if (window.showNotification) {
+                                    window.showNotification("🛑 Ingestion queue aborted.", "warning");
+                                }
+                            } else {
+                                if (window.showNotification) {
+                                    window.showNotification("✅ Ingestion queue completed successfully!", "success");
+                                }
+                            }
                         }
                     }
                 })

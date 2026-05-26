@@ -1,7 +1,3 @@
-"""
-Wiki Service - Manages Karpathy's LLM Wiki (Ingest, Query, Lint, and Supabase Storage Sync)
-"""
-
 import os
 import re
 import sqlite3
@@ -13,6 +9,7 @@ from datetime import datetime
 import urllib.request
 import urllib.parse
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from backend.config import get_config
 from backend.utils.logger import get_section_logger
 from backend.utils.supabase_helper import (
@@ -34,6 +31,7 @@ logger = get_section_logger('wiki')
 # Class-level compilation logger and queue state
 _ingest_logs: List[str] = []
 _ingest_progress: Dict[str, Any] = {"status": "IDLE", "current": 0, "total": 0, "active_session": ""}
+_abort_requested: bool = False
 _queue_lock = threading.Lock()
 
 class SupabaseChatMessageHistory(BaseChatMessageHistory):
@@ -242,6 +240,157 @@ Append-only history of Wiki operations.
         self.write_wiki_file('log.md', log_content)
         return True
 
+    def abort_batch_ingest(self) -> str:
+        """Request manual abort of active ingestion queue"""
+        global _abort_requested, _ingest_progress
+        with _queue_lock:
+            if _ingest_progress["status"] == "PROCESSING":
+                _abort_requested = True
+                _ingest_progress["status"] = "ABORTING"
+                self.log_compilation("🛑 Abort requested. Ingestion queue is stopping...")
+                return "Abort requested."
+            return "No active queue to abort."
+
+    def _probe_provider_health(self, provider: str) -> bool:
+        """Perform a fast (5-second timeout) ping check on the specified AI provider to verify key and health status"""
+        if provider == "gemini":
+            if not self.gemini_key:
+                return False
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.gemini_key}"
+                req_data = json.dumps({
+                    "contents": [{"parts": [{"text": "ping"}]}],
+                    "generationConfig": {"maxOutputTokens": 2}
+                }).encode('utf-8')
+                req = urllib.request.Request(url, data=req_data, headers={'Content-Type': 'application/json'})
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    return response.status == 200
+            except Exception as e:
+                logger.warning(f"Health check failed for Gemini: {str(e)}")
+                return False
+
+        elif provider == "groq":
+            if not self.groq_key:
+                return False
+            try:
+                url = "https://api.groq.com/openai/v1/chat/completions"
+                req_data = json.dumps({
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [{"role": "user", "content": "ping"}],
+                    "max_tokens": 2
+                }).encode('utf-8')
+                req = urllib.request.Request(
+                    url, data=req_data,
+                    headers={
+                        'Authorization': f'Bearer {self.groq_key}',
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'DataLens/1.0'
+                    }
+                )
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    return response.status == 200
+            except Exception as e:
+                logger.warning(f"Health check failed for Groq: {str(e)}")
+                return False
+
+        elif provider == "hf":
+            if not self.hf_key:
+                return False
+            try:
+                url = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-72B-Instruct/v1/chat/completions"
+                req_data = json.dumps({
+                    "model": "Qwen/Qwen2.5-72B-Instruct",
+                    "messages": [{"role": "user", "content": "ping"}],
+                    "max_tokens": 2
+                }).encode('utf-8')
+                req = urllib.request.Request(
+                    url, data=req_data,
+                    headers={
+                        'Authorization': f'Bearer {self.hf_key}',
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'DataLens/1.0'
+                    }
+                )
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    return response.status == 200
+            except Exception as e:
+                logger.warning(f"Health check failed for HF: {str(e)}")
+                return False
+
+        elif provider == "cohere":
+            if not self.cohere_key:
+                return False
+            try:
+                url = "https://api.cohere.ai/v1/chat"
+                req_data = json.dumps({
+                    "message": "ping",
+                    "model": "command-r",
+                    "max_tokens": 2
+                }).encode('utf-8')
+                req = urllib.request.Request(
+                    url, data=req_data,
+                    headers={
+                        'Authorization': f'Bearer {self.cohere_key}',
+                        'Content-Type': 'application/json'
+                    }
+                )
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    return response.status == 200
+            except Exception as e:
+                logger.warning(f"Health check failed for Cohere: {str(e)}")
+                return False
+
+        elif provider == "openrouter":
+            if not self.openrouter_key:
+                return False
+            try:
+                url = "https://openrouter.ai/api/v1/chat/completions"
+                req_data = json.dumps({
+                    "model": "meta-llama/llama-3.3-70b-instruct:free",
+                    "messages": [{"role": "user", "content": "ping"}],
+                    "max_tokens": 2
+                }).encode('utf-8')
+                req = urllib.request.Request(
+                    url, data=req_data,
+                    headers={
+                        'Authorization': f'Bearer {self.openrouter_key}',
+                        'Content-Type': 'application/json',
+                        'HTTP-Referer': 'https://huggingface.co/spaces/vrfefavr/alumini_feedback',
+                        'X-Title': 'Alumni Feedback System'
+                    }
+                )
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    return response.status == 200
+            except Exception as e:
+                logger.warning(f"Health check failed for OpenRouter: {str(e)}")
+                return False
+
+        elif provider == "mistral":
+            if not self.mistral_key:
+                return False
+            try:
+                url = "https://api.mistral.ai/v1/chat/completions"
+                req_data = json.dumps({
+                    "model": "open-mistral-nemo",
+                    "messages": [{"role": "user", "content": "ping"}],
+                    "max_tokens": 2
+                }).encode('utf-8')
+                req = urllib.request.Request(
+                    url, data=req_data,
+                    headers={
+                        'Authorization': f'Bearer {self.mistral_key}',
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'DataLens/1.0'
+                    }
+                )
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    return response.status == 200
+            except Exception as e:
+                logger.warning(f"Health check failed for Mistral: {str(e)}")
+                return False
+
+        return False
+
     # ─── COMPILER ENGINE (INGEST OPERATION) ───────────────────────────────────
 
     def compile_session(self, speaker: str, date_str: str, feedback_rows: List[Dict[str, Any]]) -> str:
@@ -249,6 +398,11 @@ Append-only history of Wiki operations.
         Compile feedback rows into events, speaker, and concept pages.
         Runs batch prompts using Gemini, falling back to a rule-based offline generator.
         """
+        global _abort_requested
+        if _abort_requested:
+            self.log_compilation("🛑 Abort requested. Skipping compilation.")
+            return ""
+
         self.log_compilation(f"Compiling feedback for '{speaker}' ({date_str}) - {len(feedback_rows)} responses...")
         
         # Prepare aggregated data payload
@@ -270,62 +424,119 @@ Append-only history of Wiki operations.
         safe_speaker = speaker.replace(' ', '_').replace('.', '')
         safe_event = f"{date_str}_{safe_speaker}"
 
+        if _abort_requested:
+            self.log_compilation("🛑 Abort requested. Skipping health checks.")
+            return ""
+
+        # Probe all configured providers in parallel using ThreadPoolExecutor
+        providers = ["gemini", "groq", "hf", "cohere", "openrouter", "mistral"]
+        healthy_providers = {}
+        
+        self.log_compilation("Starting parallel health checks for AI providers...")
+        with ThreadPoolExecutor(max_workers=len(providers)) as executor:
+            futures = {executor.submit(self._probe_provider_health, p): p for p in providers}
+            for future in as_completed(futures):
+                p = futures[future]
+                try:
+                    is_healthy = future.result()
+                    healthy_providers[p] = is_healthy
+                    if is_healthy:
+                        self.log_compilation(f"🩺 Provider health check: {p} is ONLINE")
+                    else:
+                        self.log_compilation(f"🩺 Provider health check: {p} is OFFLINE / UNHEALTHY")
+                except Exception as e:
+                    healthy_providers[p] = False
+                    self.log_compilation(f"🩺 Provider health check: {p} failed with error: {str(e)}")
+
         # ─── TRIGGER COMPILER EXECUTION: MULTI-LAYER FALLBACK ────────────────────
         # Layer 1: Gemini Flash — 15 RPM, 1 million tokens/min free tier
-        if self.gemini_key:
+        if _abort_requested:
+            self.log_compilation("🛑 Abort requested. Skipping Gemini call.")
+            return ""
+        if healthy_providers.get("gemini"):
             success, err_msg = self._run_generative_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
             if success:
                 self.log_compilation(f"✅ Compiled '{speaker}' ({date_str}) via Gemini AI.")
                 return safe_event
             else:
                 self.log_compilation(f"⚠️ Gemini failed: {err_msg}. Trying Groq...")
+        else:
+            self.log_compilation("Skipping Gemini: Provider is offline or unconfigured.")
 
         # Layer 2: Groq (Llama 3.3 70B) — backup if Gemini is unavailable
-        if self.groq_key:
+        if _abort_requested:
+            self.log_compilation("🛑 Abort requested. Skipping Groq call.")
+            return ""
+        if healthy_providers.get("groq"):
             success, err_msg = self._run_groq_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
             if success:
                 self.log_compilation(f"✅ Compiled '{speaker}' ({date_str}) via Groq Llama 3.3 70B.")
                 return safe_event
             else:
                 self.log_compilation(f"⚠️ Groq failed: {err_msg}. Trying HuggingFace Serverless...")
+        else:
+            self.log_compilation("Skipping Groq: Provider is offline or unconfigured.")
 
         # Layer 3: Hugging Face Serverless Inference API — backup if Groq is unavailable
-        if self.hf_key:
+        if _abort_requested:
+            self.log_compilation("🛑 Abort requested. Skipping HuggingFace call.")
+            return ""
+        if healthy_providers.get("hf"):
             success, err_msg = self._run_hf_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
             if success:
                 self.log_compilation(f"✅ Compiled '{speaker}' ({date_str}) via HuggingFace Serverless Inference.")
                 return safe_event
             else:
                 self.log_compilation(f"⚠️ HuggingFace failed: {err_msg}. Trying Cohere...")
+        else:
+            self.log_compilation("Skipping HuggingFace: Provider is offline or unconfigured.")
 
         # Layer 4: Cohere API — backup if HuggingFace is unavailable
-        if self.cohere_key:
+        if _abort_requested:
+            self.log_compilation("🛑 Abort requested. Skipping Cohere call.")
+            return ""
+        if healthy_providers.get("cohere"):
             success, err_msg = self._run_cohere_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
             if success:
                 self.log_compilation(f"✅ Compiled '{speaker}' ({date_str}) via Cohere.")
                 return safe_event
             else:
                 self.log_compilation(f"⚠️ Cohere failed: {err_msg}. Trying OpenRouter...")
+        else:
+            self.log_compilation("Skipping Cohere: Provider is offline or unconfigured.")
 
         # Layer 5: OpenRouter — backup if Cohere is unavailable
-        if self.openrouter_key:
+        if _abort_requested:
+            self.log_compilation("🛑 Abort requested. Skipping OpenRouter call.")
+            return ""
+        if healthy_providers.get("openrouter"):
             success, err_msg = self._run_openrouter_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
             if success:
                 self.log_compilation(f"✅ Compiled '{speaker}' ({date_str}) via OpenRouter.")
                 return safe_event
             else:
                 self.log_compilation(f"⚠️ OpenRouter failed: {err_msg}. Trying Mistral...")
+        else:
+            self.log_compilation("Skipping OpenRouter: Provider is offline or unconfigured.")
 
         # Layer 6: Mistral AI — backup if OpenRouter is unavailable
-        if self.mistral_key:
+        if _abort_requested:
+            self.log_compilation("🛑 Abort requested. Skipping Mistral call.")
+            return ""
+        if healthy_providers.get("mistral"):
             success, err_msg = self._run_mistral_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
             if success:
                 self.log_compilation(f"✅ Compiled '{speaker}' ({date_str}) via Mistral AI.")
                 return safe_event
             else:
                 self.log_compilation(f"⚠️ Mistral failed: {err_msg}. Using offline heuristics...")
+        else:
+            self.log_compilation("Skipping Mistral: Provider is offline or unconfigured.")
         
         # Execute Offline Heuristics compilation
+        if _abort_requested:
+            self.log_compilation("🛑 Abort requested. Skipping offline heuristics.")
+            return ""
         self._run_offline_ingest(safe_event, safe_speaker, speaker, date_str, total_responses, avg_rating, understanding_levels, valuable_aspects, critiques, requests)
         self.log_compilation(f"Successfully compiled '{speaker}' ({date_str}) using Local Offline Heuristic Compiler.")
         return safe_event
@@ -353,7 +564,7 @@ Append-only history of Wiki operations.
                 }
             )
 
-            with urllib.request.urlopen(request, timeout=60) as response:
+            with urllib.request.urlopen(request, timeout=30) as response:
                 res_body = json.loads(response.read().decode('utf-8'))
                 data = self._safe_parse_json(res_body['choices'][0]['message']['content'])
                 return self._write_wiki_pages(safe_event, safe_speaker, speaker, date_str, avg_rating, data)
@@ -375,19 +586,90 @@ Append-only history of Wiki operations.
             return False, str(e)
 
     def _safe_parse_json(self, text: str) -> dict:
-        """Robust JSON parser that can strip markdown block syntax if present"""
-        try:
-            return json.loads(text.strip())
-        except:
-            pass
+        """Robust JSON parser that handles code blocks, balanced brackets, and regex fallbacks"""
         cleaned = text.strip()
+        
+        # Strip markdown code blocks
         if cleaned.startswith("```"):
             first_nl = cleaned.find("\n")
             if first_nl != -1:
                 cleaned = cleaned[first_nl:]
             if cleaned.endswith("```"):
                 cleaned = cleaned[:-3]
-        return json.loads(cleaned.strip())
+        cleaned = cleaned.strip()
+        
+        # Try direct parsing
+        try:
+            return json.loads(cleaned)
+        except Exception:
+            pass
+            
+        # Try balancing braces and brackets
+        try:
+            balanced = cleaned
+            # Close quote if odd count
+            if balanced.count('"') % 2 != 0:
+                balanced += '"'
+            
+            # Simple bracket balancing
+            stack = []
+            for char in balanced:
+                if char in ('{', '['):
+                    stack.append(char)
+                elif char in ('}', ']'):
+                    if stack:
+                        top = stack[-1]
+                        if (char == '}' and top == '{') or (char == ']' and top == '['):
+                            stack.pop()
+            while stack:
+                top = stack.pop()
+                if top == '{':
+                    balanced += '}'
+                elif top == '[':
+                    balanced += ']'
+            return json.loads(balanced)
+        except Exception:
+            pass
+            
+        # Fall back to regex-based property extraction
+        try:
+            return self._regex_fallback_extract(cleaned)
+        except Exception as e:
+            logger.error(f"All JSON parsing and fallback extraction failed: {str(e)}")
+            # Absolute fallback
+            return {
+                "event_page": f"# Compiled Event\nJSON parsing failed completely.\nRaw response:\n{text}",
+                "speaker_page": f"# Speaker Profile\nJSON parsing failed completely.\nRaw response:\n{text}",
+                "speaker_update_summary": "Compilation failed to parse."
+            }
+
+    def _regex_fallback_extract(self, text: str) -> dict:
+        """Extract JSON fields via regular expressions when JSON parsing fails"""
+        data = {}
+        keys = [
+            "event_page", "speaker_page", 
+            "new_concept_name", "new_concept_page", 
+            "new_suggestion_name", "new_suggestion_page", 
+            "speaker_update_summary"
+        ]
+        for k in keys:
+            pattern = rf'"{k}"\s*:\s*"(.*?)"(?=\s*,\s*"(?:{"|".join(keys)})"\s*:|\s*\}})'
+            match = re.search(pattern, text, re.DOTALL)
+            if match:
+                val = match.group(1)
+                # Simple escape replacement
+                val = val.replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t')
+                data[k] = val
+                
+        # Fill in critical defaults if missing
+        if "event_page" not in data:
+            data["event_page"] = "# Compiled Session\nExtracting page content failed."
+        if "speaker_page" not in data:
+            data["speaker_page"] = "# Speaker Dossier\nExtracting page content failed."
+        if "speaker_update_summary" not in data:
+            data["speaker_update_summary"] = "Session compiled with parse warnings."
+            
+        return data
 
     def _run_hf_ingest(self, safe_event: str, safe_speaker: str, speaker: str, date_str: str,
                        total: int, avg_rating: float, shu: Dict[str, int],
@@ -412,7 +694,7 @@ Append-only history of Wiki operations.
                 }
             )
 
-            with urllib.request.urlopen(request, timeout=60) as response:
+            with urllib.request.urlopen(request, timeout=30) as response:
                 res_body = json.loads(response.read().decode('utf-8'))
                 raw_content = res_body['choices'][0]['message']['content']
                 data = self._safe_parse_json(raw_content)
@@ -443,7 +725,7 @@ Append-only history of Wiki operations.
             url = "https://api.cohere.ai/v1/chat"
             req_data = json.dumps({
                 "message": prompt,
-                "model": "command-r-plus",
+                "model": "command-r",
                 "response_format": {"type": "json_object"}
             }).encode('utf-8')
 
@@ -455,7 +737,7 @@ Append-only history of Wiki operations.
                 }
             )
 
-            with urllib.request.urlopen(request, timeout=60) as response:
+            with urllib.request.urlopen(request, timeout=30) as response:
                 res_body = json.loads(response.read().decode('utf-8'))
                 data = self._safe_parse_json(res_body['text'])
                 return self._write_wiki_pages(safe_event, safe_speaker, speaker, date_str, avg_rating, data)
@@ -484,7 +766,7 @@ Append-only history of Wiki operations.
         try:
             url = "https://openrouter.ai/api/v1/chat/completions"
             req_data = json.dumps({
-                "model": "mistralai/mistral-7b-instruct:free",
+                "model": "meta-llama/llama-3.3-70b-instruct:free",
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.7
             }).encode('utf-8')
@@ -499,7 +781,7 @@ Append-only history of Wiki operations.
                 }
             )
 
-            with urllib.request.urlopen(request, timeout=60) as response:
+            with urllib.request.urlopen(request, timeout=30) as response:
                 res_body = json.loads(response.read().decode('utf-8'))
                 raw_content = res_body['choices'][0]['message']['content']
                 data = self._safe_parse_json(raw_content)
@@ -544,7 +826,7 @@ Append-only history of Wiki operations.
                 }
             )
 
-            with urllib.request.urlopen(request, timeout=60) as response:
+            with urllib.request.urlopen(request, timeout=30) as response:
                 res_body = json.loads(response.read().decode('utf-8'))
                 raw_content = res_body['choices'][0]['message']['content']
                 data = self._safe_parse_json(raw_content)
@@ -689,7 +971,7 @@ Strict JSON object only. No markdown fences outside the JSON values.
             with urllib.request.urlopen(request, timeout=30) as response:
                 res_body = json.loads(response.read().decode('utf-8'))
                 text_out = res_body['candidates'][0]['content']['parts'][0]['text']
-                data = json.loads(text_out)
+                data = self._safe_parse_json(text_out)
                 return self._write_wiki_pages(safe_event, safe_speaker, speaker, date_str, avg_rating, data)
         except urllib.error.HTTPError as e:
             try:
@@ -850,12 +1132,13 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
 
     def start_batch_ingest_queue(self, sessions: List[Tuple[str, str]]) -> str:
         """Start a background compilation queue processing sessions sequentially"""
-        global _ingest_progress, _ingest_logs
+        global _ingest_progress, _ingest_logs, _abort_requested
         
         with _queue_lock:
-            if _ingest_progress["status"] == "PROCESSING":
+            if _ingest_progress["status"] in ("PROCESSING", "ABORTING"):
                 return "Queue already running."
             
+            _abort_requested = False
             _ingest_logs = []
             _ingest_progress = {
                 "status": "PROCESSING",
@@ -865,14 +1148,18 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
             }
 
         def run_queue():
-            global _ingest_progress
+            global _ingest_progress, _abort_requested
             logger.info(f"Starting Ingest queue for {len(sessions)} sessions...")
             from backend.utils.db_helper import get_db_connection
             
             db_path = get_config()().DATABASE_PATH
             
+            aborted = False
             for idx, (speaker, date_str) in enumerate(sessions):
                 with _queue_lock:
+                    if _abort_requested:
+                        aborted = True
+                        break
                     _ingest_progress["current"] = idx + 1
                     _ingest_progress["active_session"] = f"{speaker} ({date_str})"
                 
@@ -895,13 +1182,28 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
                 except Exception as e:
                     self.log_compilation(f"Error compiling session '{speaker}': {str(e)}")
 
-                # Throttling to respect Gemini 15 RPM free tier limits (sleep 4 seconds per session)
-                time.sleep(4.0)
+                if _abort_requested:
+                    aborted = True
+                    break
+
+                # Throttling to respect Gemini 15 RPM free tier limits (sleep 4 seconds per session, checking for aborts)
+                for _ in range(40):
+                    if _abort_requested:
+                        aborted = True
+                        break
+                    time.sleep(0.1)
+                
+                if aborted:
+                    break
 
             with _queue_lock:
-                _ingest_progress["status"] = "COMPLETE"
+                if aborted or _abort_requested:
+                    _ingest_progress["status"] = "ABORTED"
+                    self.log_compilation("🛑 Ingestion compilation queue aborted by user.")
+                else:
+                    _ingest_progress["status"] = "COMPLETE"
+                    self.log_compilation("Ingestion queue completed successfully!")
                 _ingest_progress["active_session"] = ""
-            self.log_compilation("Ingestion queue completed successfully!")
 
         threading.Thread(target=run_queue, daemon=True).start()
         return "Queue started."
