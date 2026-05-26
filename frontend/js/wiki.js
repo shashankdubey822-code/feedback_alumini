@@ -226,11 +226,11 @@ const Wiki = {
                         .then(() => self.loadWikiPages());
                 }
                 
-                // Show API Key Status Pop-up
+                // Show API Key Status Pop-up globally
                 if (data.gemini_configured) {
-                    self.showConfigMsg("Google Gemini API is configured and ready!", "success");
+                    if (window.showNotification) window.showNotification("Google Gemini API is configured and ready!", "success");
                 } else {
-                    self.showConfigMsg("Gemini API key is missing. Add it in Wiki Settings.", "error");
+                    if (window.showNotification) window.showNotification("Gemini API key is missing. Please add it to Hugging Face secrets.", "error");
                 }
             })
             .catch(err => console.error("Error loading wiki status:", err));
