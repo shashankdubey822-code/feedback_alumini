@@ -140,6 +140,7 @@ class RAGService:
     def _fallback_keyword_search(self, query_text: str, limit: int) -> List[Dict[str, Any]]:
         """Simple substring database search in case vector models fail"""
         from backend.config import get_config
+        import time
         db_path = get_config()().DATABASE_PATH
         try:
             conn = sqlite3.connect(db_path)
@@ -150,13 +151,20 @@ class RAGService:
             if not tokens:
                 tokens = [f"%{query_text.lower()}%"]
                 
-            query = '''
+            conditions = []
+            params = []
+            for t in tokens:
+                conditions.append("(alumni_speaker_name LIKE ? OR aspect_most_valuable LIKE ? OR improvements_suggestions LIKE ? OR future_topics LIKE ?)")
+                params.extend([t, t, t, t])
+                
+            query = f'''
                 SELECT id, name_of_student, alumni_speaker_name, aspect_most_valuable, improvements_suggestions, future_topics, session_rating
                 FROM dashboard_data
-                WHERE (aspect_most_valuable LIKE ? OR improvements_suggestions LIKE ? OR future_topics LIKE ?)
+                WHERE {' OR '.join(conditions)}
                 LIMIT ?
             '''
-            cursor.execute(query, (tokens[0], tokens[0], tokens[0], limit))
+            params.append(limit)
+            cursor.execute(query, params)
             rows = [dict(r) for r in cursor.fetchall()]
             conn.close()
             
