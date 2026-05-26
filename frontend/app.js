@@ -1917,6 +1917,17 @@ class SmartCalendar {
         };
     }
 
+    function setVenueDateMinToday() {
+        const d = document.getElementById('fb-venue-date');
+        if (!d) return;
+        const t = new Date();
+        const yyyy = t.getFullYear();
+        const mm = String(t.getMonth() + 1).padStart(2, '0');
+        const dd = String(t.getDate()).padStart(2, '0');
+        d.min = `${yyyy}-${mm}-${dd}`;
+        if (d.value && d.value < d.min) d.value = '';
+    }
+
     // ── Open / close modal ───────────────────────────────────
     function openFeedbackModal() {
         if (!getToken()) {
@@ -1928,6 +1939,7 @@ class SmartCalendar {
                 setTimeout(() => {
                     if (getToken()) {
                         document.getElementById('feedback-modal').classList.remove('hidden');
+                        setVenueDateMinToday();
                         loadEvents();
                     }
                     origSubmit.removeEventListener('click', handler);
@@ -1937,6 +1949,7 @@ class SmartCalendar {
             return;
         }
         resetForm();
+        setVenueDateMinToday();
         document.getElementById('feedback-modal').classList.remove('hidden');
         loadEvents();
     }
@@ -1980,6 +1993,12 @@ class SmartCalendar {
 
         if (!speaker || !date) {
             showStatus('Please fill in both Speaker Name and Venue Date.', 'error');
+            return;
+        }
+
+        const dateInput = document.getElementById('fb-venue-date');
+        if (dateInput && dateInput.min && date < dateInput.min) {
+            showStatus('Venue date cannot be before today.', 'error');
             return;
         }
 
@@ -2073,14 +2092,40 @@ class SmartCalendar {
                 const card = document.createElement('div');
                 card.style.cssText = 'background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px;';
                 const hasForm = !!ev.form_url;
+                const createdTime = ev.form_created_at ? new Date(ev.form_created_at).getTime() : 0;
+                const expiryTime = createdTime ? createdTime + (24 * 60 * 60 * 1000) : 0;
+                const isExpired = expiryTime > 0 && Date.now() > expiryTime;
+                
+                // Determine form status
+                let formStatusHtml = '';
+                let formReadyText = 'Form Ready';
+                let formReadyBg = 'rgba(34,211,102,0.1)';
+                let formReadyColor = '#34d399';
+                
+                if (hasForm) {
+                    if (ev.status === 'closed' || isExpired) {
+                        formReadyText = 'Closed';
+                        formReadyBg = 'rgba(239,68,68,0.1)';
+                        formReadyColor = '#ef4444';
+                    } else if (expiryTime) {
+                        // active, show timer
+                        formStatusHtml = `<div class="form-timer" data-expiry="${expiryTime}" data-form-id="${ev.form_id}" style="font-size:11px;font-weight:700;color:#34d399;background:rgba(34,211,102,0.12);padding:2px 6px;border-radius:4px;border:1px solid rgba(34,211,102,0.3);margin-top:4px;display:inline-block;">⏱ Calc...</div>`;
+                    }
+                } else {
+                    formReadyText = 'No Form';
+                    formReadyBg = 'rgba(251,191,36,0.1)';
+                    formReadyColor = '#fbbf24';
+                }
+
                 card.innerHTML = `
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
                         <div>
                             <div style="font-size:13px;font-weight:600;color:#f0f0f5;">${esc(ev.speaker_name)}</div>
                             <div style="font-size:11px;color:#8b8b9e;margin-top:2px;">${esc(ev.venue_date)} &nbsp;·&nbsp; ${ev.responses} response${ev.responses !== 1 ? 's' : ''}</div>
+                            ${formStatusHtml}
                         </div>
-                        <span style="font-size:10px;padding:3px 8px;border-radius:12px;font-weight:600;${hasForm ? 'background:rgba(34,211,102,0.1);color:#34d399;border:1px solid rgba(34,211,102,0.2);' : 'background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.2);'}">
-                            ${hasForm ? 'Form Ready' : 'No Form'}
+                        <span style="font-size:10px;padding:3px 8px;border-radius:12px;font-weight:600;background:${formReadyBg};color:${formReadyColor};border:1px solid ${formReadyColor}40;">
+                            ${formReadyText}
                         </span>
                     </div>
                     ${hasForm ? `
@@ -2089,8 +2134,8 @@ class SmartCalendar {
                             style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Copy</button>
                         <button data-open-url="${ev.form_url}" class="btn-open-event-url"
                             style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Open</button>
-                        <button data-form="${ev.form_id}" class="btn-toggle-form"
-                            style="flex:1;padding:6px;border-radius:6px;background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Toggle</button>
+                        <button data-form="${ev.form_id}" data-speaker="${esc(ev.speaker_name)}" class="btn-close-form"
+                            style="flex:1;padding:6px;border-radius:6px;background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Close</button>
                         <button data-event-id="${ev.id}" class="btn-sync-responses"
                             style="flex:1;padding:6px;border-radius:6px;background:rgba(168,85,247,0.15);color:#c084fc;border:1px solid rgba(168,85,247,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Sync</button>
                     </div>` : `
@@ -2184,24 +2229,43 @@ class SmartCalendar {
                 });
             });
 
-            // Toggle form status buttons
-            list.querySelectorAll('.btn-toggle-form').forEach(btn => {
+            // Close form buttons
+            list.querySelectorAll('.btn-close-form').forEach(btn => {
                 btn.addEventListener('click', async () => {
                     const formId = btn.dataset.form;
+                    const speakerName = btn.dataset.speaker || 'this form';
                     if (!formId) return;
-                    btn.textContent = '...';
+
+                    // Custom confirmation
+                    const confirmed = window.confirm(
+                        `⚠️ Close "${speakerName}" form?\n\nThis will immediately stop accepting new responses. Students currently filling the form will NOT be able to submit.\n\nAre you sure?`
+                    );
+                    if (!confirmed) return;
+
+                    const originalText = btn.textContent;
+                    btn.textContent = 'Closing...';
                     btn.disabled = true;
+                    btn.style.opacity = '0.6';
                     try {
-                        const r = await fetch(`${API_BASE}/api/admin/toggle-form`, {
+                        const r = await fetch(`${API_BASE}/api/admin/close-form`, {
                             method: 'POST', headers: authHeaders(),
                             body: JSON.stringify({ form_id: formId })
                         });
                         const d = await r.json();
-                        btn.textContent = d.success ? (d.accepting_responses ? 'Opened!' : 'Closed!') : 'Error';
-                        setTimeout(() => { btn.textContent = 'Toggle'; btn.disabled = false; }, 2000);
+                        const isSuccess = d.status === 'closed' || (d.message && d.message.toLowerCase().includes('closed'));
+                        if (isSuccess) {
+                            btn.textContent = '✓ Closed!';
+                            btn.style.background = 'rgba(34,197,94,0.15)';
+                            btn.style.color = '#4ade80';
+                            btn.style.borderColor = 'rgba(34,197,94,0.3)';
+                            setTimeout(() => loadEvents(), 1500); // Reload list to update badge
+                        } else {
+                            btn.textContent = 'Error';
+                            setTimeout(() => { btn.textContent = 'Close'; btn.disabled = false; btn.style.opacity = '1'; }, 2000);
+                        }
                     } catch (e) {
                         btn.textContent = 'Error';
-                        setTimeout(() => { btn.textContent = 'Toggle'; btn.disabled = false; }, 2000);
+                        setTimeout(() => { btn.textContent = 'Close'; btn.disabled = false; btn.style.opacity = '1'; }, 2000);
                     }
                 });
             });
@@ -2285,5 +2349,65 @@ class SmartCalendar {
                 }
             });
     });
+    
+    // ── Global Form Timer Updater ────────────────────────────
+    // Runs every second. When timer hits 0 → auto-closes form via API
+    // regardless of whether admin is logged in or has the modal open.
+    async function _autoCloseForm(formId) {
+        if (!formId) return;
+        try {
+            const token = localStorage.getItem('adminToken') || '';
+            const r = await fetch(`${API_BASE}/api/admin/close-form`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ form_id: formId })
+            });
+            const d = await r.json();
+            console.log(`[TIMER] Auto-closed form ${formId}:`, d.status || d.error);
+        } catch (e) {
+            console.warn(`[TIMER] Auto-close failed for ${formId}:`, e);
+        }
+    }
+
+    setInterval(() => {
+        const timers = document.querySelectorAll('.form-timer');
+        let needsReload = false;
+
+        timers.forEach(timer => {
+            const expiry = parseInt(timer.dataset.expiry, 10);
+            if (!expiry) return;
+
+            const diff = expiry - Date.now();
+            if (diff <= 0) {
+                const formId = timer.dataset.formId;
+                timer.textContent = '⛔ Closed';
+                timer.style.color = '#ef4444';
+                timer.style.background = 'rgba(239,68,68,0.1)';
+                timer.style.border = '1px solid rgba(239,68,68,0.3)';
+                timer.classList.remove('form-timer'); // stop re-triggering
+                needsReload = true;
+                if (formId) _autoCloseForm(formId); // auto-close via API
+            } else {
+                const h = Math.floor(diff / (1000 * 60 * 60)).toString().padStart(2, '0');
+                const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)).toString().padStart(2, '0');
+                const s = Math.floor((diff % (1000 * 60)) / 1000).toString().padStart(2, '0');
+                timer.textContent = `⏱ ${h}:${m}:${s}`;
+                // Change colour as time runs low
+                if (diff < 3600000) {           // < 1 hour → red urgent
+                    timer.style.color = '#ef4444';
+                    timer.style.background = 'rgba(239,68,68,0.12)';
+                    timer.style.border = '1px solid rgba(239,68,68,0.3)';
+                } else if (diff < 7200000) {    // < 2 hours → orange warning
+                    timer.style.color = '#f97316';
+                    timer.style.background = 'rgba(249,115,22,0.1)';
+                    timer.style.border = '1px solid rgba(249,115,22,0.3)';
+                }
+            }
+        });
+
+        if (needsReload) {
+            setTimeout(() => loadEvents(), 2000);
+        }
+    }, 1000);
 
 })();
