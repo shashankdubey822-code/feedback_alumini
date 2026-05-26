@@ -34,23 +34,23 @@
 }
 
 .wiki-subtab.active {
-    color: #00ffff;
-    background: rgba(0, 255, 255, 0.08);
-    border-color: rgba(0, 255, 255, 0.2);
-    box-shadow: 0 0 10px rgba(0, 255, 255, 0.1);
+    color: var(--purple);
+    background: rgba(168, 85, 247, 0.08);
+    border-color: rgba(168, 85, 247, 0.2);
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.1);
 }
 
 /* Wiki Links in Markdown rendering */
 .wiki-markdown-body .wiki-link,
 .chat-msg .wiki-link,
 #wiki-backlinks-list .wiki-link {
-    color: #00ffff !important;
+    color: var(--purple) !important;
     font-weight: 600;
     cursor: pointer;
     text-decoration: none;
-    border-bottom: 1px dashed rgba(0, 255, 255, 0.4);
+    border-bottom: 1px dashed rgba(168, 85, 247, 0.4);
     padding: 1px 4px;
-    background: rgba(0, 255, 255, 0.04);
+    background: rgba(168, 85, 247, 0.04);
     border-radius: 4px;
     transition: all 0.15s ease;
     display: inline-flex;
@@ -68,10 +68,10 @@
 .wiki-markdown-body .wiki-link:hover,
 .chat-msg .wiki-link:hover,
 #wiki-backlinks-list .wiki-link:hover {
-    color: var(--text-primary) !important;
-    background: rgba(0, 255, 255, 0.15);
+    color: var(--purple) !important;
+    background: rgba(168, 85, 247, 0.15);
     border-bottom-style: solid;
-    box-shadow: 0 0 8px rgba(0, 255, 255, 0.2);
+    box-shadow: 0 0 8px rgba(168, 85, 247, 0.2);
 }
 
 /* Explorer tree styles */
@@ -132,13 +132,13 @@
 
 .wiki-markdown-body h2 {
     font-size: 16px;
-    color: #ca7bff;
+    color: var(--purple);
     margin: 16px 0 8px;
 }
 
 .wiki-markdown-body h3 {
     font-size: 14px;
-    color: #00ffff;
+    color: var(--purple);
     margin: 12px 0 6px;
 }
 

@@ -697,6 +697,12 @@ I found the following associations in your Wiki database:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             
+            # If DB is empty, don't show any suggestions
+            cursor.execute('SELECT COUNT(*) FROM dashboard_data')
+            if cursor.fetchone()[0] == 0:
+                conn.close()
+                return []
+            
             # Fetch distinct speakers
             cursor.execute('''
                 SELECT alumni_speaker_name, COUNT(*) as cnt 

@@ -334,7 +334,7 @@ const Wiki = {
             const header = document.createElement('div');
             header.style.cursor = 'pointer';
             header.style.fontWeight = '600';
-            header.style.color = '#fff';
+            header.style.color = 'var(--text-primary)';
             header.style.display = 'flex';
             header.style.alignItems = 'center';
             header.style.gap = '6px';
@@ -343,7 +343,7 @@ const Wiki = {
             const list = document.createElement('div');
             list.className = 'folder-list';
             list.style.paddingLeft = '14px';
-            list.style.borderLeft = '1px solid rgba(255, 255, 255, 0.05)';
+            list.style.borderLeft = '1px solid var(--glass-border)';
             list.style.marginLeft = '6px';
             list.style.display = 'block';
 
@@ -365,7 +365,7 @@ const Wiki = {
                 item.style.padding = '4px 6px';
                 item.style.borderRadius = '4px';
                 item.style.fontSize = '12px';
-                item.style.color = '#a6abbb';
+                item.style.color = 'var(--text-muted)';
                 item.style.marginTop = '2px';
                 item.setAttribute('data-file', f);
                 
@@ -559,14 +559,14 @@ const Wiki = {
         div.style.lineHeight = '1.5';
         
         if (sender === 'user') {
-            div.style.background = 'rgba(191, 85, 255, 0.1)';
-            div.style.color = '#eac4ff';
+            div.style.background = 'rgba(168, 85, 247, 0.15)';
+            div.style.color = '#000000';
             div.style.alignSelf = 'flex-end';
             div.style.maxWidth = '85%';
             div.innerText = text;
         } else {
-            div.style.background = 'rgba(255, 255, 255, 0.03)';
-            div.style.color = '#e0e5f6';
+            div.style.background = 'rgba(0, 0, 0, 0.05)';
+            div.style.color = '#000000';
             div.style.alignSelf = 'flex-start';
             div.style.maxWidth = '90%';
             
@@ -579,7 +579,7 @@ const Wiki = {
                 .replace(/- (.*?)$/gm, '<li>\1</li>')
                 .replace(/\[\[([^\]|]+)\]\]/g, (match, link) => {
                     const label = link.split('/').pop().replace('_', ' ').replace('.md', '');
-                    return `<span class="wiki-link" style="color:#00ffff; cursor:pointer; text-decoration:underline;" data-page="${link}">${label}</span>`;
+                    return `<span class="wiki-link" style="color:var(--purple); cursor:pointer; text-decoration:underline;" data-page="${link}">${label}</span>`;
                 });
             
             div.innerHTML = parsedText;
