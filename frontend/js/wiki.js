@@ -574,6 +574,13 @@ const Wiki = {
         // Show indicator
         const loadingDiv = self.appendChatMessage('ai', 'Searching wiki channels & synthesizing answer...');
         
+        // Acknowledge if the request takes more than 3 seconds
+        const waitTimeout = setTimeout(() => {
+            if (loadingDiv && loadingDiv.parentNode) {
+                loadingDiv.innerHTML = '<span class="markdown-body">Thinking... this is taking a bit longer than 3 seconds, please wait!</span>';
+            }
+        }, 3000);
+        
         fetch('/api/v1/wiki/query', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -585,6 +592,7 @@ const Wiki = {
         })
         .then(res => res.json())
         .then(data => {
+            clearTimeout(waitTimeout);
             // Remove loading msg
             loadingDiv.remove();
             
