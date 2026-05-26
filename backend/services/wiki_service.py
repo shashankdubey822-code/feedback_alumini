@@ -38,23 +38,34 @@ _queue_lock = threading.Lock()
 
 class SupabaseChatMessageHistory(BaseChatMessageHistory):
     """Custom LangChain memory class for Supabase Storage"""
-    def __init__(self, session_id: str, bucket: str):
+    def __init__(self, session_id: str, bucket: str, fallback_history: List[Dict[str, str]] = None):
         self.session_id = session_id
         self.bucket = bucket
         self.path = f"memory/{session_id}.json"
+        self.fallback_history = fallback_history or []
         
     @property
     def messages(self) -> List[BaseMessage]:
-        if not is_supabase_active():
-            return []
-        try:
-            file_bytes = supabase_download_file(self.bucket, self.path)
-            if file_bytes:
-                items = json.loads(file_bytes.decode('utf-8'))
-                return messages_from_dict(items)
-        except Exception:
-            pass
-        return []
+        if is_supabase_active():
+            try:
+                file_bytes = supabase_download_file(self.bucket, self.path)
+                if file_bytes:
+                    items = json.loads(file_bytes.decode('utf-8'))
+                    return messages_from_dict(items)
+            except Exception:
+                pass
+                
+        # Fallback to frontend history
+        from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+        msgs = []
+        for h in self.fallback_history:
+            role = h.get('role', 'user')
+            content = h.get('content', '')
+            if role == 'user':
+                msgs.append(HumanMessage(content=content))
+            elif role in ('ai', 'assistant', 'model'):
+                msgs.append(AIMessage(content=content))
+        return msgs
 
     def add_messages(self, messages: List[BaseMessage]) -> None:
         if not is_supabase_active():
@@ -727,7 +738,7 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
             context_str = "No compiled wiki pages or feedback records matched this query in the database."
 
         # Strict Prompt for Factual Integrity and Counter-Questioning
-        system_instruction = """You are a smart, direct, and humanlike AI analyst for a college alumni feedback dashboard. 
+        system_instruction = """You are a smart, highly empathetic, and human-like AI analyst for a college alumni feedback dashboard. 
 
 CRITICAL FACTUAL INTEGRITY RULES:
 1. NEVER guess, assume, or hallucinate. You only have access to the data provided below in the "AVAILABLE DATA" section.
@@ -737,12 +748,17 @@ CRITICAL FACTUAL INTEGRITY RULES:
 5. If the user asks to "name the students" or "name them", inspect the "Student:" prefix in the AVAILABLE DATA. Only name the specific students listed there. If no student names are listed there, say: "The survey feedback available in the context is anonymous or does not list student names."
 6. COUNTER-QUESTIONING: If the user's question is ambiguous, unclear, or you do not understand what they are asking for, DO NOT guess. Instead, ask a clarifying counter-question to understand their intent better.
 7. SPECIFICITY: If the user asks about a specific person (like Shruti Bhardwaj), DO NOT include feedback about other people (like Yogesh) even if they are in the available data. Filter your response to match their query exactly.
-8. FORMATTING: Use proper Markdown formatting. For bullet points, ALWAYS put them on a new line (e.g., `\n* Point 1\n* Point 2`). DO NOT put multiple bullet points on the same line.
+8. FORMATTING: Use proper Markdown formatting. NEVER put multiple bullet points on the same line or inside a paragraph. You MUST separate each bullet point with a newline.
+CORRECT format:
+* Point 1
+* Point 2
+INCORRECT format:
+* Point 1 * Point 2
 
 CONVERSATIONAL MEMORY & TONE:
-1. You have conversational history. Be helpful, direct, and conversational (use "I", "you", "we").
-2. Put the direct answer or main statistic FIRST on line 1 (unless counter-questioning).
-3. Use 2-3 bullet points for supporting details if needed.
+1. You have a long-term memory of this conversation. Greet the user by their name if they told you it previously!
+2. Be conversational, warm, and highly humanized. Use words like "I", "you", "we". Do NOT sound like a robotic data parser.
+3. Put the direct answer or main statistic FIRST.
 4. Only use double-bracket WikiLinks (e.g. [[speakers/Name]]) when referring to compiled files that actually exist in the AVAILABLE DATA.
 5. Maximum length: 150 words.
 
@@ -775,7 +791,7 @@ CONVERSATIONAL MEMORY & TONE:
             # Use RunnableWithMessageHistory for real AI memory
             with_message_history = RunnableWithMessageHistory(
                 chain,
-                lambda sid: SupabaseChatMessageHistory(sid, self.bucket),
+                lambda sid: SupabaseChatMessageHistory(sid, self.bucket, fallback_history=history),
                 input_messages_key="question",
                 history_messages_key="history",
             )
