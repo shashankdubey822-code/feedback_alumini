@@ -40,6 +40,8 @@ def get_wiki_status():
         return jsonify({
             'initialized': is_initialized,
             'gemini_configured': bool(service.gemini_key),
+            'groq_configured': bool(service.groq_key),
+            'ai_provider': 'groq' if service.groq_key else ('gemini' if service.gemini_key else 'offline'),
             'total_pages': len(pages),
             'counts': {
                 'speakers': len(speakers),

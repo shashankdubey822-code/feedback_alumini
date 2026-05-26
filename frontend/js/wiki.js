@@ -226,11 +226,14 @@ const Wiki = {
                         .then(() => self.loadWikiPages());
                 }
                 
-                // Show API Key Status Pop-up globally
-                if (data.gemini_configured) {
-                    if (window.showNotification) window.showNotification("Google Gemini API is configured and ready!", "success");
+                // Show AI provider status popup
+                const provider = data.ai_provider || 'offline';
+                if (provider === 'groq') {
+                    if (window.showNotification) window.showNotification("⚡ Groq AI (Llama 3.3 70B) — 14,400 free calls/day", "success");
+                } else if (provider === 'gemini') {
+                    if (window.showNotification) window.showNotification("✅ Gemini AI active (Groq not configured)", "success");
                 } else {
-                    if (window.showNotification) window.showNotification("Gemini API key is missing. Please add it to Hugging Face secrets.", "error");
+                    if (window.showNotification) window.showNotification("⚠️ No AI key found — add GROQ_API_KEY to HF Secrets", "error");
                 }
             })
             .catch(err => console.error("Error loading wiki status:", err));
