@@ -68,7 +68,7 @@
 .drop-zone {
     width: 100%;
     max-width: 600px;
-    border: 2px dashed rgba(255, 255, 255, 0.08);
+    border: 2px dashed rgba(0, 0, 0, 0.08);
     border-radius: var(--radius-xl);
     padding: 72px 48px;
     text-align: center;
@@ -152,7 +152,7 @@
 .upload-progress.hidden { display: none; }
 .progress-bar {
     height: 5px;
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(0, 0, 0, 0.06);
     border-radius: 3px;
     overflow: hidden;
 }

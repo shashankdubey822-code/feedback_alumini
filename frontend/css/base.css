@@ -50,7 +50,7 @@
 
 .loading-bar-wrap {
     width: 200px; height: 3px;
-    background: rgba(255,255,255,0.06);
+    background: rgba(0,0,0,0.06);
     border-radius: 99px; overflow: hidden;
     margin-bottom: 24px;
 }
@@ -71,7 +71,7 @@
 #btn-show-admin {
     padding: 9px 20px;
     border-radius: var(--r-sm);
-    background: rgba(255,255,255,0.05);
+    background: rgba(0,0,0,0.05);
     color: var(--text-secondary);
     border: 1px solid var(--border);
     cursor: pointer;
@@ -80,7 +80,7 @@
     display: none;
 }
 #btn-show-admin:hover {
-    background: rgba(255,255,255,0.08);
+    background: rgba(0,0,0,0.08);
     color: var(--text-primary);
 }
 

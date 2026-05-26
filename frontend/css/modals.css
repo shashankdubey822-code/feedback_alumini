@@ -63,7 +63,7 @@
     transition: all var(--t-base);
 }
 .modal-close:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.08);
     color: var(--text-primary);
 }
 .modal-body {
@@ -95,7 +95,7 @@
     z-index: 10;
 }
 .modal-body tr:hover td {
-    background: rgba(255, 255, 255, 0.02);
+    background: rgba(0, 0, 0, 0.02);
 }
 
 /* === TOAST NOTIFICATIONS === */
@@ -220,7 +220,7 @@
     transition: all var(--t-fast);
 }
 .sc-nav-btn:hover:not(.sc-disabled) {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.08);
     color: var(--text-primary);
 }
 .sc-nav-btn.sc-disabled { opacity: 0.3; cursor: not-allowed; }
