@@ -318,7 +318,12 @@ function setupUploadHandlers() {
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
 
-    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('click', (e) => {
+        if (e.target.id === 'google-link-input' || e.target.id === 'btn-google-fetch') {
+            return;
+        }
+        fileInput.click();
+    });
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
         dropZone.classList.add('dragover');

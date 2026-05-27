@@ -6,7 +6,12 @@ function setupUploadHandlers() {
     const fileInput = document.getElementById('file-input');
     if (!dropZone || !fileInput) return;
 
-    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('click', (e) => {
+        if (e.target.id === 'google-link-input' || e.target.id === 'btn-google-fetch') {
+            return;
+        }
+        fileInput.click();
+    });
     dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
     dropZone.addEventListener('drop', e => {
