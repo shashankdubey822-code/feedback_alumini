@@ -273,7 +273,7 @@ def get_consolidated_analytics(app, filters=None, search=None):
 
     if where_clauses:
         query += " WHERE " + " AND ".join(where_clauses)
-    query += " ORDER BY id DESC LIMIT 1000"
+    query += " ORDER BY id DESC"
 
     cursor.execute(query, params)
     table_data = [dict(row) for row in cursor.fetchall()]
