@@ -402,7 +402,7 @@ function renderDeepAnalysis(da) {
                 labels: ['Actionable Suggestions', 'Generic/Non-Answers'],
                 datasets: [{
                     data: [actStats.actionable, actStats.non_actionable],
-                    backgroundColor: ['#34d399', '#fb7185'],
+                    backgroundColor: ['#ff5500', '#00e5ff'],
                     borderWidth: 0
                 }]
             },

@@ -1296,63 +1296,74 @@ FORMATTING AND LENGTH RULES (CRITICAL):
 {context_str}
 """
 
-        # Setup LangChain LLM with fallback support for API limits
-        # Setting max_retries=0 prevents LangChain from automatically sleeping for minutes when hitting 429 rate limits.
-        llm = None
-        fallbacks = []
+        # Build the models list from highest priority to lowest
+        models_to_try = []
         
-        # Build the fallback chain from bottom to top
-        if self.cohere_key:
-            from langchain_cohere import ChatCohere
-            fallbacks.append(ChatCohere(cohere_api_key=self.cohere_key, model="command-r-plus", temperature=0.1, max_retries=0))
+        if self.groq_key:
+            models_to_try.append(("Groq (Llama-3.3)", ChatGroq(api_key=self.groq_key, model="llama-3.3-70b-versatile", temperature=0.1, max_retries=0, timeout=7)))
+            
+        if self.openrouter_key:
+            try:
+                from langchain_openai import ChatOpenAI
+                models_to_try.append(("OpenRouter (Llama-3-70b)", ChatOpenAI(
+                    api_key=self.openrouter_key, 
+                    base_url="https://openrouter.ai/api/v1", 
+                    model="meta-llama/llama-3-70b-instruct", 
+                    temperature=0.1, 
+                    max_retries=0, 
+                    request_timeout=7
+                )))
+            except ImportError:
+                pass
+                
+        if self.gemini_key:
+            models_to_try.append(("Gemini 2.5 Flash", ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.1, max_retries=0, request_timeout=7)))
             
         if self.mistral_key:
             from langchain_mistralai import ChatMistralAI
-            fallbacks.append(ChatMistralAI(api_key=self.mistral_key, model="mistral-large-latest", temperature=0.1, max_retries=0))
+            models_to_try.append(("Mistral Large", ChatMistralAI(api_key=self.mistral_key, model="mistral-large-latest", temperature=0.1, max_retries=0, timeout=7)))
 
-        if self.gemini_key:
-            fallbacks.append(ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.1, max_retries=0))
-            
-        if self.groq_key:
-            llm = ChatGroq(api_key=self.groq_key, model="llama-3.3-70b-versatile", temperature=0.1, max_retries=0)
-            if fallbacks:
-                llm = llm.with_fallbacks(fallbacks[::-1]) # Reverse so Gemini is first fallback, then Mistral, then Cohere
-        elif fallbacks:
-            llm = fallbacks[-1]
-            if len(fallbacks) > 1:
-                llm = llm.with_fallbacks(fallbacks[:-1][::-1])
+        if self.cohere_key:
+            from langchain_cohere import ChatCohere
+            models_to_try.append(("Cohere Command-R", ChatCohere(cohere_api_key=self.cohere_key, model="command-r-plus", temperature=0.1, max_retries=0, timeout=7)))
 
-        if llm:
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", system_instruction),
-                MessagesPlaceholder(variable_name="history"),
-                ("human", "{question}")
-            ])
-            
-            chain = prompt | llm
-            
-            # Use RunnableWithMessageHistory for real AI memory
-            with_message_history = RunnableWithMessageHistory(
-                chain,
-                lambda sid: SupabaseChatMessageHistory(sid, self.bucket, fallback_history=history),
-                input_messages_key="question",
-                history_messages_key="history",
-            )
-            
-            try:
-                # If no session_id is provided, generate a fallback local session ID for this request
-                effective_session_id = session_id if session_id else "default_session"
-                response = with_message_history.invoke(
-                    {
-                        "question": question,
-                        "context_str": context_str
-                    },
-                    config={"configurable": {"session_id": effective_session_id}}
-                )
-                synthesis = response.content
-            except Exception as e:
-                logger.error(f"LangChain Runnable error: {str(e)}")
-                synthesis = f"Error generating response: {str(e)}"
+        synthesis = None
+        used_model_name = None
+        primary_model_name = models_to_try[0][0] if models_to_try else "None"
+
+        if models_to_try:
+            for name, llm_instance in models_to_try:
+                try:
+                    logger.info(f"Attempting query with model: {name}")
+                    prompt = ChatPromptTemplate.from_messages([
+                        ("system", system_instruction),
+                        MessagesPlaceholder(variable_name="history"),
+                        ("human", "{question}")
+                    ])
+                    chain = prompt | llm_instance
+                    
+                    with_message_history = RunnableWithMessageHistory(
+                        chain,
+                        lambda sid: SupabaseChatMessageHistory(sid, self.bucket, fallback_history=history),
+                        input_messages_key="question",
+                        history_messages_key="history",
+                    )
+                    
+                    response = with_message_history.invoke(
+                        {"question": question, "context_str": context_str},
+                        config={"configurable": {"session_id": session_id if session_id else "default_session"}}
+                    )
+                    synthesis = response.content
+                    used_model_name = name
+                    break
+                except Exception as e:
+                    logger.warning(f"Model {name} failed: {str(e)}")
+                    continue
+                    
+            if synthesis is None:
+                synthesis = "Error generating response: All configured AI models failed or timed out."
+            elif used_model_name != primary_model_name:
+                synthesis += f"\n\n*(Note: Primary model '{primary_model_name}' timed out or failed. This response was generated using fallback model: '{used_model_name}')*"
         else:
             synthesis = f"""No AI available (API keys missing). Here's what the database shows for your query:
 - **Matching Wiki Pages**: {', '.join([f'[[{p[0]}]]' for p in matched_pages]) if matched_pages else 'None'}
@@ -1440,7 +1451,7 @@ FORMATTING AND LENGTH RULES (CRITICAL):
         }
 
     def suggest_questions(self) -> List[str]:
-        """Dynamically generate analytical query suggestions using SQLite metadata and optionally Gemini"""
+        """Dynamically generate analytical query suggestions using SQLite metadata and an LLM"""
         config = get_config()()
         db_path = config.DATABASE_PATH
         
@@ -1480,11 +1491,48 @@ FORMATTING AND LENGTH RULES (CRITICAL):
             conn.close()
         except Exception as e:
             logger.error(f"Failed to query metadata for suggestions: {str(e)}")
+            return []
             
-        # Default offline fallback questions based on actual database entities
-        fallback_questions = [
+        # 2. Ask the LLM to generate 4 dynamic questions!
+        prompt_text = f"""You are an advanced analyst for a student feedback database.
+The database contains feedback on these recent speakers: {', '.join(speakers) if speakers else 'None'}.
+The database contains requests for these future topics: {', '.join(topics) if topics else 'None'}.
+
+Based strictly on this data, formulate exactly 4 insightful, analytical questions that a user could ask you to discover deeper trends in the database.
+Make the questions sound natural, like: "What was the overall sentiment for [Speaker Name]?" or "Which speaker covered [Topic] best?"
+Do NOT include generic questions that don't use the data. 
+
+Return ONLY the 4 questions, one per line. Do not use bullet points, numbering, or introductory text."""
+
+        # Attempt to get an LLM to generate the questions
+        llm = None
+        if self.groq_key:
+            llm = ChatGroq(api_key=self.groq_key, model="llama-3.3-70b-versatile", temperature=0.3, max_retries=0, timeout=5)
+        elif self.gemini_key:
+            llm = ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.3, max_retries=0, request_timeout=5)
+        elif self.openrouter_key:
+            try:
+                from langchain_openai import ChatOpenAI
+                llm = ChatOpenAI(api_key=self.openrouter_key, base_url="https://openrouter.ai/api/v1", model="meta-llama/llama-3-70b-instruct", temperature=0.3, max_retries=0, request_timeout=5)
+            except:
+                pass
+                
+        if llm:
+            try:
+                from langchain_core.messages import HumanMessage
+                res = llm.invoke([HumanMessage(content=prompt_text)])
+                questions = [q.strip().strip('-*0123456789. ') for q in res.content.split('\n') if q.strip()]
+                if len(questions) >= 4:
+                    return questions[:4]
+            except Exception as e:
+                logger.warning(f"Failed to dynamically generate questions with LLM: {e}")
+                
+        # Fallback offline questions if LLM completely fails
+        return [
             "What is the overall sentiment of guest lectures?",
-            "Who are the top rated speakers and what makes them successful?"
+            "Who are the top rated speakers and what makes them successful?",
+            f"What was the most valuable aspect of {speakers[0] if speakers else 'the last'} lecture?",
+            "Compare the student feedback across different topics."
         ]
         if speakers:
             fallback_questions.append(f"What was the most valuable aspect of [[speakers/{speakers[0].replace(' ', '_')}]]'s lecture?")

@@ -673,7 +673,7 @@ function renderDeepAnalysis(da) {
             type: 'doughnut',
             data: {
                 labels: ['Actionable Suggestions', 'Generic/Non-Answers'],
-                datasets: [{ data: [actStats.actionable, actStats.non_actionable], backgroundColor: ['#34d399', '#fb7185'], borderWidth: 0 }]
+                datasets: [{ data: [actStats.actionable, actStats.non_actionable], backgroundColor: ['#ff5500', '#eeff00ff'], borderWidth: 0 }]
             },
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#8b8b9e' } } }, cutout: '60%' }
         });

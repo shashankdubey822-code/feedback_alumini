@@ -11,14 +11,26 @@ import json
 
 logger = get_section_logger('rag')
 
+import os
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
 # Lazy-loaded sentence transformer model
 _embedding_model = None
 
-
 def _get_embedding_model():
-    """Load the SentenceTransformer model on first request to conserve memory on boot"""
+    """Load embedding model: Use Gemini if available, else local SentenceTransformer"""
     global _embedding_model
     if _embedding_model is None:
+        gemini_key = os.environ.get("GEMINI_API_KEY")
+        if gemini_key:
+            try:
+                logger.info("Loading Gemini Embedding model (faster, no local download)...")
+                _embedding_model = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004", google_api_key=gemini_key)
+                logger.info("Gemini Embedding model loaded successfully.")
+                return _embedding_model
+            except Exception as e:
+                logger.error(f"Failed to load Gemini embeddings: {str(e)}")
+                
         try:
             logger.info("Loading local sentence-transformers/all-MiniLM-L6-v2 embedding model...")
             from sentence_transformers import SentenceTransformer
@@ -29,7 +41,6 @@ def _get_embedding_model():
             _embedding_model = False  # Flag load failure
     return _embedding_model
 
-
 class RAGService:
     """Handles vector embeddings and semantic search on SQLite or Supabase"""
 
@@ -37,7 +48,7 @@ class RAGService:
         pass
 
     def generate_embedding(self, text: str) -> Optional[List[float]]:
-        """Generate a 384-dimensional float vector for a given text block"""
+        """Generate a float vector for a given text block"""
         if not text or not text.strip():
             return None
 
@@ -47,10 +58,15 @@ class RAGService:
             return None
 
         try:
-            # Generate embedding
-            embedding = model.encode(text.strip(), convert_to_numpy=True)
-            # Convert float32 array to standard Python list of floats
-            return [float(x) for x in embedding]
+            # Check if using LangChain Gemini Embeddings
+            if hasattr(model, 'embed_query'):
+                embedding = model.embed_query(text.strip())
+                # Ensure 384 dimensions if Supabase uses 384! Gemini is 768
+                return [float(x) for x in embedding[:384]]
+            else:
+                # Local SentenceTransformer
+                embedding = model.encode(text.strip(), convert_to_numpy=True)
+                return [float(x) for x in embedding]
         except Exception as e:
             logger.error(f"Error generating embedding: {str(e)}")
             return None
