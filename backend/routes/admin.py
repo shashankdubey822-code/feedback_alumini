@@ -10,7 +10,17 @@ import pandas as pd
 import re
 import urllib.request
 import json
+import io
+import requests
 from datetime import datetime
+
+try:
+    from google.oauth2 import service_account
+    from google.auth.transport.requests import Request
+    GOOGLE_AUTH_AVAILABLE = True
+except ImportError:
+    GOOGLE_AUTH_AVAILABLE = False
+
 from ..utils.logger import get_logger, log_endpoint_access
 
 logger = get_logger(__name__)
@@ -304,7 +314,35 @@ def fetch_google_link():
                 url = url.rstrip('/') + '/export?format=csv'
 
         db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
-        df = pd.read_csv(url)
+        
+        # Authenticated fetch using credentials.json or Environment Variable if available
+        creds_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'credentials.json')
+        creds_env = os.getenv('GOOGLE_CREDENTIALS')
+        
+        if GOOGLE_AUTH_AVAILABLE and (os.path.exists(creds_path) or creds_env):
+            logger.info("Using Service Account credentials for Google Sheet fetch.")
+            
+            # Use Environment Variable (Hugging Face Secret) if available, otherwise use local file
+            if creds_env:
+                import json
+                creds_dict = json.loads(creds_env)
+                creds = service_account.Credentials.from_service_account_info(
+                    creds_dict, scopes=['https://www.googleapis.com/auth/drive.readonly']
+                )
+            else:
+                creds = service_account.Credentials.from_service_account_file(
+                    creds_path, scopes=['https://www.googleapis.com/auth/drive.readonly']
+                )
+                
+            auth_req = Request()
+            creds.refresh(auth_req)
+            headers = {'Authorization': f'Bearer {creds.token}'}
+            res = requests.get(url, headers=headers)
+            res.raise_for_status()
+            df = pd.read_csv(io.StringIO(res.text))
+        else:
+            logger.info("No credentials.json found. Attempting unauthenticated fetch.")
+            df = pd.read_csv(url)
         
         if len(df) == 0:
             return jsonify({'error': 'Google Sheet is empty'}), 400
@@ -319,6 +357,10 @@ def fetch_google_link():
     except urllib.error.HTTPError as e:
         logger.error(f"HTTP error fetching Google Sheet: {e.code}")
         return jsonify({'error': f'Could not access Google Sheet (HTTP {e.code})'}), 400
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Requests error fetching Google Sheet: {str(e)}")
+        status_code = e.response.status_code if e.response is not None else 400
+        return jsonify({'error': f'Could not access Google Sheet (HTTP {status_code}). Please verify your service account access.'}), 400
     except Exception as e:
         logger.error(f"Google fetch error: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
