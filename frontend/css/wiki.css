@@ -96,6 +96,7 @@
 /* Chat bubble aesthetics */
 .chat-msg {
     animation: slideUp 0.25s ease-out;
+    white-space: pre-wrap;
 }
 
 @keyframes slideUp {
