@@ -135,11 +135,11 @@ function _handleCreateForm(payload) {
   
   if (payload.send_certificates) {
     const emailItem = form.addTextItem().setTitle("Email Address").setRequired(true);
-    emailItem.setHelpText("Enter your official university email ending in @mru.ac.in to receive your certificate.");
+    emailItem.setHelpText("Enter your correct email address to receive your certificate.");
     emailItem.setValidation(
       FormApp.createTextValidation()
-        .requireTextMatchesPattern("[a-zA-Z0-9._%+-]+@mru\\.ac\\.in")
-        .setHelpText("Must be a valid university email address ending in @mru.ac.in")
+        .requireTextIsEmail()
+        .setHelpText("Must be a valid email address.")
         .build()
     );
   }
