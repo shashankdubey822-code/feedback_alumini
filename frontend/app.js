@@ -87,7 +87,45 @@ document.addEventListener('DOMContentLoaded', () => {
     setupModal();
     setupAdminAuth();
     loadInitialData();
+    pollCertificationErrors(); // Start background polling for certification errors
 });
+
+// ========== ERROR MONITORING ==========
+let shownCertErrors = new Set();
+async function pollCertificationErrors() {
+    try {
+        const resp = await fetch('/api/errors/report');
+        if (resp.ok) {
+            const data = await resp.json();
+            const certErrors = (data.by_page && data.by_page.certification) || [];
+            
+            certErrors.forEach(err => {
+                // Only alert on critical/warning issues that are NOT ok
+                if (!err.ok && (err.severity === 'CRITICAL' || err.severity === 'WARNING')) {
+                    // Create a unique key to avoid spamming the same error
+                    const errKey = `${err.check}:${err.message}`;
+                    if (!shownCertErrors.has(errKey)) {
+                        shownCertErrors.add(errKey);
+                        
+                        // Extremely prominent popup for certification errors
+                        const fullMsg = err.detail ? `${err.message}\nAction: ${err.detail}` : err.message;
+                        showNotification(`CERTIFICATION ERROR: ${fullMsg}`, 'error');
+                        
+                        // If it's critical, also log it prominently
+                        if (err.severity === 'CRITICAL') {
+                            console.error(`[CRITICAL CERT ERROR] ${fullMsg}`);
+                        }
+                    }
+                }
+            });
+        }
+    } catch (e) {
+        console.warn("Could not poll certification errors:", e);
+    }
+    
+    // Poll again every 60 seconds
+    setTimeout(pollCertificationErrors, 60000);
+}
 
 // ========== TOAST NOTIFICATIONS ==========
 function showNotification(message, type = 'info') {

@@ -447,7 +447,7 @@ function ONE_TIME_SET_SECRETS() {
   const p = PropertiesService.getScriptProperties();
   p.setProperty("WEBHOOK_SECRET", "DL_wh_9fK2mPq7vNx4Rt8sLw3");
   p.setProperty("SECRET_KEY", "datalens2026");
-  p.setProperty("SENDER_EMAIL", "shashankdubey822@gmail.com"); // Using personal Gmail to bypass domain restrictions
+  p.setProperty("SENDER_EMAIL", "your-workspace-email@mru.ac.in"); // Restored back to MRU email due to slide permissions
   Logger.log("Saved WEBHOOK_SECRET, SECRET_KEY, and SENDER_EMAIL.");
 }
 

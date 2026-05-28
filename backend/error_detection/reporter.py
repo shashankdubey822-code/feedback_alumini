@@ -15,6 +15,7 @@ from .nlp.nlp_errors import NLPErrorDetector
 from .pages.speakers_errors import SpeakersErrorDetector
 from .upload.upload_errors import UploadErrorDetector
 from .webhook.webhook_errors import WebhookErrorDetector
+from .certification.certification_errors import CertificationErrorDetector
 
 logger = logging.getLogger("error_detection")
 
@@ -30,6 +31,7 @@ def run_all_checks(db_path: str, upload_dir: str = "data/uploads") -> Dict[str, 
         SpeakersErrorDetector(db_path),
         UploadErrorDetector(upload_dir, db_path),
         WebhookErrorDetector(),
+        CertificationErrorDetector(db_path),
     ]
 
     all_results: List[DetectionResult] = []
