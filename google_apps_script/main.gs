@@ -127,6 +127,7 @@ function _handleCreateForm(payload) {
   const form = FormApp.create(`Student Feedback: ${speaker}`);
   form.setDescription(`Session: ${date} | Speaker: ${speaker}\nJoin us in providing feedback for continuous improvement.`);
   form.setCollectEmail(false);
+  form.setRequireLogin(false); // Allow anyone (including personal Gmails) to access the form
   form.setAllowResponseEdits(false);
 
   // Step 1: Student Identity (Matches CSV Headers)
