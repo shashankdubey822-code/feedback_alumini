@@ -134,6 +134,8 @@ function _handleCreateForm(payload) {
   form.addMultipleChoiceItem().setTitle("Department").setChoiceValues(CONFIG.DEPARTMENT_OPTIONS).setRequired(true);
   const rollItem = form.addTextItem().setTitle("Roll No.").setRequired(true);
   const rollPattern = "^2[Kk]\\d{2}[A-Za-z]{3,12}\\d{5}$";
+  const emailItem = form.addTextItem().setTitle("Email Address").setRequired(true);
+  emailItem.setHelpText("Enter your correct email address to receive your certificate.");
   rollItem.setHelpText("Format: 2K + 2-digit batch year + programme code + 5 digits (e.g. 2K25EDUN01013, 2K24ECUN03021). No spaces.");
   rollItem.setValidation(
     FormApp.createTextValidation()
