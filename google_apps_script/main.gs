@@ -442,7 +442,8 @@ function ONE_TIME_SET_SECRETS() {
   const p = PropertiesService.getScriptProperties();
   p.setProperty("WEBHOOK_SECRET", "DL_wh_9fK2mPq7vNx4Rt8sLw3");
   p.setProperty("SECRET_KEY", "datalens2026");
-  Logger.log("Saved WEBHOOK_SECRET and SECRET_KEY (must match HF WEBHOOK_SECRET and APPS_SCRIPT_SECRET).");
+  p.setProperty("SENDER_EMAIL", "your-workspace-email@mru.ac.in"); // Replace with your mru.ac.in email alias
+  Logger.log("Saved WEBHOOK_SECRET, SECRET_KEY, and SENDER_EMAIL.");
 }
 
 function _handleGenerateCertificate(payload) {
@@ -509,12 +510,15 @@ function _handleGenerateCertificate(payload) {
                       `Best regards,\n` +
                       `Department Team`;
                       
-    MailApp.sendEmail({
-      to: studentEmail,
-      subject: emailSubject,
-      body: emailBody,
+    const senderEmail = PropertiesService.getScriptProperties().getProperty("SENDER_EMAIL") || "";
+    const mailOptions = {
       attachments: [pdfBlob]
-    });
+    };
+    if (senderEmail) {
+      mailOptions.from = senderEmail;
+    }
+
+    GmailApp.sendEmail(studentEmail, emailSubject, emailBody, mailOptions);
 
     // 5. Clean up the copied Google Slides file to save Drive space
     try {
