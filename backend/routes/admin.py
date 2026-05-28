@@ -930,8 +930,8 @@ def sync_responses():
                 
                 # Check if certificates should be generated
                 if event['send_certificates'] == 1 and event['template_id']:
-                    student_name = resp.get('name_of_student', 'Unknown')
-                    student_email = resp.get('student_email', '')
+                    student_name = resp.get('name_of_student', 'Unknown').strip()
+                    student_email = resp.get('student_email', '').strip()
                     
                     # Avoid duplicate jobs for same student & event
                     cursor.execute("""
@@ -940,11 +940,17 @@ def sync_responses():
                         LIMIT 1
                     """, (event_id, roll_no))
                     
-                    if not cursor.fetchone() and student_email:
+                    if not cursor.fetchone():
+                        job_status = 'pending'
+                        job_error = None
+                        if not student_email:
+                            job_status = 'failed'
+                            job_error = 'No email address provided in form submission'
+                            
                         cursor.execute("""
-                            INSERT INTO job_queue (student_name, student_email, roll_no, department, event_id, status)
-                            VALUES (?, ?, ?, ?, ?, 'pending')
-                        """, (student_name, student_email, roll_no, raw_dept, event_id))
+                            INSERT INTO job_queue (student_name, student_email, roll_no, department, event_id, status, error_message)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (student_name, student_email, roll_no, raw_dept, event_id, job_status, job_error))
                         
                 count += 1
             except sqlite3.IntegrityError as e:
