@@ -2424,6 +2424,7 @@ class SmartCalendar {
                 list.appendChild(item);
             });
         } catch (err) {
+            if (err.message === 'Request was cancelled') return;
             console.error('[CERT LOGS] Error:', err);
             list.innerHTML = `<div style="color:#ef4444;font-size:11px;text-align:center;padding:10px;">Failed to load logs: ${esc(err.message)}</div>`;
         }
