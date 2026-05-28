@@ -877,7 +877,7 @@ def sync_responses():
                 ))
                 
                 # Check if certificates should be generated
-                if event.get('send_certificates') == 1 and event.get('template_id'):
+                if event['send_certificates'] == 1 and event['template_id']:
                     student_name = resp.get('name_of_student', 'Unknown')
                     student_email = resp.get('student_email', '')
                     
