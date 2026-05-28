@@ -2486,6 +2486,35 @@ class SmartCalendar {
                     showNotification('No form URL available', 'error');
                 }
             });
+
+        // Google Slides Template ID validation & auto-extraction
+        const templateInput = document.getElementById('fb-template-id');
+        if (templateInput) {
+            templateInput.addEventListener('input', (e) => {
+                let val = e.target.value.trim();
+                
+                // Extract ID if user pasted a full Google Drive/Slides URL
+                const urlMatch = val.match(/\/d\/([a-zA-Z0-9-_]+)/);
+                if (urlMatch && urlMatch[1]) {
+                    val = urlMatch[1];
+                    e.target.value = val;
+                }
+                
+                // Google Drive IDs are typically between 25 and 60 alphanumeric/hyphen/underscore characters
+                const isValidId = /^[a-zA-Z0-9-_]{25,60}$/.test(val);
+                
+                if (val === '') {
+                    e.target.style.borderColor = '#111827';
+                    e.target.style.background = '#fff';
+                } else if (isValidId) {
+                    e.target.style.borderColor = '#34d399';
+                    e.target.style.background = 'rgba(52, 211, 153, 0.05)';
+                } else {
+                    e.target.style.borderColor = '#ef4444';
+                    e.target.style.background = 'rgba(239, 68, 68, 0.05)';
+                }
+            });
+        }
     });
     
     // ── Global Form Timer Updater ────────────────────────────
