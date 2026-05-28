@@ -875,6 +875,25 @@ def sync_responses():
                     'SYNCED',
                     datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
                 ))
+                
+                # Check if certificates should be generated
+                if event.get('send_certificates') == 1 and event.get('template_id'):
+                    student_name = resp.get('name_of_student', 'Unknown')
+                    student_email = resp.get('student_email', '')
+                    
+                    # Avoid duplicate jobs for same student & event
+                    cursor.execute("""
+                        SELECT id FROM job_queue 
+                        WHERE event_id = ? AND roll_no = ?
+                        LIMIT 1
+                    """, (event_id, roll_no))
+                    
+                    if not cursor.fetchone() and student_email:
+                        cursor.execute("""
+                            INSERT INTO job_queue (student_name, student_email, roll_no, department, event_id, status)
+                            VALUES (?, ?, ?, ?, ?, 'pending')
+                        """, (student_name, student_email, roll_no, raw_dept, event_id))
+                        
                 count += 1
             except sqlite3.IntegrityError as e:
                 logger.warning(f"Integrity error inserting response: {str(e)}")
