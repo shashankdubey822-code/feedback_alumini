@@ -2061,10 +2061,40 @@ class SmartCalendar {
         }
         
         btn.disabled = true;
-        btn.textContent = 'Creating event & form...';
-        btn.style.opacity = '0.7';
         hideStatus();
         document.getElementById('fb-result').style.display = 'none';
+
+        // ── Deep Verification ───────────────────────────────────────
+        if (sendCerts === 1 && templateId) {
+            btn.textContent = 'Verifying Template...';
+            btn.style.opacity = '0.7';
+            try {
+                const token = localStorage.getItem('adminToken') || '';
+                const verifyResp = await fetch(`${API_BASE}/api/admin/verify-template`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ template_id: templateId })
+                });
+                const verifyData = await verifyResp.json();
+                
+                if (!verifyResp.ok || !verifyData.success) {
+                    showStatus(verifyData.error || 'Template ID is invalid or inaccessible.', 'error');
+                    btn.disabled = false;
+                    btn.textContent = 'Generate Google Form';
+                    btn.style.opacity = '1';
+                    return; // Stop form creation
+                }
+            } catch (err) {
+                showStatus('Error verifying template: ' + err.message, 'error');
+                btn.disabled = false;
+                btn.textContent = 'Generate Google Form';
+                btn.style.opacity = '1';
+                return;
+            }
+        }
+
+        btn.textContent = 'Creating event & form...';
+        btn.style.opacity = '0.7';
 
         try {
             // ✅ NEW: Use atomic endpoint - creates event AND form in single transaction

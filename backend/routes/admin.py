@@ -365,6 +365,58 @@ def fetch_google_link():
         logger.error(f"Google fetch error: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
+@admin_bp.route('/verify-template', methods=['POST'])
+@log_endpoint_access
+def verify_template():
+    """
+    Verify if a Google Slide Template ID exists and is accessible
+    via the Google Apps Script.
+    """
+    try:
+        data = request.get_json() or {}
+        template_id = data.get('template_id', '').strip()
+        
+        if not template_id:
+            return jsonify({'success': False, 'error': 'No template_id provided'}), 400
+            
+        script_url = current_app.config.get('APPS_SCRIPT_URL')
+        secret_key = current_app.config.get('APPS_SCRIPT_SECRET', 'datalens2026')
+        
+        if not script_url:
+            return jsonify({'success': False, 'error': 'Apps Script URL not configured'}), 500
+            
+        # Send verification payload to GAS
+        payload = {
+            "action": "verify_template",
+            "secret": secret_key,
+            "template_id": template_id
+        }
+        
+        logger.info(f"Verifying template ID: {template_id}")
+        response = requests.post(script_url, json=payload, timeout=10)
+        response_data = response.json()
+        
+        # If response is successful, the template exists and is accessible
+        if response.status_code == 200 and response_data.get('success'):
+            return jsonify({
+                'success': True,
+                'data': response_data.get('data', {})
+            })
+        else:
+            # Pass along the specific error from GAS
+            error_msg = response_data.get('error') or response_data.get('message') or "Template verification failed"
+            return jsonify({
+                'success': False,
+                'error': error_msg
+            }), 403
+            
+    except requests.exceptions.Timeout:
+        logger.error("Timeout connecting to Apps Script for verification")
+        return jsonify({'success': False, 'error': 'Google Apps Script timeout'}), 504
+    except Exception as e:
+        logger.error(f"Verification error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @admin_bp.route('/create-event-and-form', methods=['POST'])
 @log_endpoint_access
 def create_event_and_form():
