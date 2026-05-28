@@ -2011,9 +2011,10 @@ class SmartCalendar {
         document.getElementById('fb-status').style.display = 'none';
         document.getElementById('fb-result').style.display = 'none';
         const btn = document.getElementById('btn-generate-form');
-        btn.disabled = false;
+        btn.disabled = true;
         btn.textContent = 'Generate Google Form';
-        btn.style.opacity = '1';
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
         _currentFormUrl = '';
     }
 
@@ -2487,32 +2488,70 @@ class SmartCalendar {
                 }
             });
 
-        // Google Slides Template ID validation & auto-extraction
-        const templateInput = document.getElementById('fb-template-id');
-        if (templateInput) {
-            templateInput.addEventListener('input', (e) => {
-                let val = e.target.value.trim();
+        // ── Dynamic Form Validation ──────────────────────────────
+        const btnGen = document.getElementById('btn-generate-form');
+        const fSpeaker = document.getElementById('fb-speaker-name');
+        const fDate = document.getElementById('fb-venue-date');
+        const fTemplate = document.getElementById('fb-template-id');
+        const fCerts = document.getElementById('fb-send-certs');
+
+        function validateFormInputs() {
+            if (!btnGen) return;
+            // Prevent overriding the loading state
+            if (btnGen.textContent.includes('Creating')) return;
+
+            const spk = fSpeaker ? fSpeaker.value.trim() : '';
+            const dt = fDate ? fDate.value.trim() : '';
+            let tpl = fTemplate ? fTemplate.value.trim() : '';
+            const sendCerts = fCerts ? fCerts.checked : false;
+
+            let isValid = true;
+
+            // Base requirements
+            if (!spk || !dt) {
+                isValid = false;
+            }
+
+            // Conditional requirement: if auto-generate is checked, Template ID must be valid
+            if (sendCerts) {
+                // Auto-extract ID if URL pasted
+                const urlMatch = tpl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+                if (urlMatch && urlMatch[1]) {
+                    tpl = urlMatch[1];
+                    if (fTemplate) fTemplate.value = tpl;
+                }
                 
-                // Extract ID if user pasted a full Google Drive/Slides URL
+                const isValidId = /^[a-zA-Z0-9-_]{25,60}$/.test(tpl);
+                if (!isValidId) {
+                    isValid = false;
+                }
+            }
+
+            // Remove previous green/red border styling (reverting per user request)
+            if (fTemplate) {
+                fTemplate.style.borderColor = '#111827';
+                fTemplate.style.background = '#fff';
+            }
+
+            // Enable or disable button
+            btnGen.disabled = !isValid;
+            btnGen.style.opacity = isValid ? '1' : '0.5';
+            btnGen.style.cursor = isValid ? 'pointer' : 'not-allowed';
+        }
+
+        // Attach listeners to all inputs
+        if (fSpeaker) fSpeaker.addEventListener('input', validateFormInputs);
+        if (fDate) fDate.addEventListener('input', validateFormInputs);
+        if (fCerts) fCerts.addEventListener('change', validateFormInputs);
+        if (fTemplate) {
+            fTemplate.addEventListener('input', (e) => {
+                // Keep immediate auto-extract visual update for UX
+                let val = e.target.value.trim();
                 const urlMatch = val.match(/\/d\/([a-zA-Z0-9-_]+)/);
                 if (urlMatch && urlMatch[1]) {
-                    val = urlMatch[1];
-                    e.target.value = val;
+                    e.target.value = urlMatch[1];
                 }
-                
-                // Google Drive IDs are typically between 25 and 60 alphanumeric/hyphen/underscore characters
-                const isValidId = /^[a-zA-Z0-9-_]{25,60}$/.test(val);
-                
-                if (val === '') {
-                    e.target.style.borderColor = '#111827';
-                    e.target.style.background = '#fff';
-                } else if (isValidId) {
-                    e.target.style.borderColor = '#34d399';
-                    e.target.style.background = 'rgba(52, 211, 153, 0.05)';
-                } else {
-                    e.target.style.borderColor = '#ef4444';
-                    e.target.style.background = 'rgba(239, 68, 68, 0.05)';
-                }
+                validateFormInputs();
             });
         }
     });
