@@ -6,8 +6,11 @@ from backend.services.nlp_service import NLPService
 from backend.config import get_config
 from backend.utils.logger import get_section_logger
 
+_dl_thread = None
+
 def start_dl_worker(logger_unused):
     """Start the deep learning background worker thread"""
+    global _dl_thread
     dl_logger = get_section_logger('dl_worker')
     config = get_config()()
     db_path = config.DATABASE_PATH
@@ -113,4 +116,5 @@ def start_dl_worker(logger_unused):
     
     worker_thread = threading.Thread(target=worker_loop, daemon=True)
     worker_thread.start()
+    _dl_thread = worker_thread
     return worker_thread

@@ -4,7 +4,7 @@ DB Error Detector — connectivity, schema, required columns.
 from __future__ import annotations
 import sqlite3
 from typing import List
-from .base import ErrorDetector, DetectionResult
+from ..base import ErrorDetector, DetectionResult
 
 REQUIRED_COLUMNS = [
     "id", "timestamp_normalized", "department_cleaned",

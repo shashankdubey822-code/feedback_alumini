@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 import json
 from typing import List
-from .base import ErrorDetector, DetectionResult
+from ..base import ErrorDetector, DetectionResult
 
 
 class NLPErrorDetector(ErrorDetector):

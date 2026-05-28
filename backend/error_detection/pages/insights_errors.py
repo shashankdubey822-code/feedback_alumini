@@ -3,7 +3,7 @@ AI Insights Page Error Detector — NLP service, insight payload checks.
 """
 from __future__ import annotations
 from typing import List
-from .base import ErrorDetector, DetectionResult
+from ..base import ErrorDetector, DetectionResult
 
 
 class InsightsErrorDetector(ErrorDetector):

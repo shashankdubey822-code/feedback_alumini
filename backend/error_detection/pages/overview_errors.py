@@ -4,7 +4,7 @@ Overview Page Error Detector — KPI, filter, and data quality checks.
 from __future__ import annotations
 import sqlite3
 from typing import List
-from .base import ErrorDetector, DetectionResult
+from ..base import ErrorDetector, DetectionResult
 
 
 class OverviewErrorDetector(ErrorDetector):

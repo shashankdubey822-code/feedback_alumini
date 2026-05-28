@@ -106,7 +106,39 @@ def initialize_database(app, logger):
                     form_url TEXT,
                     form_edit_url TEXT,
                     status TEXT DEFAULT 'pending',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    template_id TEXT,
+                    send_certificates INTEGER DEFAULT 0
+                )
+            ''')
+        else:
+            # Migration: add template_id and send_certificates to existing events table
+            if 'template_id' not in event_cols:
+                logger.info("Adding column template_id to events table...")
+                cursor.execute("ALTER TABLE events ADD COLUMN template_id TEXT")
+            if 'send_certificates' not in event_cols:
+                logger.info("Adding column send_certificates to events table...")
+                cursor.execute("ALTER TABLE events ADD COLUMN send_certificates INTEGER DEFAULT 0")
+
+        # Ensure job_queue table exists
+        cursor.execute("PRAGMA table_info(job_queue)")
+        queue_cols = [row[1] for row in cursor.fetchall()]
+        if not queue_cols:
+            logger.info("Creating job_queue table...")
+            cursor.execute('''
+                CREATE TABLE job_queue (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    student_name TEXT NOT NULL,
+                    student_email TEXT NOT NULL,
+                    roll_no TEXT,
+                    department TEXT,
+                    event_id INTEGER,
+                    status TEXT DEFAULT 'pending',
+                    attempts INTEGER DEFAULT 0,
+                    error_message TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(event_id) REFERENCES events(id)
                 )
             ''')
         

@@ -4,7 +4,7 @@ Upload Page Error Detector — file handling, DB insert, Google Sheets.
 from __future__ import annotations
 import os
 from typing import List
-from .base import ErrorDetector, DetectionResult
+from ..base import ErrorDetector, DetectionResult
 
 
 class UploadErrorDetector(ErrorDetector):

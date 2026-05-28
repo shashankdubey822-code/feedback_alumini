@@ -379,6 +379,8 @@ def create_event_and_form():
         data = request.get_json() or {}
         speaker_name = data.get('speaker_name', '').strip()
         venue_date = data.get('venue_date', '').strip()
+        template_id = data.get('template_id', '').strip() or None
+        send_certificates = int(data.get('send_certificates', 0))
         
         # Validation
         if not speaker_name or not venue_date:
@@ -401,8 +403,8 @@ def create_event_and_form():
         cursor = conn.cursor()
         
         cursor.execute(
-            "INSERT INTO events (speaker_name, venue_date, status) VALUES (?, ?, ?)",
-            (speaker_name, venue_date, 'creating_form')
+            "INSERT INTO events (speaker_name, venue_date, status, template_id, send_certificates) VALUES (?, ?, ?, ?, ?)",
+            (speaker_name, venue_date, 'creating_form', template_id, send_certificates)
         )
         event_id = cursor.lastrowid
         
@@ -419,7 +421,8 @@ def create_event_and_form():
             'speaker_name': speaker_name,
             'venue_date': venue_date,
             'webhook_url': webhook_url,
-            'event_id': event_id
+            'event_id': event_id,
+            'send_certificates': send_certificates
         }
         
         success, result, error = _call_google_apps_script(apps_script_url, payload, timeout=90)
@@ -543,6 +546,32 @@ def get_events():
         return jsonify({'success': True, 'events': events}), 200
     except Exception as e:
         logger.error(f"Error fetching events: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@admin_bp.route('/certificate-jobs', methods=['GET'])
+def get_certificate_jobs():
+    """Retrieve list of certificate generation jobs from the queue with event details"""
+    try:
+        db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT j.*, e.speaker_name 
+            FROM job_queue j
+            LEFT JOIN events e ON j.event_id = e.id
+            ORDER BY j.created_at DESC
+            LIMIT 50
+        """)
+        rows = cursor.fetchall()
+        
+        jobs = [dict(row) for row in rows]
+        conn.close()
+        return jsonify({'success': True, 'jobs': jobs}), 200
+    except Exception as e:
+        logger.error(f"Error fetching certificate jobs: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 

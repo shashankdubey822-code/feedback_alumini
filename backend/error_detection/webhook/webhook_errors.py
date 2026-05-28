@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import json
 from typing import List
-from .base import ErrorDetector, DetectionResult
+from ..base import ErrorDetector, DetectionResult
 
 SYNC_HEALTH_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                  '..', '..', 'logs', 'sync_health.json')

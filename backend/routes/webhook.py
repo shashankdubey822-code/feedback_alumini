@@ -127,11 +127,15 @@ def store_webhook_submission(db_path: str, payload: dict) -> int:
         responses = payload.get('responses', {})
 
         # Enforce 24-Hour Expiry & Closed Status
-        cursor.execute("SELECT created_at, status FROM events WHERE form_id = ?", (form_id,))
+        cursor.execute("SELECT id, created_at, status, template_id, send_certificates FROM events WHERE form_id = ?", (form_id,))
         event = cursor.fetchone()
         
+        event_id = None
+        send_certs = 0
+        template_id = None
+        
         if event:
-            created_at_str, status = event
+            event_id, created_at_str, status, template_id, send_certs = event
             if status == 'closed':
                 logger.warning(f"Rejected webhook for closed form: {form_id}")
                 raise ValueError("Form is closed and no longer accepting responses.")
@@ -241,6 +245,32 @@ def store_webhook_submission(db_path: str, payload: dict) -> int:
         )
 
         cursor.execute(insert_query, values)
+
+        # Enqueue certificate job if send_certificates is enabled
+        if send_certs == 1 and template_id:
+            student_name = responses.get('name_of_student', '').strip()
+            student_email = responses.get('student_email', '').strip()
+            
+            # Check if we got an email, otherwise check if there's any other field containing email/at-sign
+            if not student_email:
+                for k, v in responses.items():
+                    if isinstance(v, str) and '@' in v and '.' in v:
+                        student_email = v.strip()
+                        break
+            
+            job_status = 'pending'
+            job_error = None
+            if not student_email:
+                job_status = 'failed'
+                job_error = 'No email address provided in form submission'
+                logger.warning(f"Certificate job created as failed: {job_error} for student {student_name}")
+
+            cursor.execute("""
+                INSERT INTO job_queue (student_name, student_email, roll_no, department, event_id, status, error_message)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (student_name, student_email, roll_no, dept_cleaned, event_id, job_status, job_error))
+            logger.info(f"Enqueued certificate job for {student_name} ({student_email or 'No Email'})")
+
         conn.commit()
 
         record_id = cursor.lastrowid

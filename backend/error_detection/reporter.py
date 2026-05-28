@@ -7,14 +7,14 @@ import logging
 from typing import List, Dict, Any
 
 from .base import DetectionResult, Severity
-from .db_errors import DBErrorDetector
-from .overview_errors import OverviewErrorDetector
-from .insights_errors import InsightsErrorDetector
-from .charts_errors import ChartsErrorDetector
-from .nlp_errors import NLPErrorDetector
-from .speakers_errors import SpeakersErrorDetector
-from .upload_errors import UploadErrorDetector
-from .webhook_errors import WebhookErrorDetector
+from .db.db_errors import DBErrorDetector
+from .pages.overview_errors import OverviewErrorDetector
+from .pages.insights_errors import InsightsErrorDetector
+from .pages.charts_errors import ChartsErrorDetector
+from .nlp.nlp_errors import NLPErrorDetector
+from .pages.speakers_errors import SpeakersErrorDetector
+from .upload.upload_errors import UploadErrorDetector
+from .webhook.webhook_errors import WebhookErrorDetector
 
 logger = logging.getLogger("error_detection")
 

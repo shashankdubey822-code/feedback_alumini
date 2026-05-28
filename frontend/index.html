@@ -888,6 +888,16 @@
                     style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #111827;background:#fff;color:#111827;font-family:Inter;font-size:14px;outline:none;box-sizing:border-box;"
                     onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#111827'">
                 </div>
+                <div>
+                  <label style="display:block;font-size:12px;color:#8b8b9e;margin-bottom:6px;font-weight:500;">Google Slides Template ID (Optional)</label>
+                  <input type="text" id="fb-template-id" placeholder="Paste Google Slides file ID..." autocomplete="off"
+                    style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #111827;background:#fff;color:#111827;font-family:Inter;font-size:14px;outline:none;box-sizing:border-box;"
+                    onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#111827'">
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:4px;margin-bottom:4px;">
+                  <input type="checkbox" id="fb-send-certs" style="width:16px;height:16px;cursor:pointer;">
+                  <label for="fb-send-certs" style="font-size:13px;color:#f0f0f5;cursor:pointer;font-weight:500;">Auto-generate Certificates for this event</label>
+                </div>
                 <button id="btn-generate-form"
                   style="padding:11px;border-radius:8px;background:linear-gradient(135deg,#6366f1,#a855f7);color:white;border:none;font-weight:600;cursor:pointer;font-family:Inter;font-size:14px;transition:opacity .2s;">
                   Generate Google Form
@@ -912,8 +922,19 @@
               <h4 style="margin:0;font-size:14px;font-weight:600;color:#f0f0f5;">All Events</h4>
               <button id="btn-refresh-events" style="padding:5px 10px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);color:#8b8b9e;font-size:11px;cursor:pointer;font-family:Inter;">Refresh</button>
             </div>
-            <div id="fb-events-list" style="display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;">
+            <div id="fb-events-list" style="display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto;margin-bottom:20px;">
               <div style="color:#8b8b9e;font-size:13px;text-align:center;padding:20px;">Loading events...</div>
+            </div>
+
+            <!-- Certificate Status Logs -->
+            <div style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.07);padding-top:20px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                <h4 style="margin:0;font-size:14px;font-weight:600;color:#f0f0f5;">Certificate Queue Logs</h4>
+                <button id="btn-refresh-cert-logs" style="padding:5px 10px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);color:#8b8b9e;font-size:11px;cursor:pointer;font-family:Inter;">Refresh Logs</button>
+              </div>
+              <div id="fb-cert-logs-list" style="display:flex;flex-direction:column;gap:8px;max-height:160px;overflow-y:auto;background:rgba(0,0,0,0.2);border-radius:8px;padding:10px;border:1px solid rgba(255,255,255,0.04);">
+                <div style="color:#8b8b9e;font-size:12px;text-align:center;padding:10px;">No certificate jobs in queue.</div>
+              </div>
             </div>
 
           </div>

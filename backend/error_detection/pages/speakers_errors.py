@@ -4,7 +4,7 @@ Speakers Page Error Detector.
 from __future__ import annotations
 import sqlite3
 from typing import List
-from .base import ErrorDetector, DetectionResult
+from ..base import ErrorDetector, DetectionResult
 
 
 class SpeakersErrorDetector(ErrorDetector):

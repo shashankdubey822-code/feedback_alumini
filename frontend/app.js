@@ -1946,6 +1946,7 @@ class SmartCalendar {
                         document.getElementById('feedback-modal').classList.remove('hidden');
                         setVenueDateMinToday();
                         loadEvents();
+                        loadCertLogs();
                     }
                     origSubmit.removeEventListener('click', handler);
                 }, 300);
@@ -1957,6 +1958,7 @@ class SmartCalendar {
         setVenueDateMinToday();
         document.getElementById('feedback-modal').classList.remove('hidden');
         loadEvents();
+        loadCertLogs();
     }
 
     function closeFeedbackModal() {
@@ -1966,6 +1968,8 @@ class SmartCalendar {
     function resetForm() {
         document.getElementById('fb-speaker-name').value = '';
         document.getElementById('fb-venue-date').value = '';
+        if (document.getElementById('fb-template-id')) document.getElementById('fb-template-id').value = '';
+        if (document.getElementById('fb-send-certs')) document.getElementById('fb-send-certs').checked = false;
         document.getElementById('fb-status').style.display = 'none';
         document.getElementById('fb-result').style.display = 'none';
         const btn = document.getElementById('btn-generate-form');
@@ -1995,6 +1999,8 @@ class SmartCalendar {
     async function generateForm() {
         const speaker = document.getElementById('fb-speaker-name').value.trim();
         const date    = document.getElementById('fb-venue-date').value.trim();
+        const templateId = document.getElementById('fb-template-id') ? document.getElementById('fb-template-id').value.trim() : '';
+        const sendCerts = document.getElementById('fb-send-certs') ? (document.getElementById('fb-send-certs').checked ? 1 : 0) : 0;
 
         if (!speaker || !date) {
             showStatus('Please fill in both Speaker Name and Venue Date.', 'error');
@@ -2026,7 +2032,12 @@ class SmartCalendar {
             const response = await safeFetch(`${API_BASE}/api/admin/create-event-and-form`, {
                 method: 'POST',
                 headers: authHeaders(),
-                body: JSON.stringify({ speaker_name: speaker, venue_date: date })
+                body: JSON.stringify({ 
+                    speaker_name: speaker, 
+                    venue_date: date,
+                    template_id: templateId,
+                    send_certificates: sendCerts
+                })
             });
             
             const data = await response.json();
@@ -2136,7 +2147,7 @@ class SmartCalendar {
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
                         <div>
                             <div style="font-size:13px;font-weight:800;color:#000000;">${esc(ev.speaker_name)}</div>
-                            <div style="font-size:11px;color:#8b8b9e;margin-top:2px;">${esc(ev.venue_date)} &nbsp;·&nbsp; ${ev.responses} response${ev.responses !== 1 ? 's' : ''}</div>
+                            <div style="font-size:11px;color:#8b8b9e;margin-top:2px;">${esc(ev.venue_date)} &nbsp;·&nbsp; ${ev.responses} response${ev.responses !== 1 ? 's' : ''}${ev.send_certificates ? ' &nbsp;·&nbsp; <span style="color:#a855f7;font-weight:600;">🎓 Certs Active</span>' : ''}</div>
                             ${formStatusHtml}
                         </div>
                         <span style="font-size:10px;padding:3px 8px;border-radius:12px;font-weight:600;background:${formReadyBg};color:${formReadyColor};border:1px solid ${formReadyColor}40;">
@@ -2333,6 +2344,53 @@ class SmartCalendar {
         }
     }
 
+    // ── Load Certificate Logs ─────────────────────────────────
+    async function loadCertLogs() {
+        const list = document.getElementById('fb-cert-logs-list');
+        if (!list) return;
+        try {
+            const res = await safeFetch(`${API_BASE}/api/admin/certificate-jobs`, { headers: authHeaders() });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error);
+
+            if (!data.jobs || data.jobs.length === 0) {
+                list.innerHTML = '<div style="color:#8b8b9e;font-size:12px;text-align:center;padding:10px;">No certificate jobs in queue.</div>';
+                return;
+            }
+
+            list.innerHTML = '';
+            data.jobs.forEach(job => {
+                const item = document.createElement('div');
+                item.style.cssText = 'padding:8px;border-radius:6px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);font-size:11px;line-height:1.4;';
+                
+                let statusColor = '#8b8b9e';
+                let statusText = job.status.toUpperCase();
+                if (job.status === 'pending') { statusColor = '#fbbf24'; }
+                else if (job.status === 'processing') { statusColor = '#60a5fa'; statusText = 'SENDING'; }
+                else if (job.status === 'completed') { statusColor = '#34d399'; statusText = 'SENT'; }
+                else if (job.status === 'failed') { statusColor = '#ef4444'; }
+
+                const attemptsText = job.attempts > 0 ? ` (Attempts: ${job.attempts})` : '';
+                const errText = job.error_message ? `<div style="color:#ef4444;margin-top:4px;font-size:10px;word-break:break-all;">Error: ${esc(job.error_message)}</div>` : '';
+
+                item.innerHTML = `
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span style="font-weight:600;color:#f0f0f5;">${esc(job.student_name)}</span>
+                        <span style="font-weight:700;color:${statusColor};">${statusText}${attemptsText}</span>
+                    </div>
+                    <div style="color:#8b8b9e;font-size:10px;margin-top:2px;">
+                        Email: ${esc(job.student_email)} &nbsp;·&nbsp; Event: ${esc(job.speaker_name)}
+                    </div>
+                    ${errText}
+                `;
+                list.appendChild(item);
+            });
+        } catch (err) {
+            console.error('[CERT LOGS] Error:', err);
+            list.innerHTML = `<div style="color:#ef4444;font-size:11px;text-align:center;padding:10px;">Failed to load logs: ${esc(err.message)}</div>`;
+        }
+    }
+
     // ── Wire everything up on DOMContentLoaded ───────────────
     document.addEventListener('DOMContentLoaded', () => {
 
@@ -2365,6 +2423,10 @@ class SmartCalendar {
         // Refresh events list
         document.getElementById('btn-refresh-events')
             ?.addEventListener('click', loadEvents);
+
+        // Refresh cert logs list
+        document.getElementById('btn-refresh-cert-logs')
+            ?.addEventListener('click', loadCertLogs);
 
         // Copy form URL
         document.getElementById('btn-copy-form-url')
