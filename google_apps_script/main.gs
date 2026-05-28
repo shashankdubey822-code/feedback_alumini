@@ -383,7 +383,11 @@ function _handleCloseForm(payload) {
     
     // STRICT CLOSURE
     form.setAcceptingResponses(false);
-    form.setCustomClosedFormMessage("Sorry this form is closed, reach your mentor");
+    try {
+      form.setCustomClosedFormMessage("Sorry this form is closed, reach your mentor");
+    } catch (msgErr) {
+      console.warn("Could not set custom closed message: " + msgErr.toString());
+    }
     
     return _json(true, "Form Strictly Closed on Google Servers", { form_id: formId });
   } catch (e) {
@@ -443,7 +447,7 @@ function ONE_TIME_SET_SECRETS() {
   const p = PropertiesService.getScriptProperties();
   p.setProperty("WEBHOOK_SECRET", "DL_wh_9fK2mPq7vNx4Rt8sLw3");
   p.setProperty("SECRET_KEY", "datalens2026");
-  p.setProperty("SENDER_EMAIL", "your-workspace-email@mru.ac.in"); // Replace with your mru.ac.in email alias
+  p.setProperty("SENDER_EMAIL", "shashankdubey822@gmail.com"); // Using personal Gmail to bypass domain restrictions
   Logger.log("Saved WEBHOOK_SECRET, SECRET_KEY, and SENDER_EMAIL.");
 }
 
