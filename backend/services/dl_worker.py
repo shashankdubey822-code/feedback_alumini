@@ -44,76 +44,78 @@ def start_dl_worker(logger_unused=None):
                         """)
                         rows = cur.fetchall()
 
-                        if not rows:
-                            time.sleep(5)
-                            continue
+                if not rows:
+                    time.sleep(5)
+                    continue
 
-                        dl_logger.info(f"DL Worker processing {len(rows)} new response(s)...")
+                dl_logger.info(f"DL Worker processing {len(rows)} new response(s)...")
 
-                        for row in rows:
-                            response_id = row['id']
-                            imp_text  = str(row['improvements_suggestions'] or '').strip()
-                            val_text  = str(row['aspect_most_valuable'] or '').strip()
-                            fut_text  = str(row['future_topics'] or '').strip()
+                for row in rows:
+                    response_id = row['id']
+                    imp_text = str(row['improvements_suggestions'] or '').strip()
+                    val_text = str(row['aspect_most_valuable'] or '').strip()
+                    fut_text = str(row['future_topics'] or '').strip()
 
-                            # Combined text for overall sentiment (future_topics primary)
-                            text_parts = [t for t in [fut_text] if t and t.lower() != 'nan']
-                            full_text  = ". ".join(text_parts)
+                    # Combined text for overall sentiment (future_topics primary)
+                    text_parts = [t for t in [fut_text] if t and t.lower() != 'nan']
+                    full_text = ". ".join(text_parts)
 
-                            # Core NLP
-                            sentiment        = nlp.analyze_sentiment(full_text)
-                            general_keywords = nlp.extract_keywords(full_text)
+                    # Core NLP
+                    sentiment = nlp.analyze_sentiment(full_text)
+                    general_keywords = nlp.extract_keywords(full_text)
 
-                            # Per-field sentiment
-                            imp_sentiment = (
-                                nlp.analyze_sentiment(imp_text)['label']
-                                if imp_text and not nlp.is_non_answer(imp_text)
-                                else 'NO_RESPONSE'
-                            )
-                            val_sentiment = (
-                                nlp.analyze_sentiment(val_text)['label']
-                                if val_text and not nlp.is_non_answer(val_text)
-                                else 'NO_RESPONSE'
-                            )
+                    # Per-field sentiment
+                    imp_sentiment = (
+                        nlp.analyze_sentiment(imp_text)['label']
+                        if imp_text and not nlp.is_non_answer(imp_text)
+                        else 'NO_RESPONSE'
+                    )
+                    val_sentiment = (
+                        nlp.analyze_sentiment(val_text)['label']
+                        if val_text and not nlp.is_non_answer(val_text)
+                        else 'NO_RESPONSE'
+                    )
 
-                            # Keyphrases per field
-                            fut_keywords = nlp.extract_keyphrases(fut_text)
-                            imp_keywords = nlp.extract_keyphrases(imp_text)
-                            val_keywords = nlp.extract_keyphrases(val_text)
+                    # Keyphrases per field
+                    fut_keywords = nlp.extract_keyphrases(fut_text)
+                    imp_keywords = nlp.extract_keyphrases(imp_text)
+                    val_keywords = nlp.extract_keyphrases(val_text)
 
-                            # Actionability + Category
-                            is_actionable = bool(imp_text and not nlp.is_non_answer(imp_text))
-                            imp_lower = imp_text.lower()
-                            if not is_actionable:
-                                category = "Non-Actionable"
-                            elif any(w in imp_lower for w in ['interact', 'activity', 'engage', 'practical']):
-                                category = "More Interaction"
-                            elif any(w in imp_lower for w in ['tech', 'skill', 'code', 'ai', 'program']):
-                                category = "Technical Deep Dives"
-                            elif any(w in imp_lower for w in ['career', 'job', 'placement', 'interview', 'resume']):
-                                category = "Career Advice"
-                            elif any(w in imp_lower for w in ['time', 'duration', 'short', 'long', 'slow', 'fast', 'pace']):
-                                category = "Duration/Time"
-                            else:
-                                category = "General Improvement"
+                    # Actionability + Category
+                    is_actionable = bool(imp_text and not nlp.is_non_answer(imp_text))
+                    imp_lower = imp_text.lower()
+                    if not is_actionable:
+                        category = "Non-Actionable"
+                    elif any(w in imp_lower for w in ['interact', 'activity', 'engage', 'practical']):
+                        category = "More Interaction"
+                    elif any(w in imp_lower for w in ['tech', 'skill', 'code', 'ai', 'program']):
+                        category = "Technical Deep Dives"
+                    elif any(w in imp_lower for w in ['career', 'job', 'placement', 'interview', 'resume']):
+                        category = "Career Advice"
+                    elif any(w in imp_lower for w in ['time', 'duration', 'short', 'long', 'slow', 'fast', 'pace']):
+                        category = "Duration/Time"
+                    else:
+                        category = "General Improvement"
 
-                            keywords_payload = {
-                                "improvements_sentiment": imp_sentiment,
-                                "valuable_sentiment":     val_sentiment,
-                                "future_keywords":        fut_keywords,
-                                "imp_keywords":           imp_keywords,
-                                "val_keywords":           val_keywords,
-                                "is_actionable":          is_actionable,
-                                "category":               category,
-                                "general_keywords":       general_keywords,
-                            }
+                    keywords_payload = {
+                        "improvements_sentiment": imp_sentiment,
+                        "valuable_sentiment": val_sentiment,
+                        "future_keywords": fut_keywords,
+                        "imp_keywords": imp_keywords,
+                        "val_keywords": val_keywords,
+                        "is_actionable": is_actionable,
+                        "category": category,
+                        "general_keywords": general_keywords,
+                    }
 
-                            sentiment_label = sentiment.get('label', 'NEUTRAL')
-                            if sentiment_label not in ('POSITIVE', 'NEUTRAL', 'NEGATIVE'):
-                                sentiment_label = 'NEUTRAL'
+                    sentiment_label = sentiment.get('label', 'NEUTRAL')
+                    if sentiment_label not in ('POSITIVE', 'NEUTRAL', 'NEGATIVE'):
+                        sentiment_label = 'NEUTRAL'
 
-                            # Upsert into feedback_analysis
-                            cur.execute("""
+                    # Upsert into feedback_analysis using a short-lived DB connection
+                    with get_db() as write_conn:
+                        with write_conn.cursor() as write_cur:
+                            write_cur.execute("""
                                 INSERT INTO feedback_analysis
                                     (response_id, sentiment_score, sentiment_label,
                                      keywords_json, processed_at, model_version)
@@ -130,8 +132,7 @@ def start_dl_worker(logger_unused=None):
                                 json.dumps(keywords_payload),
                             ))
 
-                        conn.commit()
-                        dl_logger.info(f"DL Worker finished processing {len(rows)} record(s).")
+                dl_logger.info(f"DL Worker finished processing {len(rows)} record(s).")
 
                 time.sleep(5)
 

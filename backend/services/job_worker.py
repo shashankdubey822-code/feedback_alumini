@@ -83,33 +83,36 @@ def start_job_worker(logger_unused=None):
                         """)
                         jobs = cur.fetchall()
 
-                        if not jobs:
-                            time.sleep(5)
-                            continue
+                if not jobs:
+                    time.sleep(5)
+                    continue
 
-                        job_logger.info(f"Processing {len(jobs)} pending certificate job(s)...")
+                job_logger.info(f"Processing {len(jobs)} pending certificate job(s)...")
 
-                        for job in jobs:
-                            job_id        = job['id']
-                            student_name  = job['student_name']
-                            student_email = job['student_email']
-                            roll_no       = job['roll_no'] or ''
-                            department    = job['department'] or ''
-                            template_id   = job['template_id']
-                            speaker_name  = job['speaker_name'] or ''
-                            venue_date    = str(job['venue_date']) if job['venue_date'] else ''
-                            attempts      = job['attempts']
+                for job in jobs:
+                    job_id = job['id']
+                    student_name = job['student_name']
+                    student_email = job['student_email']
+                    roll_no = job['roll_no'] or ''
+                    department = job['department'] or ''
+                    template_id = job['template_id']
+                    speaker_name = job['speaker_name'] or ''
+                    venue_date = str(job['venue_date']) if job['venue_date'] else ''
+                    attempts = job['attempts']
 
-                            # Mark as processing to prevent concurrent pickup
-                            cur.execute("""
+                    # Mark as processing to prevent concurrent pickup
+                    with get_db() as update_conn:
+                        with update_conn.cursor() as update_cur:
+                            update_cur.execute("""
                                 UPDATE certificate_jobs
                                 SET status = 'processing', updated_at = NOW()
                                 WHERE id = %s
                             """, (job_id,))
-                            conn.commit()
 
-                            if not template_id:
-                                cur.execute("""
+                    if not template_id:
+                        with get_db() as update_conn:
+                            with update_conn.cursor() as update_cur:
+                                update_cur.execute("""
                                     UPDATE certificate_jobs
                                     SET status = 'failed', attempts = %s,
                                         error_message = %s, updated_at = NOW()
@@ -117,25 +120,26 @@ def start_job_worker(logger_unused=None):
                                 """, (attempts + 1,
                                       'No Google Slides template configured for this event.',
                                       job_id))
-                                conn.commit()
-                                continue
+                        continue
 
-                            payload = {
-                                'secret':         apps_script_secret,
-                                'action':         'generate_certificate',
-                                'template_id':    template_id,
-                                'student_name':   student_name,
-                                'student_email':  student_email,
-                                'roll_no':        roll_no,
-                                'department':     department,
-                                'speaker_name':   speaker_name,
-                                'venue_date':     venue_date,
-                            }
+                    payload = {
+                        'secret': apps_script_secret,
+                        'action': 'generate_certificate',
+                        'template_id': template_id,
+                        'student_name': student_name,
+                        'student_email': student_email,
+                        'roll_no': roll_no,
+                        'department': department,
+                        'speaker_name': speaker_name,
+                        'venue_date': venue_date,
+                    }
 
-                            success, error_msg = call_apps_script(apps_script_url, payload)
+                    success, error_msg = call_apps_script(apps_script_url, payload)
 
+                    with get_db() as update_conn:
+                        with update_conn.cursor() as update_cur:
                             if success:
-                                cur.execute("""
+                                update_cur.execute("""
                                     UPDATE certificate_jobs
                                     SET status = 'completed', attempts = %s,
                                         error_message = NULL, updated_at = NOW()
@@ -146,8 +150,8 @@ def start_job_worker(logger_unused=None):
                                 )
                             else:
                                 new_attempts = attempts + 1
-                                new_status   = 'failed' if new_attempts >= 3 else 'pending'
-                                cur.execute("""
+                                new_status = 'failed' if new_attempts >= 3 else 'pending'
+                                update_cur.execute("""
                                     UPDATE certificate_jobs
                                     SET status = %s, attempts = %s,
                                         error_message = %s, updated_at = NOW()
@@ -156,7 +160,6 @@ def start_job_worker(logger_unused=None):
                                 job_logger.warning(
                                     f"Job {job_id} attempt {new_attempts}/3 failed: {error_msg}"
                                 )
-                            conn.commit()
 
                 time.sleep(5)
 
