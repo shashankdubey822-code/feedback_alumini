@@ -179,15 +179,15 @@ def get_wiki_page_content(filename):
 def get_db_sessions():
     """Retrieve unique guest lecture sessions and check if compiled in wiki"""
     try:
-                rows = execute_all('''
-                        SELECT alumni_speaker_name, date_of_lecture, COUNT(*) AS cnt
-                        FROM feedback_responses
-                        WHERE alumni_speaker_name IS NOT NULL AND alumni_speaker_name <> ''
-                            AND date_of_lecture IS NOT NULL AND date_of_lecture <> ''
-                        GROUP BY alumni_speaker_name, date_of_lecture
-                        ORDER BY date_of_lecture DESC, alumni_speaker_name ASC
-                ''')
-        
+        rows = execute_all('''
+            SELECT alumni_speaker_name, date_of_lecture, COUNT(*) AS cnt
+            FROM feedback_responses
+            WHERE alumni_speaker_name IS NOT NULL AND alumni_speaker_name <> ''
+              AND date_of_lecture IS NOT NULL AND date_of_lecture <> ''
+            GROUP BY alumni_speaker_name, date_of_lecture
+            ORDER BY date_of_lecture DESC, alumni_speaker_name ASC
+        ''')
+
         service = _get_wiki_service()
         pages = service.list_wiki_pages()
         
