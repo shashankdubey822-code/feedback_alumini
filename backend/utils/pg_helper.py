@@ -23,6 +23,9 @@ class CursorWrapper:
         # We assume ? is not used inside string literals in our simple queries
         query = query.replace('?', '%s')
         
+        # Replace backticks with double quotes for PostgreSQL identifiers
+        query = query.replace('`', '"')
+        
         # Translate date functions
         query = query.replace('strftime("%Y-%m", timestamp_normalized)', "TO_CHAR(CAST(timestamp_normalized AS TIMESTAMP), 'YYYY-MM')")
         query = query.replace("strftime('%Y-%m', timestamp_normalized)", "TO_CHAR(CAST(timestamp_normalized AS TIMESTAMP), 'YYYY-MM')")

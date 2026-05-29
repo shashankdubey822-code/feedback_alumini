@@ -29,8 +29,8 @@ class KPIService:
             cursor.execute(
                 'SELECT '
                 'COUNT(*) as total, '
-                'COUNT(CASE WHEN (aspect_most_valuable IS NOT NULL AND aspect_most_valuable != "") '
-                'OR (improvements_suggestions IS NOT NULL AND improvements_suggestions != "") THEN 1 END) as with_feedback '
+                'COUNT(CASE WHEN (aspect_most_valuable IS NOT NULL AND aspect_most_valuable != \'\') '
+                'OR (improvements_suggestions IS NOT NULL AND improvements_suggestions != \'\') THEN 1 END) as with_feedback '
                 'FROM dashboard_data'
             )
 
@@ -84,8 +84,8 @@ class KPIService:
                 'SELECT '
                 'COUNT(*) as total, '
                 'COUNT(CASE WHEN '
-                '(name_of_student IS NOT NULL AND name_of_student != "") AND '
-                '(department_cleaned IS NOT NULL AND department_cleaned != "") AND '
+                '(name_of_student IS NOT NULL AND name_of_student != \'\') AND '
+                '(department_cleaned IS NOT NULL AND department_cleaned != \'\') AND '
                 '(session_rating IS NOT NULL) THEN 1 END) as complete '
                 'FROM dashboard_data'
             )
@@ -111,7 +111,7 @@ class KPIService:
 
             cursor.execute(
                 'SELECT COUNT(DISTINCT department_cleaned) as unique_depts FROM dashboard_data '
-                'WHERE department_cleaned IS NOT NULL AND department_cleaned != ""'
+                'WHERE department_cleaned IS NOT NULL AND department_cleaned != \'\''
             )
 
             result = cursor.fetchone()

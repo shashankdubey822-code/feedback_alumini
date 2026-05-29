@@ -62,7 +62,7 @@ class ChartService:
             cursor.execute(
                 'SELECT department_cleaned, COUNT(*) as count, AVG(session_rating) as avg_rating '
                 'FROM dashboard_data '
-                'WHERE department_cleaned IS NOT NULL AND department_cleaned != "" '
+                'WHERE department_cleaned IS NOT NULL AND department_cleaned != \'\' '
                 'AND session_rating IS NOT NULL '
                 'GROUP BY department_cleaned '
                 'ORDER BY avg_rating DESC'
@@ -90,7 +90,7 @@ class ChartService:
             cursor.execute(
                 'SELECT alumni_speaker_name, COUNT(*) as session_count, AVG(session_rating) as avg_rating '
                 'FROM dashboard_data '
-                'WHERE alumni_speaker_name IS NOT NULL AND alumni_speaker_name != "" '
+                'WHERE alumni_speaker_name IS NOT NULL AND alumni_speaker_name != \'\' '
                 'GROUP BY alumni_speaker_name '
                 'ORDER BY session_count DESC '
                 'LIMIT ?',

@@ -260,14 +260,14 @@ def get_consolidated_analytics(app, filters=None, search=None):
             if val is not None and col in columns:
                 if isinstance(val, list):
                     placeholders = ', '.join(['?'] * len(val))
-                    where_clauses.append(f"`{col}` IN ({placeholders})")
+                    where_clauses.append(f'"{col}" IN ({placeholders})')
                     params.extend(val)
                 else:
-                    where_clauses.append(f"`{col}` = ?")
+                    where_clauses.append(f'"{col}" = ?')
                     params.append(val)
 
     if search and columns:
-        search_clauses = [f"`{col}` LIKE ?" for col in columns]
+        search_clauses = [f'"{col}" LIKE ?' for col in columns]
         where_clauses.append(f"({' OR '.join(search_clauses)})")
         params.extend([f"%{search}%"] * len(columns))
 
@@ -283,10 +283,10 @@ def get_consolidated_analytics(app, filters=None, search=None):
     for col in ['department_cleaned', 'alumni_speaker_name']:
         if col in columns:
             cursor.execute(
-                f"SELECT DISTINCT `{col}`, COUNT(*) as cnt "
-                f"FROM dashboard_data "
-                f"WHERE `{col}` IS NOT NULL AND `{col}` != '' "
-                f"GROUP BY `{col}` ORDER BY cnt DESC"
+                f'SELECT DISTINCT "{col}", COUNT(*) as cnt '
+                f'FROM dashboard_data '
+                f'WHERE "{col}" IS NOT NULL AND "{col}" != \'\' '
+                f'GROUP BY "{col}" ORDER BY cnt DESC'
             )
             opts = [{'value': str(r[0]), 'count': r[1]} for r in cursor.fetchall()]
             if opts:
