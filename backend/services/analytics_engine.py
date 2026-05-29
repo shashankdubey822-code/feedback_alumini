@@ -64,6 +64,56 @@ class AnalyticsEngine:
             logger.info(f"Analytics Engine refreshed. Loaded {len(self._df)} records.")
         except Exception as e:
             logger.error(f"Error refreshing analytics data: {e}")
+
+    def refresh_single_record(self, response_id: int):
+        """Fetch a single record from the database and prepend it to the master DataFrame."""
+        logger.info(f"Incremental update for in-memory analytics data: #{response_id}")
+        try:
+            query = """
+            SELECT 
+                r.id as response_id,
+                r.submitted_at,
+                r.session_rating,
+                r.aspect_most_valuable,
+                r.improvements_suggestions,
+                r.session_help_understanding,
+                r.future_topics,
+                e.id as event_id,
+                e.speaker_name,
+                e.venue_date,
+                e.name as event_name,
+                e.department,
+                s.id as student_id,
+                s.name as student_name,
+                s.roll_no,
+                a.sentiment_label,
+                a.sentiment_score,
+                a.keywords_json
+            FROM feedback_responses r
+            JOIN events e ON r.event_id = e.id
+            JOIN students s ON r.student_id = s.id
+            LEFT JOIN feedback_analysis a ON r.id = a.response_id
+            WHERE r.id = %s
+            """
+            from backend.utils.supabase_db import execute_all
+            rows = execute_all(query, (response_id,))
+            if rows:
+                new_df = pd.DataFrame(rows)
+                new_df['submitted_at'] = pd.to_datetime(new_df['submitted_at'])
+                
+                # If dataframe is not empty, concat. Otherwise just assign
+                if not self._df.empty:
+                    # Remove any existing row with this ID just in case (upsert behavior)
+                    self._df = self._df[self._df['response_id'] != response_id]
+                    self._df = pd.concat([new_df, self._df], ignore_index=True)
+                else:
+                    self._df = new_df
+                    
+                self._df.sort_values(by='submitted_at', ascending=False, inplace=True)
+                self._last_refresh = datetime.now()
+                logger.info(f"Analytics Engine incremental update complete for #{response_id}.")
+        except Exception as e:
+            logger.error(f"Error in incremental refresh: {e}")
             
     def get_dataframe(self) -> pd.DataFrame:
         """Returns a copy of the current DataFrame"""

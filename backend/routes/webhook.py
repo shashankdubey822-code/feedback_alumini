@@ -275,8 +275,15 @@ def receive_form_submission():
             from backend.extensions import socketio
             from backend.services.analytics_engine import analytics_engine
             
-            # Refresh pandas dataframe to include the new row
-            analytics_engine.refresh_data()
+            def background_refresh():
+                try:
+                    analytics_engine.refresh_single_record(record_id)
+                    logger.info(f"Background analytics refresh completed for #{record_id}")
+                except Exception as e:
+                    logger.error(f"Background analytics refresh failed: {e}")
+
+            # Refresh pandas dataframe in background to not block webhook response
+            socketio.start_background_task(background_refresh)
             
             # Broadcast the update to all connected clients
             socketio.emit('new_feedback', {
