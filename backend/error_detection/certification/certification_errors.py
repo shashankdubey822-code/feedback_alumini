@@ -18,7 +18,7 @@ class CertificationErrorDetector(ErrorDetector):
     page = "certification"
 
     def __init__(self, db_path: str):
-        # db_path is ignored for Supabase integration
+        # db_path is ignored for InsForge integration
         self.db_path = db_path
 
     def run(self) -> List[DetectionResult]:

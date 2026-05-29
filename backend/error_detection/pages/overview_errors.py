@@ -53,7 +53,7 @@ class OverviewErrorDetector(ErrorDetector):
                             results.append(self._ok("filter_column", f"Filter column '{col}' present in {tbl}"))
 
                     # 4. Null timestamp check
-                    cursor.execute("SELECT COUNT(*) as cnt FROM feedback_responses WHERE timestamp_normalized IS NULL")
+                    cursor.execute("SELECT COUNT(*) as cnt FROM feedback_responses WHERE submitted_at IS NULL")
                     null_ts_res = cursor.fetchone()
                     null_ts = null_ts_res["cnt"] if null_ts_res else 0
                     if null_ts > total * 0.3:

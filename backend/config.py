@@ -14,7 +14,7 @@ class Config:
     DEBUG = False
     TESTING = False
 
-    # Database (Supabase PostgreSQL via psycopg2)
+    # Database (InsForge PostgreSQL)
     DATABASE_URL = os.getenv('DATABASE_URL', '')
     DB_POOL_MIN  = int(os.getenv('DB_POOL_MIN', 1))
     DB_POOL_MAX = int(os.getenv('DB_POOL_MAX', 15))
@@ -61,11 +61,7 @@ class Config:
     # Data Quality
     DATA_QUALITY_THRESHOLD = 80  # Minimum acceptable quality score
 
-    # Supabase Settings
-    SUPABASE_URL = os.getenv('SUPABASE_URL', '')
-    SUPABASE_ANON_KEY = os.getenv('SUPABASE_ANON_KEY', '')
-    SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_KEY', '')
-    SUPABASE_BUCKET = os.getenv('SUPABASE_BUCKET', 'wiki-pages')
+
     DATABASE_URL = os.getenv('DATABASE_URL', '')
 
     # Gemini Settings

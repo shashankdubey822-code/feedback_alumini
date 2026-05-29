@@ -8,8 +8,8 @@ from backend.utils.insforge_db import get_db, execute_one
 
 
 REQUIRED_COLUMNS = [
-    "id", "timestamp_normalized", "department_cleaned",
-    "session_rating", "dl_processed"
+    "id", "event_id", "student_id",
+    "submitted_at", "session_rating"
 ]
 
 REQUIRED_TABLES = ["feedback_responses", "events"]

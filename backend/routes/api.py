@@ -252,11 +252,27 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
             'yLabel': 'Avg Rating', 'xLabel': 'Department',
             'column': 'department', 'columnType': 'text'
         })
-    speaker_stats_payload = []
-
     # ── 3. Table data (from pandas) ──────────────────────────────────
     import pandas as pd
     df = analytics_engine.get_dataframe()
+    
+    speaker_stats_payload = []
+    if not df.empty and 'speaker_name' in df:
+        for speaker, group in df.groupby('speaker_name'):
+            avg_rating = group['session_rating'].mean() if 'session_rating' in group else 0
+            actionable_count = 0
+            if 'keywords_json' in group:
+                for kws in group['keywords_json'].dropna():
+                    if isinstance(kws, dict) and kws.get('is_actionable') == 1:
+                        actionable_count += 1
+            speaker_stats_payload.append({
+                'speaker_name': speaker,
+                'total_responses': len(group),
+                'average_rating': float(avg_rating) if pd.notnull(avg_rating) else 0.0,
+                'actionable_feedback': actionable_count
+            })
+        speaker_stats_payload.sort(key=lambda x: x['total_responses'], reverse=True)
+
     
     if filters:
         for col, val in filters.items():
@@ -335,6 +351,61 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
                 cat = kws.get('category', 'Other')
                 category_counts[cat] = category_counts.get(cat, 0) + 1
 
+    # Calculate timeTrends
+    time_trends = {}
+    if not df.empty and 'submitted_at' in df:
+        df['date'] = df['submitted_at'].dt.date
+        volume = df.groupby('date').size()
+        time_trends = {
+            'labels': [str(d) for d in volume.index],
+            'volume': volume.tolist(),
+            'sentiment': df.groupby('date')['sentiment_score'].mean().fillna(0).tolist() if 'sentiment_score' in df else []
+        }
+
+    # Calculate sentiment array
+    avg_score = df['sentiment_score'].mean() if not df.empty and 'sentiment_score' in df else 0
+    sentiment_data = [{
+        'column': 'Overall Feedback',
+        'avgPolarity': float(avg_score) if pd.notnull(avg_score) else 0.0,
+        'total': total_count,
+        'positive': sentiment_counts.get('POSITIVE', 0),
+        'neutral': sentiment_counts.get('NEUTRAL', 0),
+        'negative': sentiment_counts.get('NEGATIVE', 0)
+    }] if not df.empty else []
+
+    # Calculate aiInsights
+    ai_insights = [
+        {'type': 'info', 'title': 'Data Loaded', 'message': f'Successfully analyzed {total_count} responses.'}
+    ]
+    if actionable_stats.get('actionable', 0) > 0:
+        ai_insights.append({
+            'type': 'success', 
+            'title': 'Actionable Feedback', 
+            'message': f"Found {actionable_stats['actionable']} actionable suggestions."
+        })
+    if sentiment_counts.get('NEGATIVE', 0) > (total_count * 0.2):
+        ai_insights.append({
+            'type': 'warning',
+            'title': 'High Negative Sentiment',
+            'message': 'Over 20% of responses have negative sentiment.'
+        })
+
+    # Calculate Keywords Data
+    keywords_data = []
+    if not df.empty and 'keywords_json' in df:
+        word_counts = {}
+        for kws in df['keywords_json'].dropna():
+            if isinstance(kws, dict) and 'keywords' in kws:
+                for word in kws.get('keywords', []):
+                    word_counts[word] = word_counts.get(word, 0) + 1
+        words_list = [{'text': k, 'count': v, 'type': 'word'} for k, v in word_counts.items()]
+        words_list.sort(key=lambda x: x['count'], reverse=True)
+        if words_list:
+            keywords_data.append({
+                'column': 'Key Topics',
+                'words': words_list[:25]
+            })
+
     return {
         'meta': {
             'columns': columns,
@@ -348,12 +419,15 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
         'tableData': table_data,
         'charts': formatted_charts,
         'kpis': formatted_kpis,
-        'speaker_stats': speaker_stats_payload,
-        'deep_analytics': {
-            'actionable_stats': actionable_stats,
-            'category_counts': category_counts,
-            'sentiment_counts': sentiment_counts
+        'speakerStats': speaker_stats_payload,
+        'deepAnalysis': {
+            'actionableStats': actionable_stats,
+            'categories': [{'category': k, 'count': v} for k, v in category_counts.items()]
         },
+        'sentiment': sentiment_data,
+        'keywords': keywords_data,
+        'timeTrends': time_trends,
+        'aiInsights': ai_insights,
         'totalResponses': total_count
     }
 

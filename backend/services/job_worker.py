@@ -116,7 +116,7 @@ def start_job_worker(logger_unused=None):
                         with update_conn.cursor() as update_cur:
                             update_cur.execute("""
                                 UPDATE certificate_jobs
-                                SET status = 'processing', updated_at = NOW()
+                                SET status = 'processing'
                                 WHERE id = %s
                             """, (job_id,))
 
@@ -126,7 +126,7 @@ def start_job_worker(logger_unused=None):
                                 update_cur.execute("""
                                     UPDATE certificate_jobs
                                     SET status = 'failed',
-                                        error_message = %s, updated_at = NOW()
+                                        error_log = %s
                                     WHERE id = %s
                                 """, ('No Google Slides template configured for this event.', job_id))
                         continue
@@ -151,7 +151,7 @@ def start_job_worker(logger_unused=None):
                                 update_cur.execute("""
                                     UPDATE certificate_jobs
                                     SET status = 'completed',
-                                        error_message = NULL, updated_at = NOW()
+                                        error_log = NULL, generated_at = NOW()
                                     WHERE id = %s
                                 """, (job_id,))
                                 job_logger.info(
@@ -161,7 +161,7 @@ def start_job_worker(logger_unused=None):
                                 update_cur.execute("""
                                     UPDATE certificate_jobs
                                     SET status = 'failed',
-                                        error_message = %s, updated_at = NOW()
+                                        error_log = %s
                                     WHERE id = %s
                                 """, (error_msg, job_id))
                                 job_logger.warning(

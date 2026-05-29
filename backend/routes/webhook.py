@@ -1,6 +1,6 @@
 """
 webhook.py — Handle incoming webhooks from Google Forms / Apps Script.
-Uses native Supabase PostgreSQL via insforge_db.py.
+Uses native InsForge PostgreSQL via insforge_db.py.
 Table: feedback_responses (was: dashboard_data)
 """
 
@@ -225,10 +225,10 @@ def store_webhook_submission(payload: dict) -> int:
 
                         cur.execute("""
                             INSERT INTO certificate_jobs
-                                (response_id, status, error_message)
-                            VALUES (%s, %s, %s)
+                                (student_id, event_id, status, error_log)
+                            VALUES (%s, %s, %s, %s)
                         """, (
-                            response_id, job_status, job_error
+                            student_id, event_id, job_status, job_error
                         ))
                         logger.info(f"Certificate job enqueued for {student_name} ({student_email or 'no email'})")
 

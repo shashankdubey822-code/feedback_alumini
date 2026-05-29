@@ -391,9 +391,8 @@ def get_certificate_jobs():
         rows = execute_all("""
             SELECT j.*, e.speaker_name, s.name as student_name, s.email as student_email, s.roll_no, e.department
             FROM certificate_jobs j
-            LEFT JOIN feedback_responses r ON j.response_id = r.id
-            LEFT JOIN students s ON r.student_id = s.id
-            LEFT JOIN events e ON r.event_id = e.id
+            LEFT JOIN students s ON j.student_id = s.id
+            LEFT JOIN events e ON j.event_id = e.id
             ORDER BY j.created_at DESC
             LIMIT 50
         """)
@@ -562,14 +561,14 @@ def sync_responses():
                         job_error = None if student_email else 'No email address provided in form submission'
 
                         # Check if a certificate job already exists for this response
-                        cur.execute("SELECT id FROM certificate_jobs WHERE response_id=%s LIMIT 1",
-                                    (response_id,))
+                        cur.execute("SELECT id FROM certificate_jobs WHERE student_id=%s AND event_id=%s LIMIT 1",
+                                    (student_id, event_id))
                         if not cur.fetchone():
                             cur.execute("""
                                 INSERT INTO certificate_jobs
-                                    (response_id, status, error_message)
-                                VALUES (%s, %s, %s)
-                            """, (response_id, job_status, job_error))
+                                    (student_id, event_id, status, error_log)
+                                VALUES (%s, %s, %s, %s)
+                            """, (student_id, event_id, job_status, job_error))
                     count += 1
 
         return jsonify({'success': True, 'synced': count, 'skipped': skipped, 'total': len(responses or [])}), 200

@@ -1,7 +1,7 @@
 """
 insforge_helper.py — HTTP REST connection for InsForge Storage.
 
-Replaces supabase_helper.py for file storage.
+Replaces legacy helper for file storage.
 """
 
 import os
