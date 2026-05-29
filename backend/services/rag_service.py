@@ -125,21 +125,23 @@ class RAGService:
             conditions = []
             params = []
             for t in tokens:
-                conditions.append("(COALESCE(alumni_speaker_name, '') ILIKE %s OR COALESCE(aspect_most_valuable, '') ILIKE %s OR COALESCE(improvements_suggestions, '') ILIKE %s OR COALESCE(future_topics, '') ILIKE %s)")
+                conditions.append("(COALESCE(e.speaker_name, '') ILIKE %s OR COALESCE(r.aspect_most_valuable, '') ILIKE %s OR COALESCE(r.improvements_suggestions, '') ILIKE %s OR COALESCE(r.future_topics, '') ILIKE %s)")
                 params.extend([t, t, t, t])
 
             query = f'''
-                SELECT id, name_of_student, alumni_speaker_name, aspect_most_valuable,
-                       improvements_suggestions, future_topics, session_rating
-                FROM feedback_responses
+                SELECT r.id, s.name AS name_of_student, e.speaker_name AS alumni_speaker_name, r.aspect_most_valuable,
+                       r.improvements_suggestions, r.future_topics, r.session_rating
+                FROM feedback_responses r
+                JOIN students s ON r.student_id = s.id
+                JOIN events e ON r.event_id = e.id
                 WHERE {' OR '.join(conditions)}
-                ORDER BY submitted_at DESC
+                ORDER BY r.submitted_at DESC
                 LIMIT %s
             '''
             rows = execute_all(query, tuple(params + [limit]))
 
-            for r in rows:
-                r['similarity'] = 0.5
+            for row in rows:
+                row['similarity'] = 0.5
             return rows
         except Exception as e:
             logger.error(f"Fallback keyword search failed: {str(e)}")

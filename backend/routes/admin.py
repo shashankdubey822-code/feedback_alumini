@@ -383,9 +383,11 @@ def get_events():
 def get_certificate_jobs():
     try:
         rows = execute_all("""
-            SELECT j.*, e.speaker_name
+            SELECT j.*, e.speaker_name, s.name as student_name, s.email as student_email, s.roll_no, s.department
             FROM certificate_jobs j
-            LEFT JOIN events e ON j.event_id = e.id
+            LEFT JOIN feedback_responses r ON j.response_id = r.id
+            LEFT JOIN students s ON r.student_id = s.id
+            LEFT JOIN events e ON r.event_id = e.id
             ORDER BY j.created_at DESC
             LIMIT 50
         """)
@@ -407,9 +409,9 @@ def get_speaker_names():
     try:
         q = request.args.get('q', '').strip()
         rows = execute_all("""
-            SELECT DISTINCT TRIM(alumni_speaker_name) AS n
-            FROM feedback_responses
-            WHERE alumni_speaker_name IS NOT NULL AND TRIM(alumni_speaker_name) <> ''
+            SELECT DISTINCT TRIM(speaker_name) AS n
+            FROM events
+            WHERE speaker_name IS NOT NULL AND TRIM(speaker_name) <> ''
             ORDER BY n
         """)
         names = [r['n'] for r in rows if r['n']]
@@ -493,30 +495,46 @@ def sync_responses():
             with conn.cursor() as cur:
                 for resp in (responses or []):
                     roll_no = str(resp.get('roll_no_original', '')).strip().upper()
+                    student_name = resp.get('name_of_student', '')
+                    student_email = resp.get('student_email', '').strip()
+                    department = resp.get('department_original', '')
 
+                    # Upsert student
+                    cur.execute("""
+                        INSERT INTO students (roll_no, name, email, department)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (roll_no) DO UPDATE SET
+                            name = COALESCE(EXCLUDED.name, students.name),
+                            email = COALESCE(EXCLUDED.email, students.email),
+                            department = COALESCE(EXCLUDED.department, students.department)
+                        RETURNING id
+                    """, (roll_no, student_name, student_email, department))
+                    student_row = cur.fetchone()
+                    if not student_row:
+                        continue
+                    student_id = student_row['id']
+
+                    # Check for duplicate submission
                     cur.execute("""
                         SELECT id FROM feedback_responses
-                        WHERE form_source=%s AND roll_no=%s AND date_of_lecture=%s LIMIT 1
-                    """, (event['form_id'], roll_no, str(event['venue_date'])))
+                        WHERE event_id=%s AND student_id=%s LIMIT 1
+                    """, (event_id, student_id))
 
                     if cur.fetchone():
                         skipped += 1
                         continue
 
+                    # Insert feedback response
                     cur.execute("""
                         INSERT INTO feedback_responses (
-                            event_id, timestamp_display, name_of_student, roll_no, department,
-                            student_email, date_of_lecture, alumni_speaker_name,
+                            event_id, student_id, timestamp_display,
                             session_help_understanding, session_rating, session_technical_clarity,
                             aspect_most_valuable, improvements_suggestions, future_topics,
                             form_source, record_status
-                        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                         RETURNING id
                     """, (
-                        event_id, resp.get('timestamp'),
-                        resp.get('name_of_student', ''), roll_no,
-                        resp.get('department_original', ''), resp.get('student_email', ''),
-                        str(event['venue_date']), event['speaker_name'],
+                        event_id, student_id, resp.get('timestamp'),
                         resp.get('session_help_understanding', ''),
                         _safe_int(resp.get('session_rating')),
                         _safe_int(resp.get('session_technical_clarity')),
@@ -528,16 +546,18 @@ def sync_responses():
                     response_id = cur.fetchone()['id']
 
                     if event.get('send_certificates') and event.get('template_id'):
-                        student_email = resp.get('student_email', '').strip()
-                        cur.execute("SELECT id FROM certificate_jobs WHERE event_id=%s AND roll_no=%s LIMIT 1",
-                                    (event_id, roll_no))
-                        if not cur.fetchone() and student_email:
+                        job_status = 'pending' if student_email else 'failed'
+                        job_error = None if student_email else 'No email address provided in form submission'
+
+                        # Check if a certificate job already exists for this response
+                        cur.execute("SELECT id FROM certificate_jobs WHERE response_id=%s LIMIT 1",
+                                    (response_id,))
+                        if not cur.fetchone():
                             cur.execute("""
                                 INSERT INTO certificate_jobs
-                                    (event_id, response_id, student_name, student_email, roll_no, department, status)
-                                VALUES (%s,%s,%s,%s,%s,%s,'pending')
-                            """, (event_id, response_id, resp.get('name_of_student', ''),
-                                  student_email, roll_no, resp.get('department_original', '')))
+                                    (response_id, status, error_message)
+                                VALUES (%s, %s, %s)
+                            """, (response_id, job_status, job_error))
                     count += 1
 
         return jsonify({'success': True, 'synced': count, 'skipped': skipped, 'total': len(responses or [])}), 200

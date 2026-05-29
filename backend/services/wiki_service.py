@@ -1165,10 +1165,11 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
                     # Fetch student responses for this session
                     rows = execute_all(
                         '''
-                        SELECT *
-                        FROM feedback_responses
-                        WHERE alumni_speaker_name = %s AND date_of_lecture = %s
-                        ORDER BY submitted_at ASC
+                        SELECT r.*
+                        FROM feedback_responses r
+                        JOIN events e ON r.event_id = e.id
+                        WHERE e.speaker_name = %s AND e.venue_date = %s
+                        ORDER BY r.submitted_at ASC
                         ''',
                         (speaker, date_str)
                     )
@@ -1454,11 +1455,12 @@ FORMATTING AND LENGTH RULES (CRITICAL):
         topics = []
         try:
             speaker_rows = execute_all('''
-                SELECT alumni_speaker_name, COUNT(*) AS cnt
-                FROM feedback_responses
-                WHERE alumni_speaker_name IS NOT NULL AND alumni_speaker_name <> ''
-                GROUP BY alumni_speaker_name
-                ORDER BY cnt DESC, alumni_speaker_name ASC
+                SELECT e.speaker_name AS alumni_speaker_name, COUNT(*) AS cnt
+                FROM feedback_responses r
+                JOIN events e ON r.event_id = e.id
+                WHERE e.speaker_name IS NOT NULL AND e.speaker_name <> ''
+                GROUP BY e.speaker_name
+                ORDER BY cnt DESC, e.speaker_name ASC
                 LIMIT 5
             ''')
             speakers = [r['alumni_speaker_name'] for r in speaker_rows if r.get('alumni_speaker_name')]

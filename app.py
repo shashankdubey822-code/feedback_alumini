@@ -11,6 +11,9 @@ from flask_cors import CORS
 # Add backend to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from backend.config import get_config
 from backend.utils.logger import setup_logger
 from backend.routes.api import api_bp, legacy_bp
