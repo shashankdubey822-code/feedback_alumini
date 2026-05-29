@@ -48,6 +48,9 @@ def _canonicalize(name):
 _COL_MAP = {
     'timestamp': 'timestamp_display',
     'timestamporiginal': 'timestamp_display',
+    'emailaddress': 'student_email',
+    'email': 'student_email',
+    'studentemail': 'student_email',
     'nameofstudent': 'name_of_student',
     'department': 'department',
     'departmentoriginal': 'department',
@@ -56,7 +59,10 @@ _COL_MAP = {
     'rollnooriginal': 'roll_no',
     'rollnocleaned': 'roll_no',
     'dateofthelecture': 'date_of_lecture',
+    'dateoflecture': 'date_of_lecture',
     'alumnispeakername': 'alumni_speaker_name',
+    'speakername': 'alumni_speaker_name',
+    'nameofthespeaker': 'alumni_speaker_name',
     'didthesessionhelpyougainabetterunderstandingofindustrytrendsorcareerpaths': 'session_help_understanding',
     'sessionhelpunderstanding': 'session_help_understanding',
     'whataspectofthesessiondidyoufindmostvaluable': 'aspect_most_valuable',
@@ -109,6 +115,15 @@ def _normalize_df(df, source='csv_upload') -> pd.DataFrame:
         df['record_status'] = 'active'
     else:
         df['record_status'] = df['record_status'].fillna('active').replace('', 'active')
+        
+    # Attempt to parse submitted_at from timestamp_display
+    if 'timestamp_display' in df.columns:
+        df['submitted_at'] = pd.to_datetime(df['timestamp_display'], errors='coerce')
+        # Fill NaT with current UTC time
+        df['submitted_at'] = df['submitted_at'].fillna(pd.Timestamp.utcnow())
+    else:
+        df['submitted_at'] = pd.Timestamp.utcnow()
+
     return df
 
 
@@ -120,16 +135,18 @@ def _insert_df_rows(df: pd.DataFrame, source: str = 'csv_upload') -> int:
             for _, row in df.iterrows():
                 cur.execute("""
                     INSERT INTO feedback_responses (
-                        timestamp_display, name_of_student, roll_no, department,
+                        timestamp_display, submitted_at, name_of_student, roll_no, department,
                         student_email, date_of_lecture, alumni_speaker_name,
                         session_help_understanding, session_rating, session_technical_clarity,
                         aspect_most_valuable, improvements_suggestions, future_topics,
                         form_source, data_quality_score, is_duplicate, record_status
                     ) VALUES (
-                        %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+                        %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
                     )
                 """, (
-                    row.get('timestamp_display'), row.get('name_of_student'),
+                    row.get('timestamp_display'), 
+                    row['submitted_at'].strftime('%Y-%m-%d %H:%M:%S%z') if not pd.isna(row.get('submitted_at')) else datetime.now().isoformat(),
+                    row.get('name_of_student'),
                     row.get('roll_no'), row.get('department'), row.get('student_email'),
                     row.get('date_of_lecture'), row.get('alumni_speaker_name'),
                     row.get('session_help_understanding'),
