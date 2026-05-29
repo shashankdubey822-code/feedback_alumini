@@ -28,4 +28,5 @@ AI_INSTRUCTIONS.md
 start_debug.log
 google_apps_script/
 env.example
+.agent/
 
