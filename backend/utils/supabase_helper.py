@@ -22,10 +22,6 @@ def get_supabase_client() -> Optional[Client]:
 
     config = get_config()()
     url = config.SUPABASE_URL
-    # Ensure url has https:// prefix
-    if url and not url.startswith('http'):
-        url = f"https://{url}"
-
     # Prefer Service Role Key for backend administration (e.g. bypass RLS / write to storage)
     key = config.SUPABASE_SERVICE_KEY or config.SUPABASE_ANON_KEY
 

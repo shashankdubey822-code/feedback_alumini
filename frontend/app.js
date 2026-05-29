@@ -42,20 +42,20 @@ function abortPendingRequest(key) {
 // Enhanced fetch with abort controller and duplicate prevention
 async function safeFetch(url, options = {}) {
     const key = getRequestKey(url, options.method || 'GET', options.body);
-    
+
     // Abort any existing request with same key
     abortPendingRequest(key);
-    
+
     // Create new AbortController
     const controller = new AbortController();
     pendingRequests.set(key, controller);
-    
+
     try {
         const response = await fetch(url, {
             ...options,
             signal: controller.signal
         });
-        
+
         pendingRequests.delete(key);
         return response;
     } catch (error) {
@@ -100,7 +100,7 @@ async function pollCertificationErrors() {
         if (resp.ok) {
             const data = await resp.json();
             const certErrors = (data.by_page && data.by_page.certification) || [];
-            
+
             certErrors.forEach(err => {
                 // Only alert on critical/warning issues that are NOT ok
                 if (!err.ok && (err.severity === 'CRITICAL' || err.severity === 'WARNING')) {
@@ -108,11 +108,11 @@ async function pollCertificationErrors() {
                     const errKey = `${err.check}:${err.message}`;
                     if (!shownCertErrors.has(errKey)) {
                         shownCertErrors.add(errKey);
-                        
+
                         // Extremely prominent popup for certification errors
                         const fullMsg = err.detail ? `${err.message}\nAction: ${err.detail}` : err.message;
                         showNotification(`CERTIFICATION ERROR: ${fullMsg}`, 'error');
-                        
+
                         // If it's critical, also log it prominently
                         if (err.severity === 'CRITICAL') {
                             console.error(`[CRITICAL CERT ERROR] ${fullMsg}`);
@@ -124,7 +124,7 @@ async function pollCertificationErrors() {
     } catch (e) {
         console.warn("Could not poll certification errors:", e);
     }
-    
+
     // Poll again every 60 seconds
     setTimeout(pollCertificationErrors, 60000);
 }
@@ -142,11 +142,11 @@ function showNotification(message, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.textContent = message;
-    toast.style.position = 'relative'; 
+    toast.style.position = 'relative';
     toast.style.top = '0';
     toast.style.right = '0';
     toast.style.pointerEvents = 'auto';
-    
+
     container.appendChild(toast);
 
     setTimeout(() => {
@@ -176,11 +176,11 @@ async function copyToClipboard(text, successMessage = 'Copied to clipboard!') {
             document.body.appendChild(textArea);
             textArea.focus();
             textArea.select();
-            
+
             try {
                 const successful = document.execCommand('copy');
                 document.body.removeChild(textArea);
-                
+
                 if (successful) {
                     showNotification(successMessage, 'success');
                     return true;
@@ -195,7 +195,7 @@ async function copyToClipboard(text, successMessage = 'Copied to clipboard!') {
     } catch (error) {
         console.error('Clipboard error:', error);
         showNotification('Failed to copy. Please copy manually.', 'error');
-        
+
         // Show the text in an alert as final fallback
         alert(`Please copy this manually:\n\n${text}`);
         return false;
@@ -206,11 +206,11 @@ async function copyToClipboard(text, successMessage = 'Copied to clipboard!') {
 function safeWindowOpen(url, target = '_blank') {
     try {
         const newWindow = window.open(url, target);
-        
+
         if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
             // Popup was blocked
             showNotification('Popup blocked! Please allow popups for this site.', 'error');
-            
+
             // Show URL as fallback
             const userChoice = confirm(`Popup was blocked. URL:\n\n${url}\n\nCopy to clipboard?`);
             if (userChoice) {
@@ -218,7 +218,7 @@ function safeWindowOpen(url, target = '_blank') {
             }
             return false;
         }
-        
+
         return true;
     } catch (error) {
         console.error('Window open error:', error);
@@ -232,10 +232,10 @@ async function validateBackendConfiguration() {
     try {
         const response = await fetch(`${API_BASE}/api/admin/config/validate`);
         const data = await response.json();
-        
+
         if (!data.success || !data.all_valid) {
             console.warn('[CONFIG] Backend configuration issues detected:', data.checks);
-            
+
             const issues = [];
             if (data.checks) {
                 if (!data.checks.apps_script_url?.valid) {
@@ -248,14 +248,14 @@ async function validateBackendConfiguration() {
                     issues.push('Using default secret (security risk)');
                 }
             }
-            
+
             if (issues.length > 0) {
                 showNotification(`⚠️ Configuration warnings: ${issues.join(', ')}`, 'error');
             }
-            
+
             return false;
         }
-        
+
         console.log('[CONFIG] Backend configuration validated successfully');
         return true;
     } catch (error) {
@@ -303,17 +303,12 @@ async function loadInitialData() {
                 console.log("loadInitialData: Fetching full /api/data in background");
                 const fullResp = await fetch(`${API_BASE}/api/data`);
                 if (fullResp.ok) {
-                    const fullAnalytics = await fullResp.json();
+                    const analytics = await fullResp.json();
                     console.log("loadInitialData: Full analytics received, updating UI");
-                    state.analytics = fullAnalytics;
-                    state.tableData = fullAnalytics.tableData || [];
-                    
-                    if (fullAnalytics.meta && fullAnalytics.meta.columns) {
-                        state.columns = fullAnalytics.meta.columns.filter(col => allowedColumns.includes(col));
-                        state.columns.sort((a, b) => allowedColumns.indexOf(a) - allowedColumns.indexOf(b));
-                        state.columnTypes = fullAnalytics.meta.columnTypes || state.columnTypes;
-                    }
-                    
+                    state.analytics = analytics;
+                    state.tableData = analytics.tableData || [];
+                    state.columns = analytics.meta.columns || state.columns;
+                    state.columnTypes = analytics.meta.columnTypes || state.columnTypes;
                     renderDashboard();
                 } else {
                     console.warn('Background full analytics fetch failed:', fullResp.status);
@@ -350,19 +345,19 @@ async function loadInitialData() {
             'future_topics': "Any specific topics or areas you'd like future alumni speakers to cover?"
         };
 
-        // strictly bind dashboard table to only these 11 columns if available in init
-        if (init.meta && init.meta.columns) {
-            state.columns = init.meta.columns.filter(col => allowedColumns.includes(col));
-            state.columns.sort((a, b) => allowedColumns.indexOf(a) - allowedColumns.indexOf(b));
-        }
-        state.fileName = init.meta ? init.meta.filename || 'Database Record' : 'Preview';
+        // strictly bind dashboard table to only these 11 columns
+        state.columns = analytics.meta.columns.filter(col => allowedColumns.includes(col));
+        state.columns.sort((a, b) => allowedColumns.indexOf(a) - allowedColumns.indexOf(b));
+        state.columnTypes = analytics.meta.columnTypes;
+        state.tableData = analytics.tableData || [];
+        state.fileName = analytics.meta.filename || 'Database Record';
 
         // Auto-sort by timestamp in descending order (latest first)
         const timestampCol = state.columns.find(col => col.toUpperCase().includes('TIMESTAMP'));
         if (timestampCol) {
             state.sortColumn = timestampCol;
             state.sortDirection = 'desc';
-            // sortTableData is missing here, but it will sort on next render if needed or handled inside renderTable
+            sortTableData();
         }
 
         console.log("loadInitialData: Scheduling switchToDashboardFromLoading");
@@ -420,7 +415,7 @@ async function handleFile(file) {
         showNotification('Please upload a CSV, TSV, or TXT file.', 'error');
         return;
     }
-    
+
     const token = localStorage.getItem('adminToken');
     if (!token) {
         showNotification('Admin session expired', 'error');
@@ -482,7 +477,7 @@ function showSection(sectionId) {
     document.querySelectorAll('.dashboard-section').forEach(sec => {
         sec.classList.remove('active');
     });
-    
+
     // Show target section
     const target = document.getElementById(sectionId);
     if (target) {
@@ -545,30 +540,35 @@ function setupDashboardHandlers() {
     document.getElementById('btn-clear-filters').addEventListener('click', clearAllFilters);
     document.getElementById('global-search').addEventListener('input', debounce(applyFilters, 400));
 
-    // Auto-refresh the dashboard live via WebSockets
-    try {
-        const socket = io();
-        socket.on('new_feedback', async (data) => {
-            console.log('[WEBSOCKET] New feedback received:', data);
-            const dash = document.getElementById('dashboard-screen');
-            if (!dash || !dash.classList.contains('active')) return;
-            
-            const searchVal = document.getElementById('global-search').value.trim();
-            if (searchVal.length > 0) return; // Don't disrupt active searching
-            
-            // Show a non-intrusive toast or indicator
-            showNotification('New feedback received! Updating dashboard...', 'info');
-            
-            // Fetch updated data using the existing flow
-            await applyFilters(true); // silent flag
-        });
-        
-        socket.on('connect', () => {
-            console.log('[WEBSOCKET] Connected to server for real-time updates.');
-        });
-    } catch (e) {
-        console.warn('[WEBSOCKET] Could not initialize socket.io:', e);
-    }
+    // Auto-refresh the dashboard live (Webhooks sync) - ENHANCED with abort control
+    setInterval(async () => {
+        const dash = document.getElementById('dashboard-screen');
+        if (!dash || !dash.classList.contains('active')) return;
+
+        const searchVal = document.getElementById('global-search').value.trim();
+        if (searchVal.length > 0) return; // Don't disrupt active searching
+
+        try {
+            // Abort any pending auto-refresh request
+            if (currentAutoRefreshController) {
+                currentAutoRefreshController.abort();
+                console.log('[AUTO-REFRESH] Aborted previous request');
+            }
+
+            // Create new AbortController for this refresh
+            currentAutoRefreshController = new AbortController();
+
+            // We just re-run the normal filter workflow silently to pull new webhook data
+            await applyFilters(true); // true = silent flag
+
+            currentAutoRefreshController = null;
+        } catch (e) {
+            if (e.name !== 'AbortError') {
+                console.error('[AUTO-REFRESH] Error:', e);
+            }
+            currentAutoRefreshController = null;
+        }
+    }, 10000);
 }
 
 // ========== ADMIN AUTH & LOGIC ==========
@@ -578,7 +578,7 @@ function setupAdminAuth() {
     const btnClose = document.getElementById('admin-login-close');
     const btnSubmit = document.getElementById('btn-admin-submit');
     const errorMsg = document.getElementById('admin-login-error');
-    
+
     if (btnShowAdmin) {
         btnShowAdmin.addEventListener('click', () => {
             if (localStorage.getItem('adminToken')) {
@@ -635,17 +635,17 @@ function setupAdminAuth() {
             }
 
             showProgress('Fetching from Google...', 30);
-            
+
             try {
                 const res = await fetch(`${API_BASE}/api/admin/fetch_google_link`, {
                     method: 'POST',
-                    headers: { 
+                    headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify({ url })
                 });
-                
+
                 if (!res.ok) {
                     const err = await res.json();
                     throw new Error(err.error || 'Fetch failed');
@@ -676,19 +676,19 @@ function renderDashboard() {
     const a = state.analytics;
     if (!a) return;
 
-    try { renderKPIs(a.kpis); } catch(e) { console.error("Error renderKPIs:", e); }
-    try { renderFilters(a.filters); } catch(e) { console.error("Error renderFilters:", e); }
-    try { renderAIInsights(a.aiInsights); } catch(e) { console.error("Error renderAIInsights:", e); }
-    try { renderCharts(a.charts); } catch(e) { console.error("Error renderCharts:", e); }
-    try { renderTimeTrends(a.timeTrends); } catch(e) { console.error("Error renderTimeTrends:", e); }
-    try { renderDeepAnalysis(a.deepAnalysis); } catch(e) { console.error("Error renderDeepAnalysis:", e); }
-    try { renderSentiment(a.sentiment); } catch(e) { console.error("Error renderSentiment:", e); }
-    try { renderKeywords(a.keywords); } catch(e) { console.error("Error renderKeywords:", e); }
-    try { renderSpeakers(a.speakerStats); } catch(e) { console.error("Error renderSpeakers:", e); }
-    try { renderTable(); } catch(e) { console.error("Error renderTable:", e); }
+    try { renderKPIs(a.kpis); } catch (e) { console.error("Error renderKPIs:", e); }
+    try { renderFilters(a.filters); } catch (e) { console.error("Error renderFilters:", e); }
+    try { renderAIInsights(a.aiInsights); } catch (e) { console.error("Error renderAIInsights:", e); }
+    try { renderCharts(a.charts); } catch (e) { console.error("Error renderCharts:", e); }
+    try { renderTimeTrends(a.timeTrends); } catch (e) { console.error("Error renderTimeTrends:", e); }
+    try { renderDeepAnalysis(a.deepAnalysis); } catch (e) { console.error("Error renderDeepAnalysis:", e); }
+    try { renderSentiment(a.sentiment); } catch (e) { console.error("Error renderSentiment:", e); }
+    try { renderKeywords(a.keywords); } catch (e) { console.error("Error renderKeywords:", e); }
+    try { renderSpeakers(a.speakerStats); } catch (e) { console.error("Error renderSpeakers:", e); }
+    try { renderTable(); } catch (e) { console.error("Error renderTable:", e); }
 
     // Hide sections with no data
-    try { toggleSectionVisibility('speakers-section', a.speakerStats && a.speakerStats.length > 0); } catch(e) {}
+    try { toggleSectionVisibility('speakers-section', a.speakerStats && a.speakerStats.length > 0); } catch (e) { }
 }
 
 function toggleSectionVisibility(sectionId, hasData) {
@@ -894,7 +894,7 @@ async function applyFilters() {
         // Check if data actually changed simply using string length as a fast heuristic
         const currentDataHash = JSON.stringify(state.tableData).length;
         const newDataHash = JSON.stringify(analytics.tableData || []).length;
-        
+
         state.analytics = analytics;
         state.tableData = analytics.tableData || [];
         state.currentPage = 1;
@@ -1110,7 +1110,7 @@ function getChartOptions(type, xLabel, yLabel, chartData) {
                 bodyFont: { family: 'Inter' },
                 callbacks: {
                     // Always show full (non-truncated) label on hover
-                    title: function(tooltipItems) {
+                    title: function (tooltipItems) {
                         if (chartData && chartData.labels && tooltipItems.length > 0) {
                             const idx = tooltipItems[0].dataIndex;
                             if (chartData.labels[idx] !== undefined) {
@@ -1152,7 +1152,7 @@ function getChartOptions(type, xLabel, yLabel, chartData) {
                 ticks: {
                     color: '#5a5a6e',
                     font: { family: 'Inter', size: 10 },
-                    callback: function(value) {
+                    callback: function (value) {
                         if (Number.isInteger(value)) return value;
                         return value.toFixed(1);
                     },
@@ -1344,7 +1344,7 @@ function renderSpeakers(speakerStats) {
                 </div>
                 <div class="speaker-sentiment-pill ${sentClass}">${sentLabel} (${speaker.sentiment.toFixed(2)})</div>
             `;
-            
+
             card.addEventListener('click', () => {
                 openDataModal('Speaker Analysis', speaker.name, speaker.count, ss.column, 'categorical', null);
             });
@@ -1410,8 +1410,8 @@ function renderSpeakers(speakerStats) {
                         data: ss.speakers.map(s => s.sentiment),
                         backgroundColor: ss.speakers.map(s =>
                             s.sentiment > 0.1 ? 'rgba(52, 211, 153, 0.6)' :
-                            s.sentiment < -0.1 ? 'rgba(251, 113, 133, 0.6)' :
-                            'rgba(251, 191, 36, 0.6)'
+                                s.sentiment < -0.1 ? 'rgba(251, 113, 133, 0.6)' :
+                                    'rgba(251, 191, 36, 0.6)'
                         ),
                         borderRadius: 6,
                         borderWidth: 0,
@@ -2104,7 +2104,7 @@ class SmartCalendar {
     // ── Generate form ────────────────────────────────────────
     async function generateForm() {
         const speaker = document.getElementById('fb-speaker-name').value.trim();
-        const date    = document.getElementById('fb-venue-date').value.trim();
+        const date = document.getElementById('fb-venue-date').value.trim();
         const templateId = document.getElementById('fb-template-id') ? document.getElementById('fb-template-id').value.trim() : '';
         const sendCerts = document.getElementById('fb-send-certs') ? (document.getElementById('fb-send-certs').checked ? 1 : 0) : 0;
 
@@ -2120,13 +2120,13 @@ class SmartCalendar {
         }
 
         const btn = document.getElementById('btn-generate-form');
-        
+
         // Prevent double-click with proper state management
         if (btn.disabled) {
             console.log('[FORM] Button already disabled, ignoring click');
             return;
         }
-        
+
         btn.disabled = true;
         btn.textContent = 'Creating event & form...';
         btn.style.opacity = '0.7';
@@ -2138,20 +2138,20 @@ class SmartCalendar {
             const response = await safeFetch(`${API_BASE}/api/admin/create-event-and-form`, {
                 method: 'POST',
                 headers: authHeaders(),
-                body: JSON.stringify({ 
-                    speaker_name: speaker, 
+                body: JSON.stringify({
+                    speaker_name: speaker,
                     venue_date: date,
                     template_id: templateId,
                     send_certificates: sendCerts
                 })
             });
-            
+
             const data = await response.json();
-            
+
             if (!data.success) {
                 throw new Error(data.error || 'Failed to create event and form');
             }
-            
+
             // Success! Form created atomically
             _currentFormUrl = data.form_url;
             console.log("[FORM] Successfully created:", {
@@ -2159,11 +2159,11 @@ class SmartCalendar {
                 form_id: data.form_id,
                 form_url: data.form_url
             });
-            
+
             const urlEl = document.getElementById('fb-form-url-text');
             urlEl.textContent = _currentFormUrl || 'Error: URL not returned';
             urlEl.style.color = '#ffffff';
-            
+
             // Set up timer in the success box
             const timerEl = document.getElementById('fb-result-timer');
             if (timerEl) {
@@ -2173,22 +2173,22 @@ class SmartCalendar {
                 timerEl.className = 'form-timer';
                 timerEl.style.display = 'block';
             }
-            
+
             document.getElementById('fb-result').style.display = 'block';
 
             btn.textContent = 'Generate Another Form';
             btn.disabled = false;
             btn.style.opacity = '1';
-            
+
             showNotification('✅ Google Form created successfully!', 'success');
-            
+
             loadEvents(); // refresh list
 
         } catch (err) {
             console.error('[FORM] Error:', err);
-            
+
             let errorMessage = 'Error: ' + err.message;
-            
+
             // Enhanced error messages
             if (err.message.includes('APPS_SCRIPT_URL')) {
                 errorMessage = '⚠️ Google Apps Script not configured. Please contact administrator.';
@@ -2197,7 +2197,7 @@ class SmartCalendar {
             } else if (err.message.includes('Connection failed')) {
                 errorMessage = '🌐 Cannot reach Google Apps Script. Check your internet connection.';
             }
-            
+
             showStatus(errorMessage, 'error');
             btn.textContent = 'Generate Google Form';
             btn.disabled = false;
@@ -2210,7 +2210,7 @@ class SmartCalendar {
         const list = document.getElementById('fb-events-list');
         list.innerHTML = '<div style="color:#8b8b9e;font-size:13px;text-align:center;padding:16px;">Loading...</div>';
         try {
-            const res  = await fetch(`${API_BASE}/api/admin/events`, { headers: authHeaders() });
+            const res = await fetch(`${API_BASE}/api/admin/events`, { headers: authHeaders() });
             const data = await res.json();
             if (!data.success) throw new Error(data.error);
 
@@ -2227,13 +2227,13 @@ class SmartCalendar {
                 const createdTime = ev.form_created_at ? new Date(ev.form_created_at).getTime() : 0;
                 const expiryTime = createdTime ? createdTime + (24 * 60 * 60 * 1000) : 0;
                 const isExpired = expiryTime > 0 && Date.now() > expiryTime;
-                
+
                 // Determine form status
                 let formStatusHtml = '';
                 let formReadyText = 'Form Ready';
                 let formReadyBg = 'rgba(34,211,102,0.1)';
                 let formReadyColor = '#34d399';
-                
+
                 if (hasForm) {
                     if (ev.status === 'closed' || isExpired) {
                         formReadyText = 'Closed';
@@ -2283,14 +2283,14 @@ class SmartCalendar {
             list.querySelectorAll('.btn-sync-responses').forEach(btn => {
                 btn.addEventListener('click', async () => {
                     const id = btn.dataset.eventId;
-                    
+
                     // Prevent double-click
                     if (btn.disabled) return;
-                    
+
                     const originalText = btn.textContent;
                     btn.textContent = 'Syncing...';
                     btn.disabled = true;
-                    
+
                     try {
                         const r = await safeFetch(`${API_BASE}/api/admin/sync-responses`, {
                             method: 'POST',
@@ -2298,13 +2298,13 @@ class SmartCalendar {
                             body: JSON.stringify({ event_id: parseInt(id) })
                         });
                         const d = await r.json();
-                        
+
                         if (d.success) {
                             // Show detailed sync info
                             const synced = d.synced || 0;
                             const skipped = d.skipped || 0;
                             const total = d.total || 0;
-                            
+
                             if (synced > 0) {
                                 btn.textContent = `✓ ${synced} new`;
                                 showNotification(`Synced ${synced} responses (${skipped} duplicates skipped)`, 'success');
@@ -2312,27 +2312,27 @@ class SmartCalendar {
                                 btn.textContent = 'Up to date';
                                 showNotification('All responses already synced', 'info');
                             }
-                            
+
                             // Reload events to update response count
                             setTimeout(() => loadEvents(), 1000);
                         } else {
                             btn.textContent = 'Error';
                             showNotification(`Sync failed: ${d.error || 'Unknown error'}`, 'error');
                         }
-                        
+
                         // Reset button after delay
-                        setTimeout(() => { 
-                            btn.textContent = originalText; 
-                            btn.disabled = false; 
+                        setTimeout(() => {
+                            btn.textContent = originalText;
+                            btn.disabled = false;
                         }, 3000);
-                        
+
                     } catch (e) {
                         console.error('[SYNC] Error:', e);
                         btn.textContent = 'Failed';
                         showNotification(`Sync error: ${e.message}`, 'error');
-                        setTimeout(() => { 
-                            btn.textContent = originalText; 
-                            btn.disabled = false; 
+                        setTimeout(() => {
+                            btn.textContent = originalText;
+                            btn.disabled = false;
                         }, 3000);
                     }
                 });
@@ -2468,7 +2468,7 @@ class SmartCalendar {
             data.jobs.forEach(job => {
                 const item = document.createElement('div');
                 item.style.cssText = 'padding:8px;border-radius:6px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);font-size:11px;line-height:1.4;';
-                
+
                 let statusColor = '#8b8b9e';
                 let statusText = job.status.toUpperCase();
                 if (job.status === 'pending') { statusColor = '#fbbf24'; }
@@ -2671,7 +2671,7 @@ class SmartCalendar {
                 }
             });
     });
-    
+
     // ── Global Form Timer Updater ────────────────────────────
     // Runs every second. When timer hits 0 → auto-closes form via API
     // regardless of whether admin is logged in or has the modal open.

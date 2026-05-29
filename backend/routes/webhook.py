@@ -70,8 +70,7 @@ def _update_sync_status(success: bool, error_message: str = None):
     """Persist webhook health to a JSON file (best-effort)."""
     import os
     try:
-        status_file = os.path.join(
-            current_app.root_path, 'logs', 'sync_health.json')
+        status_file = os.path.join(current_app.root_path, 'logs', 'sync_health.json')
         data = {}
         if os.path.exists(status_file):
             try:
@@ -106,131 +105,134 @@ def store_webhook_submission(payload: dict) -> int:
     Returns the new row id.
     """
     raw_ts = payload.get('timestamp') or datetime.now(timezone.utc).isoformat()
-    timestamp_display, normalized_ts = _format_timestamp(raw_ts)
+    timestamp_display, _ = _format_timestamp(raw_ts)
 
-    form_id = payload.get('form_id', 'WEBHOOK_FORM')
+    form_id   = payload.get('form_id', 'WEBHOOK_FORM')
     responses = payload.get('responses', {})
 
     with get_db() as conn:
         with conn.cursor() as cur:
 
-                    # ── Look up event ────────────────────────────────────────────
-                    cur.execute("""
-                        SELECT id, status, template_id, send_certificates,
-                               speaker_name, venue_date, created_at
-                        FROM events WHERE form_id = %s
-                    """, (form_id,))
-                    event = cur.fetchone()
+            # ── Look up event ────────────────────────────────────────────
+            cur.execute("""
+                SELECT id, status, template_id, send_certificates,
+                       speaker_name, venue_date, created_at
+                FROM events WHERE form_id = %s
+            """, (form_id,))
+            event = cur.fetchone()
 
-                    event_id = None
-                    send_certs = False
-                    template_id = None
-                    speaker_name = responses.get('alumni_speaker_name', '')
-                    date_of_lec = responses.get('date_of_lecture', '')
+            event_id      = None
+            send_certs    = False
+            template_id   = None
+            speaker_name  = responses.get('alumni_speaker_name', '')
+            date_of_lec   = responses.get('date_of_lecture', '')
 
-                    if event:
-                        event_id = event['id']
-                        template_id = event['template_id']
-                        send_certs = bool(event['send_certificates'])
+            if event:
+                event_id    = event['id']
+                template_id = event['template_id']
+                send_certs  = bool(event['send_certificates'])
 
-                        if event['status'] == 'closed':
-                            raise ValueError(
-                                "Form is closed and no longer accepting responses.")
+                if event['status'] == 'closed':
+                    raise ValueError("Form is closed and no longer accepting responses.")
 
-                        # 24-hour expiry check
-                        created_at = event['created_at']
-                        if created_at and hasattr(created_at, 'utcoffset'):
-                            age_hours = (datetime.now(timezone.utc) -
-                                         created_at).total_seconds() / 3600
-                        else:
-                            try:
-                                created_at_dt = datetime.fromisoformat(
-                                    str(created_at).replace('Z', '+00:00'))
-                                age_hours = (datetime.now(
-                                    timezone.utc) - created_at_dt).total_seconds() / 3600
-                            except Exception:
-                                age_hours = 0
+                # 24-hour expiry check
+                created_at = event['created_at']
+                if created_at and hasattr(created_at, 'utcoffset'):
+                    age_hours = (datetime.now(timezone.utc) - created_at).total_seconds() / 3600
+                else:
+                    try:
+                        created_at_dt = datetime.fromisoformat(str(created_at).replace('Z', '+00:00'))
+                        age_hours = (datetime.now(timezone.utc) - created_at_dt).total_seconds() / 3600
+                    except Exception:
+                        age_hours = 0
 
-                        if age_hours > 24:
-                            cur.execute(
-                                "UPDATE events SET status = 'closed' WHERE id = %s", (event_id,))
-                            conn.commit()
-                            raise ValueError(
-                                "Form has expired (24-hour limit exceeded).")
+                if age_hours > 24:
+                    cur.execute("UPDATE events SET status = 'closed' WHERE id = %s", (event_id,))
+                    conn.commit()
+                    raise ValueError("Form has expired (24-hour limit exceeded).")
 
-                        # Enrich speaker/date from event record
-                        if event['speaker_name']:
-                            speaker_name = event['speaker_name']
-                        if event['venue_date'] and not date_of_lec:
-                            date_of_lec = str(event['venue_date'])
+                # Enrich speaker/date from event record
+                if event['speaker_name']:
+                    speaker_name = event['speaker_name']
+                if event['venue_date'] and not date_of_lec:
+                    date_of_lec = str(event['venue_date'])
 
-                    # ── Upsert Student ────────────────────────────────────────────
-                    student_name = responses.get('name_of_student', '').strip()
-                    student_email = responses.get('student_email', '').strip()
-                    if not student_email:
-                        for v in responses.values():
-                            if isinstance(v, str) and '@' in v and '.' in v:
-                                student_email = v.strip()
-                                break
+            # ── Roll number normalization ─────────────────────────────────
+            roll_no = _normalize_roll(responses.get('roll_no_original', ''))
 
-                    roll_no = _normalize_roll(
-                        responses.get('roll_no_original', ''))
+            # ── Insert into feedback_responses ────────────────────────────
+            cur.execute("""
+                INSERT INTO feedback_responses (
+                    event_id,
+                    submitted_at,
+                    timestamp_display,
+                    name_of_student,
+                    roll_no,
+                    department,
+                    student_email,
+                    date_of_lecture,
+                    alumni_speaker_name,
+                    session_help_understanding,
+                    session_rating,
+                    session_technical_clarity,
+                    aspect_most_valuable,
+                    improvements_suggestions,
+                    future_topics,
+                    form_source,
+                    record_status
+                ) VALUES (
+                    %s, NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                ) RETURNING id
+            """, (
+                event_id,
+                timestamp_display,
+                responses.get('name_of_student', ''),
+                roll_no,
+                responses.get('department_original', ''),
+                responses.get('student_email', ''),
+                date_of_lec,
+                speaker_name,
+                responses.get('session_help_understanding', ''),
+                responses.get('session_rating'),
+                responses.get('session_technical_clarity'),
+                responses.get('aspect_most_valuable', ''),
+                responses.get('improvements_suggestions', ''),
+                responses.get('future_topics', ''),
+                form_id,
+                'active',
+            ))
+            row = cur.fetchone()
+            response_id = row['id']
 
-                    cur.execute("""
-                        INSERT INTO students (name, email, roll_no)
-                        VALUES (%s, %s, %s) RETURNING id
-                    """, (student_name, student_email, roll_no))
-                    student_id = cur.fetchone()['id']
+            # ── Enqueue certificate job if enabled ────────────────────────
+            if send_certs and template_id and event_id:
+                student_name  = responses.get('name_of_student', '').strip()
+                student_email = responses.get('student_email', '').strip()
 
-                    # ── Insert into feedback_responses ────────────────────────────
-                    cur.execute("""
-                        INSERT INTO feedback_responses (
-                            event_id,
-                            student_id,
-                            submitted_at,
-                            session_rating,
-                            session_help_understanding,
-                            session_technical_clarity,
-                            aspect_most_valuable,
-                            improvements_suggestions,
-                            future_topics,
-                            form_source,
-                            record_status
-                        ) VALUES (
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                        ) RETURNING id
-                    """, (
-                        event_id,
-                        student_id,
-                        normalized_ts,
-                        responses.get('session_rating'),
-                        responses.get('session_help_understanding', ''),
-                        responses.get('session_technical_clarity'),
-                        responses.get('aspect_most_valuable', ''),
-                        responses.get('improvements_suggestions', ''),
-                        responses.get('future_topics', ''),
-                        form_id,
-                        'active',
-                    ))
-                    row = cur.fetchone()
-                    response_id = row['id']
+                # Fallback email scan
+                if not student_email:
+                    for v in responses.values():
+                        if isinstance(v, str) and '@' in v and '.' in v:
+                            student_email = v.strip()
+                            break
 
-                    # ── Enqueue certificate job if enabled ────────────────────────
-                    if send_certs and template_id and event_id:
-                        job_status = 'pending'
-                        job_error  = None
-                        if not student_email:
-                            job_status = 'failed'
-                            job_error  = 'No email address provided in form submission'
+                job_status = 'pending'
+                job_error  = None
+                if not student_email:
+                    job_status = 'failed'
+                    job_error  = 'No email address provided in form submission'
 
-                        cur.execute("""
-                            INSERT INTO certificate_jobs
-                                (response_id, status, error_message)
-                            VALUES (%s, %s, %s)
-                        """, (
-                            response_id, job_status, job_error
-                        ))
-                        logger.info(f"Certificate job enqueued for {student_name} ({student_email or 'no email'})")
+                cur.execute("""
+                    INSERT INTO certificate_jobs
+                        (event_id, response_id, student_name, student_email,
+                         roll_no, department, status, error_message)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    event_id, response_id, student_name, student_email,
+                    roll_no, responses.get('department_original', ''),
+                    job_status, job_error,
+                ))
+                logger.info(f"Certificate job enqueued for {student_name} ({student_email or 'no email'})")
 
         # commit happens via context manager
         return response_id
@@ -269,31 +271,6 @@ def receive_form_submission():
         LATEST_NOTIFICATIONS.append(f"New submission from: {student_name}")
         logger.info(f"Webhook submission stored #{record_id}")
         _update_sync_status(True)
-
-        # Real-time WebSocket emission & Analytics Refresh
-        try:
-            from backend.extensions import socketio
-            from backend.services.analytics_engine import analytics_engine
-            
-            def background_refresh():
-                try:
-                    analytics_engine.refresh_single_record(record_id)
-                    logger.info(f"Background analytics refresh completed for #{record_id}")
-                except Exception as e:
-                    logger.error(f"Background analytics refresh failed: {e}")
-
-            # Refresh pandas dataframe in background to not block webhook response
-            socketio.start_background_task(background_refresh)
-            
-            # Broadcast the update to all connected clients
-            socketio.emit('new_feedback', {
-                'message': f"New submission from {student_name}",
-                'student_name': student_name,
-                'record_id': record_id
-            })
-            logger.info(f"Emitted real-time new_feedback event for #{record_id}")
-        except Exception as ws_err:
-            logger.error(f"WebSocket emit error: {ws_err}")
 
         return jsonify({'status': 'success', 'record_id': record_id, 'message': 'Stored'}), 200
 

@@ -16,12 +16,8 @@ class Config:
 
     # Database (Supabase PostgreSQL via psycopg2)
     DATABASE_URL = os.getenv('DATABASE_URL', '')
-    DB_POOL_MIN  = int(os.getenv('DB_POOL_MIN', 1))
-    DB_POOL_MAX = int(os.getenv('DB_POOL_MAX', 15))
-    DATABASE_PATH = os.getenv(
-        'DATABASE_PATH',
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'database', 'dashboard.db')
-    )
+    DB_POOL_MIN  = int(os.getenv('DB_POOL_MIN', 2))
+    DB_POOL_MAX  = int(os.getenv('DB_POOL_MAX', 10))
 
     # CORS
     CORS_ORIGINS = os.getenv('CORS_ORIGINS', '*').split(',')

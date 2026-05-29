@@ -1,6 +1,4 @@
 // ========== RENDER DASHBOARD ==========
-let componentsIsApplyingFilters = false;
-
 function renderDashboard() {
     const a = state.analytics;
     if (!a) return;
@@ -293,9 +291,6 @@ function initSpeakerAutocomplete() {
 }
 
 async function applyFilters() {
-    if (componentsIsApplyingFilters) return;
-    componentsIsApplyingFilters = true;
-
     const globalSearch = document.getElementById('global-search').value.trim();
     const filters = {};
 
@@ -361,8 +356,6 @@ async function applyFilters() {
         }
     } catch (err) {
         console.error('Filter error:', err);
-    } finally {
-        componentsIsApplyingFilters = false;
     }
 }
 

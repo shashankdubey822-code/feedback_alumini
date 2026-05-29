@@ -9,7 +9,6 @@ import time
 import json
 import urllib.request
 import urllib.error
-import re
 from backend.config import get_config
 from backend.utils.logger import get_section_logger
 from backend.utils.supabase_db import get_db
@@ -70,104 +69,94 @@ def start_job_worker(logger_unused=None):
             try:
                 with get_db() as conn:
                     with conn.cursor() as cur:
-                        # Fetch pending jobs (JOIN feedback_responses, students, events)
+                        # Fetch pending jobs (JOIN events to get template/speaker info)
                         cur.execute("""
                             SELECT
-                                j.id, 
-                                s.name AS student_name, 
-                                s.email AS student_email,
-                                s.roll_no, 
-                                e.department, 
-                                e.template_id, 
-                                e.speaker_name, 
-                                e.venue_date
+                                j.id, j.student_name, j.student_email,
+                                j.roll_no, j.department, j.event_id, j.attempts,
+                                e.template_id, e.speaker_name, e.venue_date
                             FROM certificate_jobs j
-                            JOIN feedback_responses r ON j.response_id = r.id
-                            JOIN students s ON r.student_id = s.id
-                            JOIN events e ON r.event_id = e.id
-                            WHERE j.status = 'pending'
+                            JOIN events e ON j.event_id = e.id
+                            WHERE j.status = 'pending' AND j.attempts < 3
                             ORDER BY j.created_at ASC
                             LIMIT 5
                         """)
                         jobs = cur.fetchall()
 
-                if not jobs:
-                    time.sleep(5)
-                    continue
+                        if not jobs:
+                            time.sleep(5)
+                            continue
 
-                job_logger.info(f"Processing {len(jobs)} pending certificate job(s)...")
+                        job_logger.info(f"Processing {len(jobs)} pending certificate job(s)...")
 
-                for job in jobs:
-                    job_id = job['id']
-                    student_name = job['student_name']
-                    student_email = job['student_email']
-                    roll_no = job['roll_no'] or ''
-                    department = job['department'] or ''
-                    template_id = job['template_id']
-                    speaker_name = job['speaker_name'] or ''
-                    venue_date = str(job['venue_date']) if job['venue_date'] else ''
+                        for job in jobs:
+                            job_id        = job['id']
+                            student_name  = job['student_name']
+                            student_email = job['student_email']
+                            roll_no       = job['roll_no'] or ''
+                            department    = job['department'] or ''
+                            template_id   = job['template_id']
+                            speaker_name  = job['speaker_name'] or ''
+                            venue_date    = str(job['venue_date']) if job['venue_date'] else ''
+                            attempts      = job['attempts']
 
-                    if template_id:
-                        match = re.search(r'/d/([a-zA-Z0-9-_]+)', template_id)
-                        if match:
-                            template_id = match.group(1)
-
-                    # Mark as processing to prevent concurrent pickup
-                    with get_db() as update_conn:
-                        with update_conn.cursor() as update_cur:
-                            update_cur.execute("""
+                            # Mark as processing to prevent concurrent pickup
+                            cur.execute("""
                                 UPDATE certificate_jobs
                                 SET status = 'processing', updated_at = NOW()
                                 WHERE id = %s
                             """, (job_id,))
+                            conn.commit()
 
-                    if not template_id:
-                        with get_db() as update_conn:
-                            with update_conn.cursor() as update_cur:
-                                update_cur.execute("""
+                            if not template_id:
+                                cur.execute("""
                                     UPDATE certificate_jobs
-                                    SET status = 'failed',
+                                    SET status = 'failed', attempts = %s,
                                         error_message = %s, updated_at = NOW()
                                     WHERE id = %s
-                                """, ('No Google Slides template configured for this event.', job_id))
-                        continue
+                                """, (attempts + 1,
+                                      'No Google Slides template configured for this event.',
+                                      job_id))
+                                conn.commit()
+                                continue
 
-                    payload = {
-                        'secret': apps_script_secret,
-                        'action': 'generate_certificate',
-                        'template_id': template_id,
-                        'student_name': student_name,
-                        'student_email': student_email,
-                        'roll_no': roll_no,
-                        'department': department,
-                        'speaker_name': speaker_name,
-                        'venue_date': venue_date,
-                    }
+                            payload = {
+                                'secret':         apps_script_secret,
+                                'action':         'generate_certificate',
+                                'template_id':    template_id,
+                                'student_name':   student_name,
+                                'student_email':  student_email,
+                                'roll_no':        roll_no,
+                                'department':     department,
+                                'speaker_name':   speaker_name,
+                                'venue_date':     venue_date,
+                            }
 
-                    success, error_msg = call_apps_script(apps_script_url, payload)
+                            success, error_msg = call_apps_script(apps_script_url, payload)
 
-                    with get_db() as update_conn:
-                        with update_conn.cursor() as update_cur:
                             if success:
-                                update_cur.execute("""
+                                cur.execute("""
                                     UPDATE certificate_jobs
-                                    SET status = 'completed',
+                                    SET status = 'completed', attempts = %s,
                                         error_message = NULL, updated_at = NOW()
                                     WHERE id = %s
-                                """, (job_id,))
+                                """, (attempts + 1, job_id))
                                 job_logger.info(
                                     f"Certificate sent: {student_name} ({student_email})"
                                 )
                             else:
-                                update_cur.execute("""
+                                new_attempts = attempts + 1
+                                new_status   = 'failed' if new_attempts >= 3 else 'pending'
+                                cur.execute("""
                                     UPDATE certificate_jobs
-                                    SET status = 'failed',
+                                    SET status = %s, attempts = %s,
                                         error_message = %s, updated_at = NOW()
                                     WHERE id = %s
-                                """, (error_msg, job_id))
+                                """, (new_status, new_attempts, error_msg, job_id))
                                 job_logger.warning(
-                                    f"Job {job_id} failed: {error_msg}"
+                                    f"Job {job_id} attempt {new_attempts}/3 failed: {error_msg}"
                                 )
+                            conn.commit()
 
                 time.sleep(5)
 

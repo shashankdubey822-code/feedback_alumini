@@ -37,6 +37,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    setInterval(checkDLStatus, 10000);
-    setTimeout(checkDLStatus, 1500);
+    setInterval(checkDLStatus, 3500);
+    setTimeout(checkDLStatus, 1000);
 });
