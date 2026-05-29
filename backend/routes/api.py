@@ -4,6 +4,7 @@ API Routes - REST endpoints for analytics and data retrieval
 
 import json
 import os
+import time
 from flask import Blueprint, jsonify, request
 from ..services.chart_service import ChartService
 from ..services.nlp_service import NLPService
@@ -12,6 +13,9 @@ from ..utils.logger import get_section_logger, log_endpoint_access
 from ..utils.supabase_db import get_db, execute_all, execute_one
 
 logger = get_section_logger('api')
+
+_DL_STATUS_CACHE = {'value': 0, 'timestamp': 0.0}
+_DL_STATUS_CACHE_TTL = float(os.getenv('DL_STATUS_CACHE_TTL', '5'))
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 legacy_bp = Blueprint('legacy', __name__, url_prefix='/api')
@@ -93,15 +97,24 @@ def get_all_trends():
 def get_dl_status():
     """Get Deep Learning background processing status (unprocessed feedback_responses)"""
     try:
+        now = time.time()
+        if now - _DL_STATUS_CACHE['timestamp'] < _DL_STATUS_CACHE_TTL:
+            return jsonify({'processing_count': _DL_STATUS_CACHE['value'], 'cached': True}), 200
+
         row = execute_one("""
             SELECT COUNT(*) AS cnt FROM feedback_responses r
             WHERE NOT EXISTS (
                 SELECT 1 FROM feedback_analysis a WHERE a.response_id = r.id
             )
         """)
-        return jsonify({'processing_count': row['cnt'] if row else 0}), 200
+        count = row['cnt'] if row else 0
+        _DL_STATUS_CACHE['value'] = count
+        _DL_STATUS_CACHE['timestamp'] = now
+        return jsonify({'processing_count': count, 'cached': False}), 200
     except Exception as e:
         logger.error(f"Error getting DL status: {str(e)}")
+        if _DL_STATUS_CACHE['timestamp'] > 0:
+            return jsonify({'processing_count': _DL_STATUS_CACHE['value'], 'cached': True, 'stale': True, 'error': str(e)}), 200
         return jsonify({'processing_count': 0, 'error': str(e)}), 500
 
 

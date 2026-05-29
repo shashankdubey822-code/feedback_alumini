@@ -23,6 +23,7 @@ const API_BASE = '';
 // ========== REQUEST MANAGEMENT (FIX: Prevent duplicate requests) ==========
 const pendingRequests = new Map(); // Track active requests
 let currentAutoRefreshController = null; // AbortController for auto-refresh
+let dashboardIsApplyingFilters = false;
 
 // Utility: Create unique request key
 function getRequestKey(url, method, body) {
@@ -818,6 +819,9 @@ function updateSpeakerSuggestions(filters) {
 }
 
 async function applyFilters() {
+    if (dashboardIsApplyingFilters) return;
+    dashboardIsApplyingFilters = true;
+
     const globalSearch = document.getElementById('global-search').value.trim();
     const filters = {};
 
@@ -880,6 +884,8 @@ async function applyFilters() {
         }
     } catch (err) {
         console.error('Filter error:', err);
+    } finally {
+        dashboardIsApplyingFilters = false;
     }
 }
 
