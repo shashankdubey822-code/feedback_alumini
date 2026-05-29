@@ -10,7 +10,7 @@ logger = get_logger(__name__)
 health_bp = Blueprint('health', __name__, url_prefix='/api/v1')
 
 
-from backend.utils.supabase_db import get_db
+from backend.utils.insforge_db import get_db
 
 def check_database_health(db_path: str = None) -> dict:
     """Check database connection and basic statistics"""

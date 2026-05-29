@@ -1,14 +1,14 @@
 """
-KPI Service — Key Performance Indicators using native Supabase PostgreSQL.
+KPI Service — Key Performance Indicators using native InsForge PostgreSQL.
 """
 
 from typing import Dict
 from datetime import datetime, timedelta
-from backend.utils.supabase_db import execute_one
+from backend.utils.insforge_db import execute_one
 
 
 class KPIService:
-    """Calculate KPIs directly from Supabase PostgreSQL."""
+    """Calculate KPIs directly from InsForge PostgreSQL."""
 
     def calculate_engagement_rate(self) -> float:
         """% of responses that include written feedback."""

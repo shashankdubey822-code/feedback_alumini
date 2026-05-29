@@ -5,7 +5,7 @@ Wiki Routes - REST Blueprint for Wiki operations
 from flask import Blueprint, jsonify, request, current_app
 from backend.services.wiki_service import WikiService
 from backend.utils.logger import get_section_logger, log_endpoint_access
-from backend.utils.supabase_db import execute_all
+from backend.utils.insforge_db import execute_all
 import os
 import re
 
@@ -278,7 +278,7 @@ def execute_wiki_query():
 @wiki_bp.route('/clear-memory', methods=['POST'])
 @log_endpoint_access
 def execute_wiki_clear_memory():
-    """Delete chat history for a session from the Supabase bucket"""
+    """Delete chat history for a session from the InsForge bucket"""
     try:
         body = request.get_json() or {}
         session_id = body.get('session_id', 'default_session').strip()
@@ -323,8 +323,8 @@ def save_wiki_config():
     try:
         body = request.get_json() or {}
         gemini_key = body.get('gemini_key', '').strip()
-        supabase_url = body.get('supabase_url', '').strip()
-        supabase_key = body.get('supabase_key', '').strip()
+        insforge_url = body.get('insforge_url', '').strip()
+        insforge_key = body.get('insforge_key', '').strip()
         
         if gemini_key:
             current_app.config['GEMINI_API_KEY'] = gemini_key
@@ -332,14 +332,14 @@ def save_wiki_config():
             service = _get_wiki_service()
             service.gemini_key = gemini_key
             
-        if supabase_url and supabase_key:
-            current_app.config['SUPABASE_URL'] = supabase_url
-            current_app.config['SUPABASE_SERVICE_KEY'] = supabase_key
-            os.environ['SUPABASE_URL'] = supabase_url
-            os.environ['SUPABASE_SERVICE_KEY'] = supabase_key
-            # Reset cached supabase client to reinitialize
-            from backend.utils import supabase_helper
-            supabase_helper._supabase_client = None
+        if insforge_url and insforge_key:
+            current_app.config['INSFORGE_URL'] = insforge_url
+            current_app.config['INSFORGE_SERVICE_KEY'] = insforge_key
+            os.environ['INSFORGE_URL'] = insforge_url
+            os.environ['INSFORGE_SERVICE_KEY'] = insforge_key
+            # Reset cached insforge client to reinitialize
+            from backend.utils import insforge_helper
+            insforge_helper._insforge_client = None
             
         return jsonify({'message': 'Configuration updated successfully.'}), 200
     except Exception as e:

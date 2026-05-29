@@ -1,5 +1,5 @@
 import pandas as pd
-from backend.utils.supabase_db import execute_all
+from backend.utils.insforge_db import execute_all
 from backend.utils.logger import get_section_logger
 from datetime import datetime
 
@@ -8,7 +8,7 @@ logger = get_section_logger('analytics_engine')
 class AnalyticsEngine:
     """
     In-Memory Analytics Engine.
-    Fetches all normalized data from Supabase and performs blazing fast
+    Fetches all normalized data from InsForge and performs blazing fast
     filtering, aggregation, and analytics using pandas DataFrames.
     """
     def __init__(self):
@@ -93,7 +93,7 @@ class AnalyticsEngine:
             LEFT JOIN feedback_analysis a ON r.id = a.response_id
             WHERE r.id = %s
             """
-            from backend.utils.supabase_db import execute_all
+            from backend.utils.insforge_db import execute_all
             rows = execute_all(query, (response_id,))
             if rows:
                 new_df = pd.DataFrame(rows)

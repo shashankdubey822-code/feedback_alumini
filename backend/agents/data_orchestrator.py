@@ -2,7 +2,7 @@ from typing import Dict, Any, List
 import pandas as pd
 from datetime import datetime
 from backend.utils.logger import get_section_logger
-from backend.utils.supabase_db import execute_one, execute_all
+from backend.utils.insforge_db import execute_one, execute_all
 from backend.agents.base import BaseAgent, SupervisorAgent
 
 logger = get_section_logger('data_orchestrator')
@@ -31,9 +31,9 @@ class IdentityResolutionAgent(BaseAgent):
     def execute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         logger.info("Executing IdentityResolutionAgent")
         row = payload.get('row', {})
-        email = row.get('email_address', '').strip()
-        roll_no = row.get('roll_number', '').strip()
-        name = row.get('name_of_the_student', '').strip()
+        email = row.get('student_email', '').strip() or None
+        roll_no = row.get('roll_no', '').strip()
+        name = row.get('name_of_student', '').strip()
         department = row.get('department', '').strip()
 
         # Simple ID tracking mapping (in real DB, this is an upsert)
@@ -80,12 +80,12 @@ class FeedbackExtractionAgent(BaseAgent):
             except: return None
             
         payload['feedback_data'] = {
-            'submitted_at': row.get('timestamp'),
-            'session_rating': safe_int(row.get('how_would_you_rate_the_session_overall')),
-            'session_help_understanding': row.get('did_the_session_help_you_understand_the_real-world_applications_of_your_course_of_study', ''),
-            'aspect_most_valuable': row.get('what_aspect_of_the_lecture_did_you_find_most_valuable', ''),
-            'improvements_suggestions': row.get('how_could_the_session_be_improved', ''),
-            'future_topics': row.get('what_topics_would_you_like_to_see_covered_in_future_alumni_lectures', '')
+            'submitted_at': row.get('timestamp_display'),
+            'session_rating': safe_int(row.get('session_rating')),
+            'session_help_understanding': row.get('session_help_understanding', ''),
+            'aspect_most_valuable': row.get('aspect_most_valuable', ''),
+            'improvements_suggestions': row.get('improvements_suggestions', ''),
+            'future_topics': row.get('future_topics', '')
         }
         return payload
 
@@ -132,12 +132,12 @@ class DatabaseSyncAgent(BaseAgent):
             
             # 2. Upsert Event
             evt_row = execute_one("""
-                INSERT INTO events (speaker_name, venue_date, department, name)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO events (speaker_name, venue_date, department)
+                VALUES (%s, %s, %s)
                 ON CONFLICT (speaker_name, venue_date) DO UPDATE SET
                     department = EXCLUDED.department
                 RETURNING id
-            """, (evt['speaker_name'], evt['venue_date'], evt['department'], evt['name']))
+            """, (evt['speaker_name'], evt['venue_date'], evt['department']))
             event_id = evt_row['id']
             
             # 3. Upsert Feedback

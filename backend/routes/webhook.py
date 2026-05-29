@@ -1,6 +1,6 @@
 """
 webhook.py — Handle incoming webhooks from Google Forms / Apps Script.
-Uses native Supabase PostgreSQL via supabase_db.py.
+Uses native Supabase PostgreSQL via insforge_db.py.
 Table: feedback_responses (was: dashboard_data)
 """
 
@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify, current_app
 from backend.utils.logger import get_section_logger, log_endpoint_access
-from backend.utils.supabase_db import get_db
+from backend.utils.insforge_db import get_db
 
 try:
     from zoneinfo import ZoneInfo

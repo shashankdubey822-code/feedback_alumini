@@ -767,7 +767,7 @@
               <div style="position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, #bf5fff, #ff716c); border-top-left-radius: 12px; border-top-right-radius: 12px;"></div>
               
               <h3 style="margin:0 0 6px; font-size: 18px; color: var(--text-primary); font-weight: 600;">Wiki Keys &amp; Storage Configuration</h3>
-              <p style="margin:0 0 24px; font-size: 13px; color: var(--text-muted);">Provide API keys to unlock advanced generative AI and persistent Supabase storage syncing.</p>
+              <p style="margin:0 0 24px; font-size: 13px; color: var(--text-muted);">Provide API keys to unlock advanced generative AI and persistent InsForge storage syncing.</p>
 
               <div style="display: grid; gap: 16px;">
                 <div>
@@ -777,19 +777,19 @@
                 </div>
 
                 <div style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: 8px;">
-                  <h4 style="margin: 0 0 12px; font-size: 13px; color: var(--text-primary); font-weight: 600;">Supabase Storage Sync (Recommended for Hugging Face)</h4>
+                  <h4 style="margin: 0 0 12px; font-size: 13px; color: var(--text-primary); font-weight: 600;">InsForge Storage Sync (Recommended for Hugging Face)</h4>
                   
                   <div style="display: grid; gap: 12px; margin-bottom: 12px;">
                     <div>
-                      <label style="display:block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Supabase Project URL</label>
-                      <input type="text" id="cfg-supabase-url" placeholder="https://your-project.supabase.co" class="filter-input" style="width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-input); color: var(--text-primary);" />
+                      <label style="display:block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">InsForge Project URL</label>
+                      <input type="text" id="cfg-insforge-url" placeholder="https://your-project.insforge.co" class="filter-input" style="width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-input); color: var(--text-primary);" />
                     </div>
                     <div>
-                      <label style="display:block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Supabase Service Role Key (or Anon Key)</label>
-                      <input type="password" id="cfg-supabase-key" placeholder="Enter Supabase API Key..." class="filter-input" style="width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-input); color: var(--text-primary);" />
+                      <label style="display:block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">InsForge Service Role Key (or Anon Key)</label>
+                      <input type="password" id="cfg-insforge-key" placeholder="Enter InsForge API Key..." class="filter-input" style="width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-input); color: var(--text-primary);" />
                     </div>
                   </div>
-                  <p style="margin: 4px 0 0; font-size: 11px; color: var(--text-muted);">Saves Wiki Markdown pages to your Supabase bucket so they compound forever across cloud container restarts.</p>
+                  <p style="margin: 4px 0 0; font-size: 11px; color: var(--text-muted);">Saves Wiki Markdown pages to your InsForge bucket so they compound forever across cloud container restarts.</p>
                 </div>
 
                 <button id="btn-save-cfg" class="browse-btn" style="margin-top: 12px; padding: 12px; background: linear-gradient(135deg, #00ffff, #bf5fff); color: #fff; border: none; font-weight: 700; cursor: pointer; border-radius: 6px;">Save Configuration</button>

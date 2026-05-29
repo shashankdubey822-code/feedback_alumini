@@ -10,7 +10,7 @@ from ..services.chart_service import ChartService
 from ..services.nlp_service import NLPService
 from ..services.kpi_service import KPIService
 from ..utils.logger import get_section_logger, log_endpoint_access
-from ..utils.supabase_db import get_db, execute_all, execute_one
+from ..utils.insforge_db import get_db, execute_all, execute_one
 from ..services.analytics_engine import analytics_engine
 
 logger = get_section_logger('api')
@@ -157,6 +157,12 @@ def get_error_report():
         logger.error(f"Error running error report: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@legacy_bp.route('/errors/report', methods=['GET'])
+@log_endpoint_access
+def legacy_get_error_report():
+    """Legacy wrapper to support frontend requests to /api/errors/report."""
+    return get_error_report()
+
 
 @api_bp.errorhandler(404)
 def not_found(error):
@@ -300,7 +306,15 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
             if opts:
                 formatted_filters.append({'column': label, 'type': 'categorical', 'options': opts})
 
-    kpis = list(kpi_dict.values()) if isinstance(kpi_dict, dict) else kpi_dict
+    kpi_dict = kpi_dict if isinstance(kpi_dict, dict) else {}
+    formatted_kpis = [
+        {'label': 'Engagement Rate', 'value': f"{kpi_dict.get('engagement_rate', 0)}%", 'sub': 'Responses w/ written feedback'},
+        {'label': 'Satisfaction Score', 'value': f"{kpi_dict.get('satisfaction_score', 0)}%", 'sub': 'Rated 4 or higher'},
+        {'label': 'Completion Rate', 'value': f"{kpi_dict.get('completion_rate', 0)}%", 'sub': 'Required fields filled'},
+        {'label': 'Department Coverage', 'value': f"{kpi_dict.get('department_coverage', 0)}%", 'sub': 'Departments represented'},
+        {'label': 'Submissions (7d)', 'value': kpi_dict.get('submission_velocity_7d', 0), 'sub': 'Responses / day'},
+        {'label': 'Submissions (30d)', 'value': kpi_dict.get('submission_velocity_30d', 0), 'sub': 'Responses / day'}
+    ]
     
     columns = list(table_data[0].keys()) if table_data else []
     col_types = {c: 'text' for c in columns}
@@ -333,7 +347,7 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
         },
         'tableData': table_data,
         'charts': formatted_charts,
-        'kpis': kpis,
+        'kpis': formatted_kpis,
         'speaker_stats': speaker_stats_payload,
         'deep_analytics': {
             'actionable_stats': actionable_stats,

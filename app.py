@@ -23,7 +23,7 @@ from backend.routes.admin import admin_bp
 from backend.routes.wiki import wiki_bp
 from backend.extensions import socketio
 
-from backend.utils.supabase_db import initialize_database
+from backend.utils.insforge_db import initialize_database
 
 
 def create_app(config=None):

@@ -12,13 +12,13 @@ import urllib.error
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from backend.config import get_config
 from backend.utils.logger import get_section_logger
-from backend.utils.supabase_db import execute_all
-from backend.utils.supabase_helper import (
-    supabase_upload_file,
-    supabase_download_file,
-    supabase_list_files,
-    supabase_delete_file,
-    is_supabase_active
+from backend.utils.insforge_db import execute_all
+from backend.utils.insforge_helper import (
+    insforge_upload_file,
+    insforge_download_file,
+    insforge_list_files,
+    insforge_delete_file,
+    is_insforge_active
 )
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.messages import BaseMessage, messages_from_dict, messages_to_dict
@@ -35,8 +35,8 @@ _ingest_progress: Dict[str, Any] = {"status": "IDLE", "current": 0, "total": 0, 
 _abort_requested: bool = False
 _queue_lock = threading.Lock()
 
-class SupabaseChatMessageHistory(BaseChatMessageHistory):
-    """Custom LangChain memory class for Supabase Storage"""
+class InsForgeChatMessageHistory(BaseChatMessageHistory):
+    """Custom LangChain memory class for InsForge Storage"""
     def __init__(self, session_id: str, bucket: str, fallback_history: List[Dict[str, str]] = None):
         self.session_id = session_id
         self.bucket = bucket
@@ -45,9 +45,9 @@ class SupabaseChatMessageHistory(BaseChatMessageHistory):
         
     @property
     def messages(self) -> List[BaseMessage]:
-        if is_supabase_active():
+        if is_insforge_active():
             try:
-                file_bytes = supabase_download_file(self.bucket, self.path)
+                file_bytes = insforge_download_file(self.bucket, self.path)
                 if file_bytes:
                     items = json.loads(file_bytes.decode('utf-8'))
                     return messages_from_dict(items)
@@ -67,20 +67,20 @@ class SupabaseChatMessageHistory(BaseChatMessageHistory):
         return msgs
 
     def add_messages(self, messages: List[BaseMessage]) -> None:
-        if not is_supabase_active():
+        if not is_insforge_active():
             return
         try:
             current_messages = self.messages
             current_messages.extend(messages)
             items = messages_to_dict(current_messages)
             history_bytes = json.dumps(items, indent=2).encode('utf-8')
-            supabase_upload_file(self.bucket, self.path, history_bytes, "application/json")
+            insforge_upload_file(self.bucket, self.path, history_bytes, "application/json")
         except Exception as e:
-            logger.error(f"Error saving chat history to Supabase: {str(e)}")
+            logger.error(f"Error saving chat history to InsForge: {str(e)}")
 
     def clear(self) -> None:
-        if is_supabase_active():
-            supabase_delete_file(self.bucket, self.path)
+        if is_insforge_active():
+            insforge_delete_file(self.bucket, self.path)
 
 
 class WikiService:
@@ -90,7 +90,7 @@ class WikiService:
         config = get_config()()
         self.wiki_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data', 'wiki')
         self.pages_dir = os.path.join(self.wiki_dir, 'pages')
-        self.bucket = config.SUPABASE_BUCKET
+        self.bucket = config.INSFORGE_BUCKET
         self.gemini_key = config.GEMINI_API_KEY
         self.groq_key = config.GROQ_API_KEY
         
@@ -109,7 +109,7 @@ class WikiService:
     # ─── CORE FILE ACCESSORS ──────────────────────────────────────────────────
 
     def write_wiki_file(self, rel_path: str, content: str) -> bool:
-        """Write content to local disk AND upload to Supabase Storage if configured"""
+        """Write content to local disk AND upload to InsForge Storage if configured"""
         local_path = os.path.join(self.pages_dir, rel_path)
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         
@@ -120,21 +120,21 @@ class WikiService:
         except Exception as e:
             logger.error(f"Local write failed for '{rel_path}': {str(e)}")
 
-        # 2. Upload to Supabase Storage
-        if is_supabase_active():
+        # 2. Upload to InsForge Storage
+        if is_insforge_active():
             content_bytes = content.encode('utf-8')
-            success = supabase_upload_file(self.bucket, f"pages/{rel_path}", content_bytes, "text/markdown")
+            success = insforge_upload_file(self.bucket, f"pages/{rel_path}", content_bytes, "text/markdown")
             if success:
-                logger.info(f"Synced '{rel_path}' to Supabase bucket '{self.bucket}'")
+                logger.info(f"Synced '{rel_path}' to InsForge bucket '{self.bucket}'")
             return success
 
         return True
 
     def read_wiki_file(self, rel_path: str) -> Optional[str]:
-        """Read content from Supabase Storage, falling back to local file if offline"""
-        # 1. Try Supabase Storage first
-        if is_supabase_active():
-            file_bytes = supabase_download_file(self.bucket, f"pages/{rel_path}")
+        """Read content from InsForge Storage, falling back to local file if offline"""
+        # 1. Try InsForge Storage first
+        if is_insforge_active():
+            file_bytes = insforge_download_file(self.bucket, f"pages/{rel_path}")
             if file_bytes is not None:
                 return file_bytes.decode('utf-8')
 
@@ -152,11 +152,11 @@ class WikiService:
         """Get relative paths of all pages in the Wiki"""
         all_pages = []
         
-        if is_supabase_active():
-            # List files from Supabase Storage
+        if is_insforge_active():
+            # List files from InsForge Storage
             # Walk through subdirectories
             for sub in ['', 'events', 'speakers', 'concepts', 'suggestions']:
-                files = supabase_list_files(self.bucket, f"pages/{sub}".strip('/'))
+                files = insforge_list_files(self.bucket, f"pages/{sub}".strip('/'))
                 for f in files:
                     name = f.get('name')
                     if name and name.endswith('.md'):
@@ -1343,7 +1343,7 @@ FORMATTING AND LENGTH RULES (CRITICAL):
                     
                     with_message_history = RunnableWithMessageHistory(
                         chain,
-                        lambda sid: SupabaseChatMessageHistory(sid, self.bucket, fallback_history=history),
+                        lambda sid: InsForgeChatMessageHistory(sid, self.bucket, fallback_history=history),
                         input_messages_key="question",
                         history_messages_key="history",
                     )
@@ -1371,15 +1371,15 @@ FORMATTING AND LENGTH RULES (CRITICAL):
         return {"answer": synthesis, "citations": [p[0] for p in matched_pages]}
 
     def clear_memory(self, session_id: str) -> bool:
-        """Delete chat history for the given session ID from Supabase bucket"""
-        if is_supabase_active() and session_id:
+        """Delete chat history for the given session ID from InsForge bucket"""
+        if is_insforge_active() and session_id:
             try:
                 path = f"memory/{session_id}.json"
-                supabase_delete_file(self.bucket, path)
-                logger.info(f"Deleted memory for session '{session_id}' from Supabase bucket.")
+                insforge_delete_file(self.bucket, path)
+                logger.info(f"Deleted memory for session '{session_id}' from InsForge bucket.")
                 return True
             except Exception as e:
-                logger.error(f"Failed to delete memory from Supabase bucket: {e}")
+                logger.error(f"Failed to delete memory from InsForge bucket: {e}")
         return False
 
     # ─── WIKI LINTER (HEALTH CHECKS) ──────────────────────────────────────────
@@ -1450,7 +1450,7 @@ FORMATTING AND LENGTH RULES (CRITICAL):
         }
 
     def suggest_questions(self) -> List[str]:
-        """Dynamically generate analytical query suggestions from Supabase-backed feedback."""
+        """Dynamically generate analytical query suggestions from InsForge-backed feedback."""
         speakers = []
         topics = []
         try:

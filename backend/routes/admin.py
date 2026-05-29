@@ -1,5 +1,5 @@
 """
-admin.py — Admin Routes. Native Supabase PostgreSQL via supabase_db.py.
+admin.py — Admin Routes. Native InsForge PostgreSQL via insforge_db.py.
 Tables: events, feedback_responses, feedback_analysis, certificate_jobs
 """
 
@@ -15,7 +15,7 @@ import pandas as pd
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app
 from backend.utils.logger import get_logger, log_endpoint_access
-from backend.utils.supabase_db import get_db, execute_all, execute_one, execute_returning
+from backend.utils.insforge_db import get_db, execute_all, execute_one, execute_returning
 
 try:
     from google.oauth2 import service_account
@@ -597,7 +597,7 @@ def validate_config():
             'webhook_secret': {
                 'configured': bool(current_app.config.get('WEBHOOK_SECRET')),
             },
-            'database': {'type': 'supabase_postgresql', 'status': 'connected'},
+            'database': {'type': 'insforge_postgresql', 'status': 'connected'},
         }
         all_valid = is_valid and checks['apps_script_secret']['configured'] and checks['webhook_secret']['configured']
         return jsonify({'success': True, 'all_valid': all_valid, 'checks': checks}), 200

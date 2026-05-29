@@ -1,6 +1,6 @@
 from typing import Dict, Any
 from backend.utils.logger import get_section_logger
-from backend.utils.supabase_db import execute_one
+from backend.utils.insforge_db import execute_one
 from backend.agents.base import BaseAgent, SupervisorAgent
 
 logger = get_section_logger('analysis_orchestrator')

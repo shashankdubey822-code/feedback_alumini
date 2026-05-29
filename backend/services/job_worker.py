@@ -1,6 +1,6 @@
 """
 job_worker.py — Background certificate generation worker.
-Uses native Supabase PostgreSQL via supabase_db.py.
+Uses native InsForge PostgreSQL via insforge_db.py.
 Table: certificate_jobs (was: job_queue)
 """
 
@@ -12,7 +12,7 @@ import urllib.error
 import re
 from backend.config import get_config
 from backend.utils.logger import get_section_logger
-from backend.utils.supabase_db import get_db
+from backend.utils.insforge_db import get_db
 
 _job_thread = None
 

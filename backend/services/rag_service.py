@@ -5,8 +5,8 @@ RAG Service - Computes embeddings locally and performs semantic vector search
 from typing import List, Dict, Any, Optional
 import numpy as np
 from backend.utils.logger import get_section_logger
-from backend.utils.supabase_helper import get_supabase_client, is_supabase_active
-from backend.utils.supabase_db import execute_all
+from backend.utils.insforge_helper import get_insforge_client, is_insforge_active
+from backend.utils.insforge_db import execute_all
 import json
 
 logger = get_section_logger('rag')
@@ -42,7 +42,7 @@ def _get_embedding_model():
     return _embedding_model
 
 class RAGService:
-    """Handles vector embeddings and semantic search on SQLite or Supabase"""
+    """Handles vector embeddings and semantic search on SQLite or InsForge"""
 
     def __init__(self):
         pass
@@ -61,7 +61,7 @@ class RAGService:
             # Check if using LangChain Gemini Embeddings
             if hasattr(model, 'embed_query'):
                 embedding = model.embed_query(text.strip())
-                # Ensure 384 dimensions if Supabase uses 384! Gemini is 768
+                # Ensure 384 dimensions if InsForge uses 384! Gemini is 768
                 return [float(x) for x in embedding[:384]]
             else:
                 # Local SentenceTransformer
@@ -74,12 +74,12 @@ class RAGService:
     def search_similar_feedback(self, query_text: str, limit: int = 5, threshold: float = 0.4) -> List[Dict[str, Any]]:
         """
         Execute semantic search for feedback matching the query text.
-        Routes to Supabase RPC 'match_feedback' if active, otherwise runs local SQL search.
+        Routes to InsForge RPC 'match_feedback' if active, otherwise runs local SQL search.
         """
-        # If Supabase is not active, skip generating the embedding (which loads the slow SentenceTransformer model)
+        # If InsForge is not active, skip generating the embedding (which loads the slow SentenceTransformer model)
         # and go straight to the fast fallback keyword search.
-        if not is_supabase_active():
-            logger.info("Supabase not active. Skipping slow local embedding generation and using fast keyword search.")
+        if not is_insforge_active():
+            logger.info("InsForge not active. Skipping slow local embedding generation and using fast keyword search.")
             return self._fallback_keyword_search(query_text, limit)
 
         query_vector = self.generate_embedding(query_text)
@@ -87,12 +87,12 @@ class RAGService:
             # Fallback to simple keyword search
             return self._fallback_keyword_search(query_text, limit)
 
-        # ─── 1. SUPABASE VECTOR SEARCH (RPC) ──────────────────────────────────
-        if is_supabase_active():
-            client = get_supabase_client()
+        # ─── 1. INSFORGE VECTOR SEARCH (RPC) ──────────────────────────────────
+        if is_insforge_active():
+            client = get_insforge_client()
             if client:
                 try:
-                    logger.info(f"Executing Supabase pgvector RPC search for query: '{query_text}'")
+                    logger.info(f"Executing InsForge pgvector RPC search for query: '{query_text}'")
                     response = client.rpc(
                         'match_feedback',
                         {
@@ -103,7 +103,7 @@ class RAGService:
                     ).execute()
                     return response.data or []
                 except Exception as e:
-                    logger.error(f"Supabase pgvector query failed: {str(e)}")
+                    logger.error(f"InsForge pgvector query failed: {str(e)}")
                     # Fallback to local
         
         # ─── 2. LOCAL SQLITE FALLBACK ─────────────────────────────────────────
@@ -116,7 +116,7 @@ class RAGService:
             return self._fallback_keyword_search(query_text, limit)
 
     def _fallback_keyword_search(self, query_text: str, limit: int) -> List[Dict[str, Any]]:
-        """Simple Supabase-backed substring search in case vector models fail"""
+        """Simple InsForge-backed substring search in case vector models fail"""
         try:
             tokens = [f"%{t}%" for t in query_text.lower().split() if len(t) > 2]
             if not tokens:

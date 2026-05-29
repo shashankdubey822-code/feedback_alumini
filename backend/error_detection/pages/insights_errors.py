@@ -31,7 +31,7 @@ class InsightsErrorDetector(ErrorDetector):
 
         # 3. Check that at least some DL-processed rows exist (insights need them)
         try:
-            from backend.utils.supabase_db import execute_one
+            from backend.utils.insforge_db import execute_one
             row_total = execute_one("SELECT COUNT(*) as count FROM feedback_responses")
             row_processed = execute_one("SELECT COUNT(*) as count FROM feedback_analysis")
             

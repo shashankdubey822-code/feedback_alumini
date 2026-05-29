@@ -2,7 +2,7 @@ import os
 from typing import List
 from datetime import datetime
 from backend.error_detection.base import ErrorDetector, DetectionResult
-from backend.utils.supabase_db import get_db, execute_one
+from backend.utils.insforge_db import get_db, execute_one
 
 
 class CertificationErrorDetector(ErrorDetector):

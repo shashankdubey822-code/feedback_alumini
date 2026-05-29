@@ -2,7 +2,7 @@
 NLP / Deep Learning Page Error Detector.
 """
 from __future__ import annotations
-from backend.utils.supabase_db import get_db, execute_one
+from backend.utils.insforge_db import get_db, execute_one
 import json
 from typing import List
 from ..base import ErrorDetector, DetectionResult

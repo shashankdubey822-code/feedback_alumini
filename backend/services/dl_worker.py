@@ -1,7 +1,7 @@
 """
 dl_worker.py — Deep Learning / NLP background worker.
 Reads unprocessed rows from feedback_responses, writes to feedback_analysis.
-Uses native Supabase PostgreSQL via supabase_db.py.
+Uses native InsForge PostgreSQL via insforge_db.py.
 """
 
 import threading
@@ -9,7 +9,7 @@ import time
 import json
 from backend.services.nlp_service import NLPService
 from backend.utils.logger import get_section_logger
-from backend.utils.supabase_db import get_db
+from backend.utils.insforge_db import get_db
 
 _dl_thread = None
 

@@ -40,8 +40,8 @@ const Wiki = {
         canvas: null,
         saveCfgBtn: null,
         cfgGeminiKey: null,
-        cfgSupabaseUrl: null,
-        cfgSupabaseKey: null,
+        cfgInsForgeUrl: null,
+        cfgInsForgeKey: null,
         cfgStatusMsg: null,
         selectAllBtn: null,
         compileStartBtn: null
@@ -50,7 +50,7 @@ const Wiki = {
     init() {
         console.log("Initializing AI Knowledge Wiki Module...");
         
-        // Generate/load persistent local session ID for Supabase bucket storage memory
+        // Generate/load persistent local session ID for InsForge bucket storage memory
         if (!localStorage.getItem('wiki_session_id')) {
             localStorage.setItem('wiki_session_id', 'session_' + Math.random().toString(36).substring(2, 11));
         }
@@ -91,8 +91,8 @@ const Wiki = {
         // Settings elements
         this.elements.saveCfgBtn = document.getElementById('btn-save-cfg');
         this.elements.cfgGeminiKey = document.getElementById('cfg-gemini-key');
-        this.elements.cfgSupabaseUrl = document.getElementById('cfg-supabase-url');
-        this.elements.cfgSupabaseKey = document.getElementById('cfg-supabase-key');
+        this.elements.cfgInsForgeUrl = document.getElementById('cfg-insforge-url');
+        this.elements.cfgInsForgeKey = document.getElementById('cfg-insforge-key');
         this.elements.cfgStatusMsg = document.getElementById('cfg-status-msg');
         
         // Buttons
@@ -795,8 +795,8 @@ const Wiki = {
 
     saveConfiguration() {
         const gemini = this.elements.cfgGeminiKey.value.trim();
-        const url = this.elements.cfgSupabaseUrl.value.trim();
-        const key = this.elements.cfgSupabaseKey.value.trim();
+        const url = this.elements.cfgInsForgeUrl.value.trim();
+        const key = this.elements.cfgInsForgeKey.value.trim();
 
         if (!gemini && !url) {
             this.showConfigMsg("Please fill in at least one credential.", "error");
@@ -809,8 +809,8 @@ const Wiki = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 gemini_key: gemini,
-                supabase_url: url,
-                supabase_key: key
+                insforge_url: url,
+                insforge_key: key
             })
         })
         .then(res => res.json())
@@ -820,8 +820,8 @@ const Wiki = {
             } else {
                 self.showConfigMsg(data.message, "success");
                 self.elements.cfgGeminiKey.value = '';
-                self.elements.cfgSupabaseUrl.value = '';
-                self.elements.cfgSupabaseKey.value = '';
+                self.elements.cfgInsForgeUrl.value = '';
+                self.elements.cfgInsForgeKey.value = '';
                 self.loadWikiPages();
             }
         })

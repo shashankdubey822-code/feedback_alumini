@@ -1,14 +1,14 @@
 """
-Chart Service — Generate chart data using native Supabase PostgreSQL.
+Chart Service — Generate chart data using native InsForge PostgreSQL.
 """
 
 from typing import Dict, List
 from datetime import datetime, timedelta
-from backend.utils.supabase_db import execute_all, execute_one
+from backend.utils.insforge_db import execute_all, execute_one
 
 
 class ChartService:
-    """Generate chart data from Supabase PostgreSQL."""
+    """Generate chart data from InsForge PostgreSQL."""
 
     def get_timeline_data(self, df, days: int = 30) -> List[Dict]:
         if df.empty: return []

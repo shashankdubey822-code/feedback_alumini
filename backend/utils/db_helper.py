@@ -1,10 +1,10 @@
 """
 db_helper.py — Database initialization and startup helpers.
-Uses native psycopg2 via supabase_db.py — no SQLite shim.
+Uses native psycopg2 via insforge_db.py — no SQLite shim.
 """
 
 import logging
-from backend.utils.supabase_db import get_db, execute_all
+from backend.utils.insforge_db import get_db, execute_all
 
 logger = logging.getLogger(__name__)
 
@@ -82,12 +82,12 @@ CREATE INDEX idx_cert_jobs_status ON certificate_jobs(status);
 
 def initialize_database(app, log=None):
     """
-    Ensure all required tables exist in Supabase PostgreSQL.
+    Ensure all required tables exist in InsForge PostgreSQL.
     Safe to call on every startup (uses CREATE TABLE IF NOT EXISTS).
     """
     _log = log or logger
     try:
-        _log.info("Verifying database schema on Supabase...")
+        _log.info("Verifying database schema on InsForge...")
         with get_db() as conn:
             with conn.cursor() as cur:
                 cur.execute(_SCHEMA_SQL)
@@ -109,7 +109,7 @@ def get_table_columns(table_name: str) -> list[str]:
 
 # ---------------------------------------------------------------------------
 # Legacy compatibility: kept so old imports don't crash during migration
-# These are deprecated — use supabase_db.get_db() directly instead
+# These are deprecated — use insforge_db.get_db() directly instead
 # ---------------------------------------------------------------------------
 def get_db_connection(db_path=None, timeout=30.0):
     """
@@ -117,6 +117,6 @@ def get_db_connection(db_path=None, timeout=30.0):
     Returns a raw psycopg2 connection from the pool for legacy callers.
     Caller must commit and return it themselves.
     """
-    from backend.utils.supabase_db import get_conn
+    from backend.utils.insforge_db import get_conn
     conn = get_conn()
     return conn
