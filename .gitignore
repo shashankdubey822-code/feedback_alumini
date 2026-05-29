@@ -24,6 +24,8 @@ backend/credentials.json
 
 # User specific configuration/context files
 AI_CONTEXT.md
-AI_CONTENT.md
+AI_INSTRUCTIONS.md
 start_debug.log
 google_apps_script/
+env.example
+
