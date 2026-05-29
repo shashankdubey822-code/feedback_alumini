@@ -8,6 +8,7 @@ All backend services should import from this module.
 import os
 import logging
 import contextlib
+import time
 import psycopg2
 import psycopg2.extras
 from psycopg2 import pool
@@ -39,7 +40,22 @@ def _get_pool() -> pool.ThreadedConnectionPool:
 
 def get_conn() -> psycopg2.extensions.connection:
     """Get a connection from the pool. Caller must call put_conn() when done."""
-    return _get_pool().getconn()
+    max_attempts = int(os.environ.get('DB_POOL_RETRIES', 3))
+    base_delay = float(os.environ.get('DB_POOL_RETRY_DELAY', 0.1))
+
+    last_error: Exception | None = None
+    for attempt in range(max_attempts):
+        try:
+            return _get_pool().getconn()
+        except pool.PoolError as exc:
+            last_error = exc
+            if 'exhausted' not in str(exc).lower() or attempt >= max_attempts - 1:
+                raise
+            time.sleep(base_delay * (attempt + 1))
+
+    if last_error:
+        raise last_error
+    raise RuntimeError('Unable to acquire database connection')
 
 
 def put_conn(conn: psycopg2.extensions.connection, close: bool = False) -> None:

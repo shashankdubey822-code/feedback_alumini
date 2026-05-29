@@ -5,7 +5,7 @@ Wiki Routes - REST Blueprint for Wiki operations
 from flask import Blueprint, jsonify, request, current_app
 from backend.services.wiki_service import WikiService
 from backend.utils.logger import get_section_logger, log_endpoint_access
-from backend.utils import pg_helper as sqlite3
+from backend.utils.supabase_db import execute_all
 import os
 import re
 
@@ -179,21 +179,15 @@ def get_wiki_page_content(filename):
 def get_db_sessions():
     """Retrieve unique guest lecture sessions and check if compiled in wiki"""
     try:
-        db_path = current_app.config.get('DATABASE_PATH')
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT alumni_speaker_name, date_of_lecture, COUNT(*) as cnt
-            FROM dashboard_data
-            WHERE alumni_speaker_name IS NOT NULL AND alumni_speaker_name != ''
-              AND date_of_lecture IS NOT NULL AND date_of_lecture != ''
+        rows = execute_all('''
+            SELECT alumni_speaker_name, date_of_lecture, COUNT(*) AS cnt
+            FROM feedback_responses
+            WHERE alumni_speaker_name IS NOT NULL AND alumni_speaker_name <> ''
+              AND date_of_lecture IS NOT NULL AND date_of_lecture <> ''
             GROUP BY alumni_speaker_name, date_of_lecture
-            ORDER BY date_of_lecture DESC
+            ORDER BY date_of_lecture DESC, alumni_speaker_name ASC
         ''')
-        rows = [dict(r) for r in cursor.fetchall()]
-        conn.close()
-        
+
         service = _get_wiki_service()
         pages = service.list_wiki_pages()
         

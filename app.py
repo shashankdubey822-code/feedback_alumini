@@ -11,6 +11,9 @@ from flask_cors import CORS
 # Add backend to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from backend.config import get_config
 from backend.utils.logger import setup_logger
 from backend.routes.api import api_bp, legacy_bp
@@ -18,8 +21,9 @@ from backend.routes.webhook import webhook_bp
 from backend.routes.health import health_bp
 from backend.routes.admin import admin_bp
 from backend.routes.wiki import wiki_bp
+from backend.extensions import socketio
 
-from backend.utils.db_helper import initialize_database
+from backend.utils.supabase_db import initialize_database
 
 
 def create_app(config=None):
@@ -93,6 +97,9 @@ def create_app(config=None):
     app.register_blueprint(admin_bp)
     app.register_blueprint(wiki_bp)
 
+    # Initialize SocketIO
+    socketio.init_app(app)
+
     # Initialize Wiki folders and templates on startup
     try:
         from backend.services.wiki_service import WikiService
@@ -158,12 +165,8 @@ if __name__ == '__main__':
     logger.info(f"Starting server on port {port}")
 
     # Trigger HF Space rebuild for Google Form fix
-    app.run(
-        host='0.0.0.0',
-        port=port,
-        debug=debug,
-        use_reloader=False,  # Disable reloader for HF Spaces
-    )
+    socketio.run(
+        app,
         host='0.0.0.0',
         port=port,
         debug=debug,
