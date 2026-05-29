@@ -129,35 +129,24 @@ def _normalize_df(df, source='csv_upload') -> pd.DataFrame:
 
 def _insert_df_rows(df: pd.DataFrame, source: str = 'csv_upload') -> int:
     df = _normalize_df(df, source)
-    inserted = 0
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            for _, row in df.iterrows():
-                cur.execute("""
-                    INSERT INTO feedback_responses (
-                        timestamp_display, submitted_at, name_of_student, roll_no, department,
-                        student_email, date_of_lecture, alumni_speaker_name,
-                        session_help_understanding, session_rating, session_technical_clarity,
-                        aspect_most_valuable, improvements_suggestions, future_topics,
-                        form_source, data_quality_score, is_duplicate, record_status
-                    ) VALUES (
-                        %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
-                    )
-                """, (
-                    row.get('timestamp_display'), 
-                    row['submitted_at'].strftime('%Y-%m-%d %H:%M:%S%z') if not pd.isna(row.get('submitted_at')) else datetime.now().isoformat(),
-                    row.get('name_of_student'),
-                    row.get('roll_no'), row.get('department'), row.get('student_email'),
-                    row.get('date_of_lecture'), row.get('alumni_speaker_name'),
-                    row.get('session_help_understanding'),
-                    _safe_int(row.get('session_rating')),
-                    _safe_int(row.get('session_technical_clarity')),
-                    row.get('aspect_most_valuable'), row.get('improvements_suggestions'),
-                    row.get('future_topics'), row.get('form_source', source),
-                    row.get('data_quality_score'), bool(row.get('is_duplicate', False)),
-                    row.get('record_status', 'active'),
-                ))
-                inserted += 1
+    # ── Orchestrator Injection ──
+    from backend.agents.data_orchestrator import DataOrchestratorSupervisor
+    orchestrator = DataOrchestratorSupervisor()
+    
+    # Convert DataFrame to list of dicts for the agent payload
+    rows_payload = df.to_dict('records')
+    
+    # Execute the Data Orchestrator pipeline
+    result = orchestrator.execute({'rows': rows_payload})
+    processed = result.get('processed_rows', [])
+    
+    # Count successful syncs (no error key present in the row state)
+    inserted = sum(1 for row_state in processed if 'response_id' in row_state and 'error' not in row_state)
+    
+    # Update in-memory dataframe cache
+    from backend.services.analytics_engine import analytics_engine
+    analytics_engine.refresh_data()
+    
     return inserted
 
 
@@ -542,23 +531,29 @@ def sync_responses():
                         continue
 
                     # Insert feedback response
+                    submitted_at = resp.get('timestamp')
+                    try:
+                        submitted_at = pd.to_datetime(submitted_at).strftime('%Y-%m-%d %H:%M:%S%z') if pd.notna(submitted_at) else datetime.now().isoformat()
+                    except:
+                        submitted_at = datetime.now().isoformat()
+
                     cur.execute("""
                         INSERT INTO feedback_responses (
-                            event_id, student_id, timestamp_display,
+                            event_id, student_id, submitted_at,
                             session_help_understanding, session_rating, session_technical_clarity,
                             aspect_most_valuable, improvements_suggestions, future_topics,
-                            form_source, record_status
-                        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            is_duplicate
+                        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                         RETURNING id
                     """, (
-                        event_id, student_id, resp.get('timestamp'),
+                        event_id, student_id, submitted_at,
                         resp.get('session_help_understanding', ''),
                         _safe_int(resp.get('session_rating')),
                         _safe_int(resp.get('session_technical_clarity')),
                         resp.get('aspect_most_valuable', ''),
                         resp.get('improvements_suggestions', ''),
                         resp.get('future_topics', ''),
-                        event['form_id'], 'SYNCED',
+                        False
                     ))
                     response_id = cur.fetchone()['id']
 
