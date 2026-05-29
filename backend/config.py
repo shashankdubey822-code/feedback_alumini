@@ -14,15 +14,10 @@ class Config:
     DEBUG = False
     TESTING = False
 
-    # Database
-    DATABASE_PATH = os.getenv('DATABASE_PATH', 'dashboard.db')
-    SQLALCHEMY_DATABASE_URI = f'sqlite:///{DATABASE_PATH}'
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ECHO = False
-    
-    # SQLite timeout and connection settings
-    SQLITE_TIMEOUT = 30.0  # 30 seconds timeout for locked database
-    SQLITE_CHECK_SAME_THREAD = False  # Allow cross-thread access
+    # Database (Supabase PostgreSQL via psycopg2)
+    DATABASE_URL = os.getenv('DATABASE_URL', '')
+    DB_POOL_MIN  = int(os.getenv('DB_POOL_MIN', 2))
+    DB_POOL_MAX  = int(os.getenv('DB_POOL_MAX', 10))
 
     # CORS
     CORS_ORIGINS = os.getenv('CORS_ORIGINS', '*').split(',')
@@ -101,7 +96,6 @@ class DevelopmentConfig(Config):
 class TestingConfig(Config):
     """Testing configuration"""
     TESTING = True
-    DATABASE_PATH = 'database/test_dashboard.db'
     WTF_CSRF_ENABLED = False
     SESSION_COOKIE_SECURE = False
 

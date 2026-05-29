@@ -2,14 +2,14 @@
 API Routes - REST endpoints for analytics and data retrieval
 """
 
+import json
+import os
 from flask import Blueprint, jsonify, request
 from ..services.chart_service import ChartService
 from ..services.nlp_service import NLPService
 from ..services.kpi_service import KPIService
 from ..utils.logger import get_section_logger, log_endpoint_access
-from backend.utils import pg_helper as sqlite3
-import os
-from ..utils.db_helper import get_db_connection
+from ..utils.supabase_db import get_db, execute_all, execute_one
 
 logger = get_section_logger('api')
 
@@ -19,13 +19,12 @@ legacy_bp = Blueprint('legacy', __name__, url_prefix='/api')
 
 def get_services(app):
     """Initialize services — NLPService is cached on the app object (singleton)."""
-    db_path = app.config.get('DATABASE_PATH', 'dashboard.db')
     if not hasattr(app, '_nlp_service'):
         app._nlp_service = NLPService()
     return {
-        'charts': ChartService(db_path),
+        'charts': ChartService(),
         'nlp': app._nlp_service,
-        'kpi': KPIService(db_path),
+        'kpi': KPIService(),
     }
 
 
@@ -74,23 +73,16 @@ def get_all_kpis():
 @api_bp.route('/trends/all', methods=['GET'])
 @log_endpoint_access
 def get_all_trends():
-    """Get all trend data (time-series from dashboard_data)"""
+    """Get all trend data (time-series from feedback_responses)"""
     try:
-        from flask import current_app
-        db_path = current_app.config.get('DATABASE_PATH', 'dashboard.db')
-        conn = get_db_connection(db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT DATE(timestamp_normalized) as date, COUNT(*) as count
-            FROM dashboard_data
-            WHERE timestamp_normalized IS NOT NULL
-            GROUP BY DATE(timestamp_normalized)
+        rows = execute_all("""
+            SELECT DATE(submitted_at) AS date, COUNT(*) AS count
+            FROM feedback_responses
+            WHERE submitted_at IS NOT NULL
+            GROUP BY DATE(submitted_at)
             ORDER BY date ASC
         """)
-        rows = [dict(r) for r in cursor.fetchall()]
-        conn.close()
-        return jsonify({'trends': rows}), 200
+        return jsonify({'trends': [dict(r) for r in rows]}), 200
     except Exception as e:
         logger.error(f"Error getting trends: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -99,22 +91,15 @@ def get_all_trends():
 @api_bp.route('/dl-status', methods=['GET'])
 @log_endpoint_access
 def get_dl_status():
-    """Get Deep Learning background processing status"""
+    """Get Deep Learning background processing status (unprocessed feedback_responses)"""
     try:
-        from flask import current_app
-        db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("PRAGMA table_info(dashboard_data)")
-        cols = [row[1] for row in cursor.fetchall()]
-        if 'dl_processed' not in cols:
-            return jsonify({'processing_count': 0}), 200
-
-        cursor.execute("SELECT COUNT(*) FROM dashboard_data WHERE dl_processed = 0")
-        count = cursor.fetchone()[0]
-        conn.close()
-        return jsonify({'processing_count': count}), 200
+        row = execute_one("""
+            SELECT COUNT(*) AS cnt FROM feedback_responses r
+            WHERE NOT EXISTS (
+                SELECT 1 FROM feedback_analysis a WHERE a.response_id = r.id
+            )
+        """)
+        return jsonify({'processing_count': row['cnt'] if row else 0}), 200
     except Exception as e:
         logger.error(f"Error getting DL status: {str(e)}")
         return jsonify({'processing_count': 0, 'error': str(e)}), 500
@@ -179,36 +164,19 @@ def get_legacy_filter():
         return jsonify({'error': str(e)}), 500
 
 def get_consolidated_analytics(app, filters=None, search=None):
-    """Consolidate analytics data for the dashboard."""
-    db_path = app.config.get('DATABASE_PATH')
+    """Consolidate analytics data for the dashboard (native Supabase PostgreSQL)."""
 
     # ── 1. KPIs ─────────────────────────────────────────────────────
     try:
-        kpi_service = KPIService(db_path)
-        kpi_dict = kpi_service.get_all_kpis()   # returns Dict[str, float]
+        kpi_service = KPIService()
+        kpi_dict = kpi_service.get_all_kpis()
     except Exception:
         kpi_dict = {}
-
-    LABEL_MAP = {
-        'engagement_rate':         'Engagement Rate',
-        'satisfaction_score':      'Satisfaction Score',
-        'completion_rate':         'Completion Rate',
-        'department_coverage':     'Dept Coverage',
-        'submission_velocity_7d':  'Submissions / Day (7d)',
-        'submission_velocity_30d': 'Submissions / Day (30d)',
-    }
-    UNIT_MAP = {
-        'engagement_rate':     '%',
-        'satisfaction_score':  '%',
-        'completion_rate':     '%',
-        'department_coverage': '%',
-    }
-    # (KPIs will be finalized after table_data aggregation)
     formatted_kpis = []
 
     # ── 2. Charts ────────────────────────────────────────────────────
     try:
-        chart_service = ChartService(db_path)
+        chart_service = ChartService()
         raw_charts = chart_service.get_all_chart_data()
     except Exception:
         raw_charts = {}
@@ -217,87 +185,94 @@ def get_consolidated_analytics(app, filters=None, search=None):
     rd = raw_charts.get('rating_distribution', [])
     if rd:
         formatted_charts.append({
-            'title':  'Session Rating Distribution',
-            'type':   'doughnut',
+            'title': 'Session Rating Distribution', 'type': 'doughnut',
             'labels': [d.get('label', '') for d in rd],
             'data':   [d.get('value', 0)  for d in rd],
-            'column': 'session_rating',
-            'columnType': 'numeric',
+            'column': 'session_rating', 'columnType': 'numeric',
             'binBoundaries': [{'exact': d.get('rating')} for d in rd]
         })
     dr = raw_charts.get('department_ratings', [])
     if dr:
         formatted_charts.append({
-            'title':  'Avg Rating by Department',
-            'type':   'bar',
-            'labels': [d.get('department', '')      for d in dr],
-            'data':   [d.get('average_rating', 0)   for d in dr],
-            'yLabel': 'Avg Rating',
-            'xLabel': 'Department',
-            'column': 'department_cleaned',
-            'columnType': 'text'
+            'title': 'Avg Rating by Department', 'type': 'bar',
+            'labels': [d.get('department', '')    for d in dr],
+            'data':   [d.get('average_rating', 0) for d in dr],
+            'yLabel': 'Avg Rating', 'xLabel': 'Department',
+            'column': 'department', 'columnType': 'text'
         })
-
-    # (Removed redundant SpeakerService call - will aggregate from table_data loop below)
     speaker_stats_payload = []
 
-    # ── 4. Table data & meta ─────────────────────────────────────────
-    conn = get_db_connection(db_path)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
+    # ── 3. Table data (join feedback_responses + feedback_analysis) ───
+    ALLOWED_FILTER_COLS = {'department', 'alumni_speaker_name', 'date_of_lecture',
+                           'session_rating', 'session_help_understanding', 'form_source'}
+    TEXT_SEARCH_COLS = ['name_of_student', 'department', 'alumni_speaker_name',
+                        'aspect_most_valuable', 'improvements_suggestions', 'future_topics']
 
-    # Get column names
-    cursor.execute("PRAGMA table_info(dashboard_data)")
-    columns = [row['name'] for row in cursor.fetchall()]
-
-    # Build filtered query (whitelist columns to prevent injection)
-    query = "SELECT * FROM dashboard_data"
-    where_clauses = []
-    params = []
+    base_query = """
+        SELECT r.id, r.event_id, r.timestamp_display, r.name_of_student, r.roll_no,
+               r.department, r.student_email, r.date_of_lecture, r.alumni_speaker_name,
+               r.session_help_understanding, r.session_rating, r.session_technical_clarity,
+               r.aspect_most_valuable, r.improvements_suggestions, r.future_topics,
+               r.form_source, r.record_status, r.submitted_at,
+               a.sentiment_label  AS dl_sentiment_label,
+               a.sentiment_score  AS dl_sentiment_score,
+               a.nlp_payload      AS dl_keywords
+        FROM feedback_responses r
+        LEFT JOIN feedback_analysis a ON a.response_id = r.id
+    """
+    where_clauses, params = [], []
 
     if filters:
         for col, val in filters.items():
-            if val is not None and col in columns:
+            if val is not None and col in ALLOWED_FILTER_COLS:
                 if isinstance(val, list):
-                    placeholders = ', '.join(['?'] * len(val))
-                    where_clauses.append(f'"{col}" IN ({placeholders})')
-                    params.extend(val)
+                    where_clauses.append(f'r.{col} = ANY(%s)')
+                    params.append(val)
                 else:
-                    where_clauses.append(f'"{col}" = ?')
+                    where_clauses.append(f'r.{col} = %s')
                     params.append(val)
 
-    if search and columns:
-        search_clauses = [f'"{col}" LIKE ?' for col in columns]
+    if search:
+        search_clauses = [f'CAST(r.{c} AS TEXT) ILIKE %s' for c in TEXT_SEARCH_COLS]
         where_clauses.append(f"({' OR '.join(search_clauses)})")
-        params.extend([f"%{search}%"] * len(columns))
+        params.extend([f'%{search}%'] * len(TEXT_SEARCH_COLS))
 
+    full_query = base_query
     if where_clauses:
-        query += " WHERE " + " AND ".join(where_clauses)
-    query += " ORDER BY id DESC"
+        full_query += ' WHERE ' + ' AND '.join(where_clauses)
+    full_query += ' ORDER BY r.submitted_at DESC'
 
-    cursor.execute(query, params)
-    table_data = [dict(row) for row in cursor.fetchall()]
+    raw_rows = execute_all(full_query, tuple(params) if params else None)
+    table_data = []
+    for r in raw_rows:
+        d = dict(r)
+        for k, v in d.items():
+            if hasattr(v, 'isoformat'):
+                d[k] = v.isoformat()
+        table_data.append(d)
 
-    # Build filter panel options
+    columns = list(table_data[0].keys()) if table_data else [
+        'id','timestamp_display','name_of_student','roll_no','department',
+        'student_email','date_of_lecture','alumni_speaker_name',
+        'session_help_understanding','session_rating','session_technical_clarity',
+        'aspect_most_valuable','improvements_suggestions','future_topics','form_source'
+    ]
+
+    # Filter panel options
     formatted_filters = []
-    for col in ['department_cleaned', 'alumni_speaker_name']:
-        if col in columns:
-            cursor.execute(
-                f'SELECT DISTINCT "{col}", COUNT(*) as cnt '
-                f'FROM dashboard_data '
-                f'WHERE "{col}" IS NOT NULL AND "{col}" != \'\' '
-                f'GROUP BY "{col}" ORDER BY cnt DESC'
-            )
-            opts = [{'value': str(r[0]), 'count': r[1]} for r in cursor.fetchall()]
-            if opts:
-                formatted_filters.append({'column': col, 'type': 'categorical', 'options': opts})
+    for col in ['department', 'alumni_speaker_name']:
+        opts_rows = execute_all(
+            f"SELECT DISTINCT {col} AS v, COUNT(*) AS cnt FROM feedback_responses "
+            f"WHERE {col} IS NOT NULL AND {col} <> '' GROUP BY {col} ORDER BY cnt DESC"
+        )
+        opts = [{'value': r['v'], 'count': r['cnt']} for r in opts_rows if r['v']]
+        if opts:
+            formatted_filters.append({'column': col, 'type': 'categorical', 'options': opts})
 
-    conn.close()
-
-    # ── 5. Total Responses KPI ───────────────────────────────────────
+    # ── 4. Total Responses KPI ───────────────────────────────────────
     total_count = len(table_data)
 
-    # ── 6. Column type detection ─────────────────────────────────────
+    # ── 5. Column type detection ─────────────────────────────────────
     num_keywords  = {'rating', 'score', 'count', 'num', 'total', 'age', 'year'}
     date_keywords = {'date', 'time', 'timestamp'}
     col_types = {}
@@ -310,11 +285,9 @@ def get_consolidated_analytics(app, filters=None, search=None):
         else:
             col_types[col] = 'text'
 
-    # ── 7. Deep Learning Payload Aggregation ─────────────────────────
+    # ── 6. Deep Learning Payload Aggregation ─────────────────────────
     sentiment_counts = {'POSITIVE': 0, 'NEUTRAL': 0, 'NEGATIVE': 0}
     keyword_freq = {}
-    
-    # New Deep Analysis trackers
     imp_sentiment = {'POSITIVE': 0, 'NEUTRAL': 0, 'NEGATIVE': 0, 'NO_RESPONSE': 0}
     val_sentiment = {'POSITIVE': 0, 'NEUTRAL': 0, 'NEGATIVE': 0, 'NO_RESPONSE': 0}
     actionable_stats = {'actionable': 0, 'non_actionable': 0}
@@ -323,13 +296,11 @@ def get_consolidated_analytics(app, filters=None, search=None):
     val_keyword_freq = {}
     imp_keyword_freq = {}
     session_understanding_counts = {}
-    topic_freq = {}  # BERTopic cluster label → count
-    dept_counts = {}  # department → response count
-    rating_by_dept = {}  # department → [ratings]
-    
-    import json
-    speaker_tracker = {} # name -> {count, total_rating, total_sentiment}
-    time_tracker    = {} # date -> count
+    topic_freq = {}
+    dept_counts = {}
+    rating_by_dept = {}
+    speaker_tracker = {}
+    time_tracker    = {}
 
     total_rating_sum = 0.0
     total_rating_count = 0
@@ -355,13 +326,13 @@ def get_consolidated_analytics(app, filters=None, search=None):
             except: pass
 
         # Time Tracking
-        raw_ts = row.get('timestamp_normalized') or row.get('timestamp_original')
+        raw_ts = row.get('submitted_at') or row.get('timestamp_display')
         if raw_ts and len(str(raw_ts)) >= 10:
-            date_key = str(raw_ts)[:10] # YYYY-MM-DD
+            date_key = str(raw_ts)[:10]
             time_tracker[date_key] = time_tracker.get(date_key, 0) + 1
 
         # Department tracking
-        dept = row.get('department_cleaned') or row.get('Department') or ''
+        dept = row.get('department') or ''
         if dept:
             # Shorten long school names for display
             short = dept.replace('School of Engineering: ', '').replace('School of ', '')
@@ -739,6 +710,6 @@ def get_consolidated_analytics(app, filters=None, search=None):
         'meta': {
             'columns':     columns,
             'columnTypes': col_types,
-            'filename':    'Hugging Face Database'
+            'filename':    'Supabase PostgreSQL'
         }
     }

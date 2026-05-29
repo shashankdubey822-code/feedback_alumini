@@ -1,149 +1,140 @@
 """
-Database connection helper to prevent locking issues
+db_helper.py — Database initialization and startup helpers.
+Uses native psycopg2 via supabase_db.py — no SQLite shim.
 """
-import os
-from backend.utils import pg_helper as sqlite3
+
+import logging
+from backend.utils.supabase_db import get_db, execute_all
+
+logger = logging.getLogger(__name__)
 
 
-def get_db_connection(db_path, timeout=30.0):
+# ---------------------------------------------------------------------------
+# Schema SQL — single source of truth for all table definitions
+# ---------------------------------------------------------------------------
+_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS events (
+    id                  BIGSERIAL PRIMARY KEY,
+    speaker_name        TEXT NOT NULL,
+    venue_date          TEXT NOT NULL,
+    form_id             TEXT UNIQUE,
+    form_url            TEXT,
+    form_edit_url       TEXT,
+    template_id         TEXT,
+    send_certificates   BOOLEAN DEFAULT FALSE,
+    status              TEXT NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending', 'creating_form', 'active', 'closed')),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_form_id ON events(form_id);
+CREATE INDEX IF NOT EXISTS idx_events_status  ON events(status);
+CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS feedback_responses (
+    id                          BIGSERIAL PRIMARY KEY,
+    event_id                    BIGINT REFERENCES events(id) ON DELETE SET NULL,
+    submitted_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    timestamp_display           TEXT,
+    name_of_student             TEXT,
+    roll_no                     TEXT,
+    department                  TEXT,
+    student_email               TEXT,
+    date_of_lecture             TEXT,
+    alumni_speaker_name         TEXT,
+    session_help_understanding  TEXT,
+    session_rating              SMALLINT CHECK (session_rating BETWEEN 1 AND 5),
+    session_technical_clarity   SMALLINT CHECK (session_technical_clarity BETWEEN 1 AND 5),
+    aspect_most_valuable        TEXT,
+    improvements_suggestions    TEXT,
+    future_topics               TEXT,
+    form_source                 TEXT DEFAULT 'webhook',
+    data_quality_score          NUMERIC(5,2),
+    is_duplicate                BOOLEAN DEFAULT FALSE,
+    record_status               TEXT DEFAULT 'active',
+    created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_event_id     ON feedback_responses(event_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_submitted_at ON feedback_responses(submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_feedback_speaker      ON feedback_responses(alumni_speaker_name);
+CREATE INDEX IF NOT EXISTS idx_feedback_department   ON feedback_responses(department);
+CREATE INDEX IF NOT EXISTS idx_feedback_roll_no      ON feedback_responses(roll_no);
+
+CREATE TABLE IF NOT EXISTS feedback_analysis (
+    id              BIGSERIAL PRIMARY KEY,
+    response_id     BIGINT NOT NULL UNIQUE REFERENCES feedback_responses(id) ON DELETE CASCADE,
+    sentiment_score NUMERIC(6,4),
+    sentiment_label TEXT CHECK (sentiment_label IN ('POSITIVE', 'NEUTRAL', 'NEGATIVE')),
+    keywords_json   JSONB,
+    topic_id        INTEGER,
+    topic_label     TEXT,
+    processed_at    TIMESTAMPTZ DEFAULT NOW(),
+    model_version   TEXT DEFAULT 'v1'
+);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_response_id ON feedback_analysis(response_id);
+CREATE INDEX IF NOT EXISTS idx_analysis_sentiment   ON feedback_analysis(sentiment_label);
+
+CREATE TABLE IF NOT EXISTS certificate_jobs (
+    id              BIGSERIAL PRIMARY KEY,
+    event_id        BIGINT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    response_id     BIGINT REFERENCES feedback_responses(id) ON DELETE SET NULL,
+    student_name    TEXT NOT NULL,
+    student_email   TEXT NOT NULL,
+    roll_no         TEXT,
+    department      TEXT,
+    status          TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+    attempts        SMALLINT DEFAULT 0,
+    error_message   TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cert_jobs_status   ON certificate_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_cert_jobs_event_id ON certificate_jobs(event_id);
+"""
+
+
+def initialize_database(app, log=None):
     """
-    Create a database connection with proper timeout and WAL mode
-    
-    Args:
-        db_path: Path to the SQLite database file
-        timeout: Timeout in seconds for database locks (default: 30.0)
-        
-    Returns:
-        sqlite3.Connection: Database connection with optimized settings
+    Ensure all required tables exist in Supabase PostgreSQL.
+    Safe to call on every startup (uses CREATE TABLE IF NOT EXISTS).
     """
-    conn = sqlite3.connect(db_path, timeout=timeout, check_same_thread=False)
-    # Enable Write-Ahead Logging for better concurrency
-    conn.execute("PRAGMA journal_mode=WAL")
-    # Set busy timeout
-    conn.execute(f"PRAGMA busy_timeout={int(timeout * 1000)}")
-    return conn
-
-
-def initialize_database(app, logger):
+    _log = log or logger
     try:
-        db_path = app.config.get('DATABASE_PATH')
-
-        # Create database directory if it doesn't exist (and if there is a directory specified)
-        db_dir = os.path.dirname(db_path)
-        if db_dir:
-            os.makedirs(db_dir, exist_ok=True)
-
-        # Connect to database using our helper
-        conn = get_db_connection(db_path)
-        cursor = conn.cursor()
-
-        # Check if table exists and has correct columns
-        cursor.execute("PRAGMA table_info(dashboard_data)")
-        columns = [row[1] for row in cursor.fetchall()]
-        
-        # If table doesn't exist or is missing critical modern columns, recreate it
-        if not columns or 'form_source' not in columns:
-            logger.info("Initializing/Repairing dashboard_data table...")
-            cursor.execute("DROP TABLE IF EXISTS dashboard_data")
-            cursor.execute('''
-                CREATE TABLE dashboard_data (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp_original TEXT,
-                    timestamp_normalized TEXT,
-                    name_of_student TEXT,
-                    name_normalized TEXT,
-                    department_original TEXT,
-                    department_cleaned TEXT,
-                    roll_no_original TEXT,
-                    roll_no_cleaned TEXT,
-                    date_of_lecture TEXT,
-                    alumni_speaker_name TEXT,
-                    session_help_understanding TEXT,
-                    session_rating INTEGER,
-                    session_technical_clarity INTEGER,
-                    aspect_most_valuable TEXT,
-                    improvements_suggestions TEXT,
-                    future_topics TEXT,
-                    form_source TEXT,
-                    data_quality_score REAL,
-                    is_duplicate_flag INTEGER DEFAULT 0,
-                    record_status TEXT,
-                    cleaned_at TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    dl_sentiment_score REAL,
-                    dl_sentiment_label TEXT,
-                    dl_keywords TEXT,
-                    dl_topic_id INTEGER,
-                    dl_processed INTEGER DEFAULT 0
-                )
-            ''')
-        
-        # Add new DL columns if they don't exist but the table does
-        if columns and 'form_source' in columns:
-            dl_columns = {
-                'dl_sentiment_score': 'REAL',
-                'dl_sentiment_label': 'TEXT',
-                'dl_keywords': 'TEXT',
-                'dl_topic_id': 'INTEGER',
-                'dl_processed': 'INTEGER DEFAULT 0'
-            }
-            for col_name, col_type in dl_columns.items():
-                if col_name not in columns:
-                    logger.info(f"Adding column {col_name} to dashboard_data")
-                    cursor.execute(f"ALTER TABLE dashboard_data ADD COLUMN {col_name} {col_type}")
-        
-        # Ensure events table exists
-        cursor.execute("PRAGMA table_info(events)")
-        event_cols = [row[1] for row in cursor.fetchall()]
-        if not event_cols:
-            logger.info("Creating events table...")
-            cursor.execute('''
-                CREATE TABLE events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    speaker_name TEXT NOT NULL,
-                    venue_date TEXT NOT NULL,
-                    form_id TEXT,
-                    form_url TEXT,
-                    form_edit_url TEXT,
-                    status TEXT DEFAULT 'pending',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    template_id TEXT,
-                    send_certificates INTEGER DEFAULT 0
-                )
-            ''')
-        else:
-            # Migration: add template_id and send_certificates to existing events table
-            if 'template_id' not in event_cols:
-                logger.info("Adding column template_id to events table...")
-                cursor.execute("ALTER TABLE events ADD COLUMN template_id TEXT")
-            if 'send_certificates' not in event_cols:
-                logger.info("Adding column send_certificates to events table...")
-                cursor.execute("ALTER TABLE events ADD COLUMN send_certificates INTEGER DEFAULT 0")
-
-        # Ensure job_queue table exists
-        cursor.execute("PRAGMA table_info(job_queue)")
-        queue_cols = [row[1] for row in cursor.fetchall()]
-        if not queue_cols:
-            logger.info("Creating job_queue table...")
-            cursor.execute('''
-                CREATE TABLE job_queue (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    student_name TEXT NOT NULL,
-                    student_email TEXT NOT NULL,
-                    roll_no TEXT,
-                    department TEXT,
-                    event_id INTEGER,
-                    status TEXT DEFAULT 'pending',
-                    attempts INTEGER DEFAULT 0,
-                    error_message TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY(event_id) REFERENCES events(id)
-                )
-            ''')
-        
-        conn.commit()
-        conn.close()
-        logger.info("Database schema verified and ready")
+        _log.info("Verifying database schema on Supabase...")
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(_SCHEMA_SQL)
+        _log.info("Database schema verified and ready")
     except Exception as e:
-        logger.error(f"Error initializing database: {str(e)}")
+        _log.error(f"Database initialization failed: {e}")
+        raise
+
+
+def get_table_columns(table_name: str) -> list[str]:
+    """Return a list of column names for the given table."""
+    rows = execute_all(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_name = %s ORDER BY ordinal_position",
+        (table_name,)
+    )
+    return [r['column_name'] for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Legacy compatibility: kept so old imports don't crash during migration
+# These are deprecated — use supabase_db.get_db() directly instead
+# ---------------------------------------------------------------------------
+def get_db_connection(db_path=None, timeout=30.0):
+    """
+    DEPRECATED — do not use in new code.
+    Returns a raw psycopg2 connection from the pool for legacy callers.
+    Caller must commit and return it themselves.
+    """
+    from backend.utils.supabase_db import get_conn
+    conn = get_conn()
+    return conn
