@@ -27,12 +27,12 @@ def check_database_health(db_path: str) -> dict:
         if table_exists:
             # Get record count
             cursor.execute('SELECT COUNT(*) as count FROM dashboard_data')
-            record_count = cursor.fetchone()['count']
+            record_count = cursor.fetchone()[0]
 
             cursor.execute(
                 'SELECT COUNT(*) as count FROM dashboard_data WHERE data_quality_score >= 80'
             )
-            quality_count = cursor.fetchone()['count']
+            quality_count = cursor.fetchone()[0]
 
             health_percentage = (quality_count / record_count * 100) if record_count > 0 else 0
 
