@@ -383,7 +383,7 @@ def get_events():
 def get_certificate_jobs():
     try:
         rows = execute_all("""
-            SELECT j.*, e.speaker_name, s.name as student_name, s.email as student_email, s.roll_no, s.department
+            SELECT j.*, e.speaker_name, s.name as student_name, s.email as student_email, s.roll_no, e.department
             FROM certificate_jobs j
             LEFT JOIN feedback_responses r ON j.response_id = r.id
             LEFT JOIN students s ON r.student_id = s.id

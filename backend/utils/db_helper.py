@@ -15,8 +15,10 @@ logger = logging.getLogger(__name__)
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS events (
     id                  BIGSERIAL PRIMARY KEY,
+    name                TEXT,
     speaker_name        TEXT NOT NULL,
     venue_date          TEXT NOT NULL,
+    department          TEXT,
     form_id             TEXT UNIQUE,
     form_url            TEXT,
     form_edit_url       TEXT,
