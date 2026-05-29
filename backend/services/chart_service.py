@@ -40,13 +40,14 @@ class ChartService:
         try:
             rows = execute_all("""
                 SELECT
-                    department,
+                    e.department,
                     COUNT(*) AS count,
-                    AVG(session_rating) AS avg_rating
-                FROM feedback_responses
-                WHERE department IS NOT NULL AND department <> ''
-                  AND session_rating IS NOT NULL
-                GROUP BY department
+                    AVG(r.session_rating) AS avg_rating
+                FROM feedback_responses r
+                LEFT JOIN events e ON r.event_id = e.id
+                WHERE e.department IS NOT NULL AND e.department <> ''
+                  AND r.session_rating IS NOT NULL
+                GROUP BY e.department
                 ORDER BY avg_rating DESC
             """)
             return [
@@ -65,12 +66,13 @@ class ChartService:
         try:
             rows = execute_all("""
                 SELECT
-                    alumni_speaker_name,
+                    e.speaker_name AS alumni_speaker_name,
                     COUNT(*) AS session_count,
-                    AVG(session_rating) AS avg_rating
-                FROM feedback_responses
-                WHERE alumni_speaker_name IS NOT NULL AND alumni_speaker_name <> ''
-                GROUP BY alumni_speaker_name
+                    AVG(r.session_rating) AS avg_rating
+                FROM feedback_responses r
+                LEFT JOIN events e ON r.event_id = e.id
+                WHERE e.speaker_name IS NOT NULL AND e.speaker_name <> ''
+                GROUP BY e.speaker_name
                 ORDER BY session_count DESC
                 LIMIT %s
             """, (limit,))

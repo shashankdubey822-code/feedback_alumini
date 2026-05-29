@@ -271,8 +271,13 @@ def create_event_and_form():
         data = request.get_json() or {}
         speaker_name      = data.get('speaker_name', '').strip()
         venue_date        = data.get('venue_date', '').strip()
-        template_id       = data.get('template_id', '').strip() or None
+        template_id_raw   = data.get('template_id', '').strip() or None
         send_certificates = bool(data.get('send_certificates', False))
+
+        template_id = None
+        if template_id_raw:
+            match = re.search(r'/d/([a-zA-Z0-9-_]+)', template_id_raw)
+            template_id = match.group(1) if match else template_id_raw
 
         if not speaker_name or not venue_date:
             return jsonify({'success': False, 'error': 'speaker_name and venue_date required'}), 400

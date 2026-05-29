@@ -55,10 +55,11 @@ def get_initial():
 
         # small sample of recent rows (only a few columns)
         sample_rows = execute_all("""
-            SELECT id, submitted_at, alumni_speaker_name, session_rating, aspect_most_valuable
-            FROM feedback_responses
-            WHERE submitted_at IS NOT NULL
-            ORDER BY submitted_at DESC
+            SELECT r.id, r.submitted_at, e.speaker_name AS alumni_speaker_name, r.session_rating, r.aspect_most_valuable
+            FROM feedback_responses r
+            LEFT JOIN events e ON r.event_id = e.id
+            WHERE r.submitted_at IS NOT NULL
+            ORDER BY r.submitted_at DESC
             LIMIT 25
         """)
 
@@ -275,31 +276,49 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
                         'aspect_most_valuable', 'improvements_suggestions', 'future_topics']
 
     base_query = """
-        SELECT r.id, r.event_id, r.timestamp_display, r.name_of_student, r.roll_no,
-               r.department, r.student_email, r.date_of_lecture, r.alumni_speaker_name,
+        SELECT r.id, r.event_id, r.submitted_at, 
+               TO_CHAR(r.submitted_at, 'DD-MM-YYYY HH24:MI:SS') as timestamp_display,
+               s.name AS name_of_student, s.roll_no,
+               e.department, s.email AS student_email, e.venue_date AS date_of_lecture, e.speaker_name AS alumni_speaker_name,
                r.session_help_understanding, r.session_rating, r.session_technical_clarity,
                r.aspect_most_valuable, r.improvements_suggestions, r.future_topics,
-               r.form_source, r.record_status, r.submitted_at,
+               r.form_source, r.record_status,
                a.sentiment_label  AS dl_sentiment_label,
                a.sentiment_score  AS dl_sentiment_score,
                a.keywords_json    AS dl_keywords
         FROM feedback_responses r
+        LEFT JOIN students s ON r.student_id = s.id
+        LEFT JOIN events e ON r.event_id = e.id
         LEFT JOIN feedback_analysis a ON a.response_id = r.id
     """
     where_clauses, params = [], []
 
+    COL_MAP = {
+        'department': 'e.department',
+        'alumni_speaker_name': 'e.speaker_name',
+        'date_of_lecture': 'e.venue_date',
+        'session_rating': 'r.session_rating',
+        'session_help_understanding': 'r.session_help_understanding',
+        'form_source': 'r.form_source',
+        'name_of_student': 's.name',
+        'aspect_most_valuable': 'r.aspect_most_valuable',
+        'improvements_suggestions': 'r.improvements_suggestions',
+        'future_topics': 'r.future_topics'
+    }
+
     if filters:
         for col, val in filters.items():
             if val is not None and col in ALLOWED_FILTER_COLS:
+                db_col = COL_MAP[col]
                 if isinstance(val, list):
-                    where_clauses.append(f'r.{col} = ANY(%s)')
+                    where_clauses.append(f'{db_col} = ANY(%s)')
                     params.append(val)
                 else:
-                    where_clauses.append(f'r.{col} = %s')
+                    where_clauses.append(f'{db_col} = %s')
                     params.append(val)
 
     if search:
-        search_clauses = [f'CAST(r.{c} AS TEXT) ILIKE %s' for c in TEXT_SEARCH_COLS]
+        search_clauses = [f'CAST({COL_MAP[c]} AS TEXT) ILIKE %s' for c in TEXT_SEARCH_COLS]
         where_clauses.append(f"({' OR '.join(search_clauses)})")
         params.extend([f'%{search}%'] * len(TEXT_SEARCH_COLS))
 
@@ -338,9 +357,12 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
     # Filter panel options
     formatted_filters = []
     for col in ['department', 'alumni_speaker_name']:
+        db_col = COL_MAP[col]
         opts_rows = execute_all(
-            f"SELECT DISTINCT {col} AS v, COUNT(*) AS cnt FROM feedback_responses "
-            f"WHERE {col} IS NOT NULL AND {col} <> '' GROUP BY {col} ORDER BY cnt DESC"
+            f"SELECT DISTINCT {db_col} AS v, COUNT(*) AS cnt FROM feedback_responses r "
+            f"LEFT JOIN events e ON r.event_id = e.id "
+            f"LEFT JOIN students s ON r.student_id = s.id "
+            f"WHERE {db_col} IS NOT NULL AND {db_col} <> '' GROUP BY {db_col} ORDER BY cnt DESC"
         )
         opts = [{'value': r['v'], 'count': r['cnt']} for r in opts_rows if r['v']]
         if opts:

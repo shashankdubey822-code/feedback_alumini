@@ -9,6 +9,7 @@ import time
 import json
 import urllib.request
 import urllib.error
+import re
 from backend.config import get_config
 from backend.utils.logger import get_section_logger
 from backend.utils.supabase_db import get_db
@@ -99,6 +100,11 @@ def start_job_worker(logger_unused=None):
                     speaker_name = job['speaker_name'] or ''
                     venue_date = str(job['venue_date']) if job['venue_date'] else ''
                     attempts = job['attempts']
+
+                    if template_id:
+                        match = re.search(r'/d/([a-zA-Z0-9-_]+)', template_id)
+                        if match:
+                            template_id = match.group(1)
 
                     # Mark as processing to prevent concurrent pickup
                     with get_db() as update_conn:
