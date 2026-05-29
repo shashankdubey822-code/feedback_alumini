@@ -82,9 +82,8 @@ def start_job_worker(logger_unused=None):
                                 e.speaker_name, 
                                 e.venue_date
                             FROM certificate_jobs j
-                            JOIN feedback_responses r ON j.response_id = r.id
-                            JOIN students s ON r.student_id = s.id
-                            JOIN events e ON r.event_id = e.id
+                            JOIN students s ON j.student_id = s.id
+                            JOIN events e ON j.event_id = e.id
                             WHERE j.status = 'pending'
                             ORDER BY j.created_at ASC
                             LIMIT 5

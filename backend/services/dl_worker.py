@@ -38,7 +38,7 @@ def start_dl_worker(logger_unused=None):
                                 fr.future_topics
                             FROM feedback_responses fr
                             LEFT JOIN feedback_analysis fa ON fa.response_id = fr.id
-                            WHERE fa.id IS NULL
+                            WHERE fa.response_id IS NULL
                             ORDER BY fr.submitted_at ASC
                             LIMIT 20
                         """)
