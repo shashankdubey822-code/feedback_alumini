@@ -35,7 +35,7 @@ class CursorWrapper:
             match = re.search(r'PRAGMA table_info\((.*?)\)', query)
             if match:
                 table = match.group(1).strip()
-                query = f"SELECT column_name as name, data_type as type FROM information_schema.columns WHERE table_name = '{table}'"
+                query = f"SELECT ordinal_position - 1 as cid, column_name as name, data_type as type, is_nullable as notnull, column_default as dflt_value, 0 as pk FROM information_schema.columns WHERE table_name = '{table}'"
         elif "PRAGMA" in query:
             # We ignore other pragmas like journal_mode or busy_timeout
             return self
