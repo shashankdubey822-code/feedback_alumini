@@ -70,7 +70,8 @@ def _update_sync_status(success: bool, error_message: str = None):
     """Persist webhook health to a JSON file (best-effort)."""
     import os
     try:
-        status_file = os.path.join(current_app.root_path, 'logs', 'sync_health.json')
+        status_file = os.path.join(
+            current_app.root_path, 'logs', 'sync_health.json')
         data = {}
         if os.path.exists(status_file):
             try:
@@ -105,13 +106,13 @@ def store_webhook_submission(payload: dict) -> int:
     Returns the new row id.
     """
     raw_ts = payload.get('timestamp') or datetime.now(timezone.utc).isoformat()
-            timestamp_display, normalized_ts = _format_timestamp(raw_ts)
+    timestamp_display, normalized_ts = _format_timestamp(raw_ts)
 
-            form_id   = payload.get('form_id', 'WEBHOOK_FORM')
-            responses = payload.get('responses', {})
+    form_id = payload.get('form_id', 'WEBHOOK_FORM')
+    responses = payload.get('responses', {})
 
-            with get_db() as conn:
-                with conn.cursor() as cur:
+    with get_db() as conn:
+        with conn.cursor() as cur:
 
                     # ── Look up event ────────────────────────────────────────────
                     cur.execute("""
@@ -121,35 +122,41 @@ def store_webhook_submission(payload: dict) -> int:
                     """, (form_id,))
                     event = cur.fetchone()
 
-                    event_id      = None
-                    send_certs    = False
-                    template_id   = None
-                    speaker_name  = responses.get('alumni_speaker_name', '')
-                    date_of_lec   = responses.get('date_of_lecture', '')
+                    event_id = None
+                    send_certs = False
+                    template_id = None
+                    speaker_name = responses.get('alumni_speaker_name', '')
+                    date_of_lec = responses.get('date_of_lecture', '')
 
                     if event:
-                        event_id    = event['id']
+                        event_id = event['id']
                         template_id = event['template_id']
-                        send_certs  = bool(event['send_certificates'])
+                        send_certs = bool(event['send_certificates'])
 
                         if event['status'] == 'closed':
-                            raise ValueError("Form is closed and no longer accepting responses.")
+                            raise ValueError(
+                                "Form is closed and no longer accepting responses.")
 
                         # 24-hour expiry check
                         created_at = event['created_at']
                         if created_at and hasattr(created_at, 'utcoffset'):
-                            age_hours = (datetime.now(timezone.utc) - created_at).total_seconds() / 3600
+                            age_hours = (datetime.now(timezone.utc) -
+                                         created_at).total_seconds() / 3600
                         else:
                             try:
-                                created_at_dt = datetime.fromisoformat(str(created_at).replace('Z', '+00:00'))
-                                age_hours = (datetime.now(timezone.utc) - created_at_dt).total_seconds() / 3600
+                                created_at_dt = datetime.fromisoformat(
+                                    str(created_at).replace('Z', '+00:00'))
+                                age_hours = (datetime.now(
+                                    timezone.utc) - created_at_dt).total_seconds() / 3600
                             except Exception:
                                 age_hours = 0
 
                         if age_hours > 24:
-                            cur.execute("UPDATE events SET status = 'closed' WHERE id = %s", (event_id,))
+                            cur.execute(
+                                "UPDATE events SET status = 'closed' WHERE id = %s", (event_id,))
                             conn.commit()
-                            raise ValueError("Form has expired (24-hour limit exceeded).")
+                            raise ValueError(
+                                "Form has expired (24-hour limit exceeded).")
 
                         # Enrich speaker/date from event record
                         if event['speaker_name']:
@@ -158,7 +165,7 @@ def store_webhook_submission(payload: dict) -> int:
                             date_of_lec = str(event['venue_date'])
 
                     # ── Upsert Student ────────────────────────────────────────────
-                    student_name  = responses.get('name_of_student', '').strip()
+                    student_name = responses.get('name_of_student', '').strip()
                     student_email = responses.get('student_email', '').strip()
                     if not student_email:
                         for v in responses.values():
@@ -166,7 +173,8 @@ def store_webhook_submission(payload: dict) -> int:
                                 student_email = v.strip()
                                 break
 
-                    roll_no = _normalize_roll(responses.get('roll_no_original', ''))
+                    roll_no = _normalize_roll(
+                        responses.get('roll_no_original', ''))
 
                     cur.execute("""
                         INSERT INTO students (name, email, roll_no)
@@ -195,34 +203,34 @@ def store_webhook_submission(payload: dict) -> int:
                         event_id,
                         student_id,
                         normalized_ts,
-                responses.get('session_rating'),
-                responses.get('session_help_understanding', ''),
-                responses.get('session_technical_clarity'),
-                responses.get('aspect_most_valuable', ''),
-                responses.get('improvements_suggestions', ''),
-                responses.get('future_topics', ''),
-                form_id,
-                'active',
-            ))
-            row = cur.fetchone()
-            response_id = row['id']
+                        responses.get('session_rating'),
+                        responses.get('session_help_understanding', ''),
+                        responses.get('session_technical_clarity'),
+                        responses.get('aspect_most_valuable', ''),
+                        responses.get('improvements_suggestions', ''),
+                        responses.get('future_topics', ''),
+                        form_id,
+                        'active',
+                    ))
+                    row = cur.fetchone()
+                    response_id = row['id']
 
-            # ── Enqueue certificate job if enabled ────────────────────────
-            if send_certs and template_id and event_id:
-                job_status = 'pending'
-                job_error  = None
-                if not student_email:
-                    job_status = 'failed'
-                    job_error  = 'No email address provided in form submission'
+                    # ── Enqueue certificate job if enabled ────────────────────────
+                    if send_certs and template_id and event_id:
+                        job_status = 'pending'
+                        job_error  = None
+                        if not student_email:
+                            job_status = 'failed'
+                            job_error  = 'No email address provided in form submission'
 
-                cur.execute("""
-                    INSERT INTO certificate_jobs
-                        (response_id, status, error_message)
-                    VALUES (%s, %s, %s)
-                """, (
-                    response_id, job_status, job_error
-                ))
-                logger.info(f"Certificate job enqueued for {student_name} ({student_email or 'no email'})")
+                        cur.execute("""
+                            INSERT INTO certificate_jobs
+                                (response_id, status, error_message)
+                            VALUES (%s, %s, %s)
+                        """, (
+                            response_id, job_status, job_error
+                        ))
+                        logger.info(f"Certificate job enqueued for {student_name} ({student_email or 'no email'})")
 
         # commit happens via context manager
         return response_id
