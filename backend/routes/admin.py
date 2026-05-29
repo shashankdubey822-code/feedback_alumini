@@ -31,6 +31,16 @@ admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
 
 
+_transformer_model = None
+
+def get_transformer_model():
+    global _transformer_model
+    if _transformer_model is None:
+        from sentence_transformers import SentenceTransformer
+        _transformer_model = SentenceTransformer('all-MiniLM-L6-v2')
+    return _transformer_model
+
+
 def _canonicalize_column(name):
     """Convert an input column to a canonical key for flexible matching."""
     return re.sub(r'[^a-z0-9]+', '', str(name).strip().lower())
@@ -365,58 +375,6 @@ def fetch_google_link():
         logger.error(f"Google fetch error: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
-@admin_bp.route('/verify-template', methods=['POST'])
-@log_endpoint_access
-def verify_template():
-    """
-    Verify if a Google Slide Template ID exists and is accessible
-    via the Google Apps Script.
-    """
-    try:
-        data = request.get_json() or {}
-        template_id = data.get('template_id', '').strip()
-        
-        if not template_id:
-            return jsonify({'success': False, 'error': 'No template_id provided'}), 400
-            
-        script_url = current_app.config.get('APPS_SCRIPT_URL')
-        secret_key = current_app.config.get('APPS_SCRIPT_SECRET', 'datalens2026')
-        
-        if not script_url:
-            return jsonify({'success': False, 'error': 'Apps Script URL not configured'}), 500
-            
-        # Send verification payload to GAS
-        payload = {
-            "action": "verify_template",
-            "secret": secret_key,
-            "template_id": template_id
-        }
-        
-        logger.info(f"Verifying template ID: {template_id}")
-        response = requests.post(script_url, json=payload, timeout=10)
-        response_data = response.json()
-        
-        # If response is successful, the template exists and is accessible
-        if response.status_code == 200 and response_data.get('success'):
-            return jsonify({
-                'success': True,
-                'data': response_data.get('data', {})
-            })
-        else:
-            # Pass along the specific error from GAS
-            error_msg = response_data.get('error') or response_data.get('message') or "Template verification failed"
-            return jsonify({
-                'success': False,
-                'error': error_msg
-            }), 403
-            
-    except requests.exceptions.Timeout:
-        logger.error("Timeout connecting to Apps Script for verification")
-        return jsonify({'success': False, 'error': 'Google Apps Script timeout'}), 504
-    except Exception as e:
-        logger.error(f"Verification error: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
 @admin_bp.route('/create-event-and-form', methods=['POST'])
 @log_endpoint_access
 def create_event_and_form():
@@ -632,6 +590,7 @@ def get_certificate_jobs():
 def get_speaker_names():
     """Distinct alumni speaker names from dashboard_data for form autocomplete."""
     try:
+        q = request.args.get('q', '').strip()
         db_path = current_app.config.get('DATABASE_PATH', 'database/dashboard.db')
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -645,6 +604,17 @@ def get_speaker_names():
         )
         names = [row[0] for row in cursor.fetchall() if row[0]]
         conn.close()
+
+        if q and names:
+            model = get_transformer_model()
+            from sentence_transformers import util
+            query_emb = model.encode(q, convert_to_tensor=True)
+            names_embs = model.encode(names, convert_to_tensor=True)
+            cos_scores = util.cos_sim(query_emb, names_embs)[0]
+            scored = [(name, float(cos_scores[i])) for i, name in enumerate(names)]
+            scored.sort(key=lambda x: x[1], reverse=True)
+            names = [x[0] for x in scored[:10]]
+
         return jsonify({'success': True, 'names': names}), 200
     except Exception as e:
         logger.error(f"Error fetching speaker names: {str(e)}")
@@ -929,9 +899,9 @@ def sync_responses():
                 ))
                 
                 # Check if certificates should be generated
-                if event['send_certificates'] == 1 and event['template_id']:
-                    student_name = resp.get('name_of_student', 'Unknown').strip()
-                    student_email = resp.get('student_email', '').strip()
+                if event.get('send_certificates') == 1 and event.get('template_id'):
+                    student_name = resp.get('name_of_student', 'Unknown')
+                    student_email = resp.get('student_email', '')
                     
                     # Avoid duplicate jobs for same student & event
                     cursor.execute("""
@@ -940,17 +910,11 @@ def sync_responses():
                         LIMIT 1
                     """, (event_id, roll_no))
                     
-                    if not cursor.fetchone():
-                        job_status = 'pending'
-                        job_error = None
-                        if not student_email:
-                            job_status = 'failed'
-                            job_error = 'No email address provided in form submission'
-                            
+                    if not cursor.fetchone() and student_email:
                         cursor.execute("""
-                            INSERT INTO job_queue (student_name, student_email, roll_no, department, event_id, status, error_message)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """, (student_name, student_email, roll_no, raw_dept, event_id, job_status, job_error))
+                            INSERT INTO job_queue (student_name, student_email, roll_no, department, event_id, status)
+                            VALUES (?, ?, ?, ?, ?, 'pending')
+                        """, (student_name, student_email, roll_no, raw_dept, event_id))
                         
                 count += 1
             except sqlite3.IntegrityError as e:

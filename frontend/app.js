@@ -15,6 +15,7 @@ const state = {
     sortDirection: 'asc',
     tableData: [],
     charts: [],
+    allSpeakers: [],
 };
 
 const API_BASE = '';
@@ -87,9 +88,45 @@ document.addEventListener('DOMContentLoaded', () => {
     setupModal();
     setupAdminAuth();
     loadInitialData();
+    pollCertificationErrors(); // Start background polling for certification errors
 });
 
-
+// ========== ERROR MONITORING ==========
+let shownCertErrors = new Set();
+async function pollCertificationErrors() {
+    try {
+        const resp = await fetch('/api/errors/report');
+        if (resp.ok) {
+            const data = await resp.json();
+            const certErrors = (data.by_page && data.by_page.certification) || [];
+            
+            certErrors.forEach(err => {
+                // Only alert on critical/warning issues that are NOT ok
+                if (!err.ok && (err.severity === 'CRITICAL' || err.severity === 'WARNING')) {
+                    // Create a unique key to avoid spamming the same error
+                    const errKey = `${err.check}:${err.message}`;
+                    if (!shownCertErrors.has(errKey)) {
+                        shownCertErrors.add(errKey);
+                        
+                        // Extremely prominent popup for certification errors
+                        const fullMsg = err.detail ? `${err.message}\nAction: ${err.detail}` : err.message;
+                        showNotification(`CERTIFICATION ERROR: ${fullMsg}`, 'error');
+                        
+                        // If it's critical, also log it prominently
+                        if (err.severity === 'CRITICAL') {
+                            console.error(`[CRITICAL CERT ERROR] ${fullMsg}`);
+                        }
+                    }
+                }
+            });
+        }
+    } catch (e) {
+        console.warn("Could not poll certification errors:", e);
+    }
+    
+    // Poll again every 60 seconds
+    setTimeout(pollCertificationErrors, 60000);
+}
 
 // ========== TOAST NOTIFICATIONS ==========
 function showNotification(message, type = 'info') {
@@ -758,6 +795,9 @@ function renderFilters(filters) {
         container.appendChild(item);
     });
 
+    // Update speaker suggestions for autocomplete in Form Manager
+    updateSpeakerSuggestions(filters);
+
     container.querySelectorAll('.filter-input:not(.calendar-trigger), .filter-select').forEach(el => {
         el.addEventListener('change', applyFilters);
         el.addEventListener('input', debounce(applyFilters, 400));
@@ -767,6 +807,14 @@ function renderFilters(filters) {
     container.querySelectorAll('.calendar-trigger').forEach(el => {
         new SmartCalendar(el, JSON.parse(el.dataset.dates || '[]'), () => applyFilters());
     });
+}
+
+function updateSpeakerSuggestions(filters) {
+    const speakerFilter = filters.find(f => f.column === 'alumni_speaker_name');
+    if (!speakerFilter || !speakerFilter.options) return;
+
+    // Cache the full list for autocomplete (even when filtered)
+    state.allSpeakers = speakerFilter.options.map(o => o.value);
 }
 
 async function applyFilters() {
@@ -1935,6 +1983,18 @@ class SmartCalendar {
         if (d.value && d.value < d.min) d.value = '';
     }
 
+    async function fetchSpeakerNames() {
+        try {
+            const res = await fetch(`${API_BASE}/api/admin/speaker-names`, { headers: authHeaders() });
+            const data = await res.json();
+            if (data.success && Array.isArray(data.names)) {
+                state.allSpeakers = data.names;
+            }
+        } catch (e) {
+            console.warn('[SPEAKER AUTOCOMPLETE] Failed to fetch speaker names:', e);
+        }
+    }
+
     // ── Open / close modal ───────────────────────────────────
     function openFeedbackModal() {
         if (!getToken()) {
@@ -1949,6 +2009,7 @@ class SmartCalendar {
                         setVenueDateMinToday();
                         loadEvents();
                         loadCertLogs();
+                        fetchSpeakerNames();
                     }
                     origSubmit.removeEventListener('click', handler);
                 }, 300);
@@ -1961,24 +2022,31 @@ class SmartCalendar {
         document.getElementById('feedback-modal').classList.remove('hidden');
         loadEvents();
         loadCertLogs();
+        fetchSpeakerNames();
     }
 
     function closeFeedbackModal() {
         document.getElementById('feedback-modal').classList.add('hidden');
+        const dropdown = document.getElementById('speaker-autocomplete-dropdown');
+        if (dropdown) dropdown.classList.remove('active');
     }
 
     function resetForm() {
         document.getElementById('fb-speaker-name').value = '';
+        const dropdown = document.getElementById('speaker-autocomplete-dropdown');
+        if (dropdown) {
+            dropdown.innerHTML = '';
+            dropdown.classList.remove('active');
+        }
         document.getElementById('fb-venue-date').value = '';
         if (document.getElementById('fb-template-id')) document.getElementById('fb-template-id').value = '';
         if (document.getElementById('fb-send-certs')) document.getElementById('fb-send-certs').checked = false;
         document.getElementById('fb-status').style.display = 'none';
         document.getElementById('fb-result').style.display = 'none';
         const btn = document.getElementById('btn-generate-form');
-        btn.disabled = true;
+        btn.disabled = false;
         btn.textContent = 'Generate Google Form';
-        btn.style.opacity = '0.5';
-        btn.style.cursor = 'not-allowed';
+        btn.style.opacity = '1';
         _currentFormUrl = '';
     }
 
@@ -2025,40 +2093,10 @@ class SmartCalendar {
         }
         
         btn.disabled = true;
-        hideStatus();
-        document.getElementById('fb-result').style.display = 'none';
-
-        // ── Deep Verification ───────────────────────────────────────
-        if (sendCerts === 1 && templateId) {
-            btn.textContent = 'Verifying Template...';
-            btn.style.opacity = '0.7';
-            try {
-                const token = localStorage.getItem('adminToken') || '';
-                const verifyResp = await fetch(`${API_BASE}/api/admin/verify-template`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify({ template_id: templateId })
-                });
-                const verifyData = await verifyResp.json();
-                
-                if (!verifyResp.ok || !verifyData.success) {
-                    showStatus(verifyData.error || 'Template ID is invalid or inaccessible.', 'error');
-                    btn.disabled = false;
-                    btn.textContent = 'Generate Google Form';
-                    btn.style.opacity = '1';
-                    return; // Stop form creation
-                }
-            } catch (err) {
-                showStatus('Error verifying template: ' + err.message, 'error');
-                btn.disabled = false;
-                btn.textContent = 'Generate Google Form';
-                btn.style.opacity = '1';
-                return;
-            }
-        }
-
         btn.textContent = 'Creating event & form...';
         btn.style.opacity = '0.7';
+        hideStatus();
+        document.getElementById('fb-result').style.display = 'none';
 
         try {
             // ✅ NEW: Use atomic endpoint - creates event AND form in single transaction
@@ -2425,8 +2463,124 @@ class SmartCalendar {
         }
     }
 
+    // ── Speaker Autocomplete Logic ───────────────────────────
+    let selectedSuggestionIdx = -1;
+
+    let autocompleteTimeout = null;
+
+    function selectSpeaker(name) {
+        const input = document.getElementById('fb-speaker-name');
+        const dropdown = document.getElementById('speaker-autocomplete-dropdown');
+        if (input) input.value = name;
+        if (dropdown) dropdown.classList.remove('active');
+    }
+
+    function renderSpeakerAutocomplete(query) {
+        const dropdown = document.getElementById('speaker-autocomplete-dropdown');
+        if (!dropdown) return;
+
+        if (!query || query.trim().length < 1) {
+            dropdown.innerHTML = '';
+            dropdown.classList.remove('active');
+            return;
+        }
+
+        if (autocompleteTimeout) clearTimeout(autocompleteTimeout);
+
+        autocompleteTimeout = setTimeout(async () => {
+            try {
+                const res = await fetch(`${API_BASE}/api/admin/speaker-names?q=${encodeURIComponent(query)}`, {
+                    headers: authHeaders()
+                });
+                const data = await res.json();
+                if (!data.success || !Array.isArray(data.names) || data.names.length === 0) {
+                    dropdown.innerHTML = '';
+                    dropdown.classList.remove('active');
+                    return;
+                }
+
+                selectedSuggestionIdx = -1;
+                dropdown.innerHTML = '';
+                data.names.forEach((name, idx) => {
+                    const item = document.createElement('div');
+                    item.className = 'autocomplete-item';
+                    item.dataset.index = String(idx);
+
+                    const qLower = query.trim().toLowerCase();
+                    const nLower = name.toLowerCase();
+                    let html = esc(name);
+                    const qIdx = nLower.indexOf(qLower);
+                    if (qIdx !== -1) {
+                        html = esc(name.slice(0, qIdx)) +
+                            `<span class="match-highlight">${esc(name.slice(qIdx, qIdx + query.trim().length))}</span>` +
+                            esc(name.slice(qIdx + query.trim().length));
+                    }
+
+                    item.innerHTML = `
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        <span>${html}</span>
+                    `;
+
+                    item.addEventListener('click', () => {
+                        selectSpeaker(name);
+                    });
+                    dropdown.appendChild(item);
+                });
+                dropdown.classList.add('active');
+            } catch (err) {
+                console.warn('[SPEAKER AUTOCOMPLETE] Failed to fetch transformer suggestions:', err);
+            }
+        }, 200);
+    }
+
+    function initSpeakerAutocomplete() {
+        const input = document.getElementById('fb-speaker-name');
+        const dropdown = document.getElementById('speaker-autocomplete-dropdown');
+        if (!input || !dropdown) return;
+
+        input.addEventListener('input', (e) => {
+            renderSpeakerAutocomplete(e.target.value);
+        });
+
+        input.addEventListener('keydown', (e) => {
+            const items = dropdown.querySelectorAll('.autocomplete-item');
+            if (!dropdown.classList.contains('active') || items.length === 0) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedSuggestionIdx = (selectedSuggestionIdx + 1) % items.length;
+                updateSelection(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedSuggestionIdx = (selectedSuggestionIdx - 1 + items.length) % items.length;
+                updateSelection(items);
+            } else if (e.key === 'Enter' && selectedSuggestionIdx !== -1) {
+                e.preventDefault();
+                items[selectedSuggestionIdx].click();
+            } else if (e.key === 'Escape') {
+                dropdown.classList.remove('active');
+            }
+        });
+
+        function updateSelection(items) {
+            items.forEach((item, idx) => {
+                item.classList.toggle('selected', idx === selectedSuggestionIdx);
+                if (idx === selectedSuggestionIdx) item.scrollIntoView({ block: 'nearest' });
+            });
+        }
+
+        // Close on click outside
+        document.addEventListener('click', (e) => {
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.classList.remove('active');
+            }
+        });
+    }
+
     // ── Wire everything up on DOMContentLoaded ───────────────
     document.addEventListener('DOMContentLoaded', () => {
+        // Initialize speaker autocomplete
+        initSpeakerAutocomplete();
 
         // "Admin Panel" (Manage Forms) sidebar button → now opens Feedback Modal
         const btnAdminPanel = document.getElementById('btn-admin-panel');
@@ -2481,73 +2635,6 @@ class SmartCalendar {
                     showNotification('No form URL available', 'error');
                 }
             });
-
-        // ── Dynamic Form Validation ──────────────────────────────
-        const btnGen = document.getElementById('btn-generate-form');
-        const fSpeaker = document.getElementById('fb-speaker-name');
-        const fDate = document.getElementById('fb-venue-date');
-        const fTemplate = document.getElementById('fb-template-id');
-        const fCerts = document.getElementById('fb-send-certs');
-
-        function validateFormInputs() {
-            if (!btnGen) return;
-            // Prevent overriding the loading state
-            if (btnGen.textContent.includes('Creating')) return;
-
-            const spk = fSpeaker ? fSpeaker.value.trim() : '';
-            const dt = fDate ? fDate.value.trim() : '';
-            let tpl = fTemplate ? fTemplate.value.trim() : '';
-            const sendCerts = fCerts ? fCerts.checked : false;
-
-            let isValid = true;
-
-            // Base requirements
-            if (!spk || !dt) {
-                isValid = false;
-            }
-
-            // Conditional requirement: if auto-generate is checked, Template ID must be valid
-            if (sendCerts) {
-                // Auto-extract ID if URL pasted
-                const urlMatch = tpl.match(/\/d\/([a-zA-Z0-9-_]+)/);
-                if (urlMatch && urlMatch[1]) {
-                    tpl = urlMatch[1];
-                    if (fTemplate) fTemplate.value = tpl;
-                }
-                
-                const isValidId = /^[a-zA-Z0-9-_]{25,60}$/.test(tpl);
-                if (!isValidId) {
-                    isValid = false;
-                }
-            }
-
-            // Remove previous green/red border styling (reverting per user request)
-            if (fTemplate) {
-                fTemplate.style.borderColor = '#111827';
-                fTemplate.style.background = '#fff';
-            }
-
-            // Enable or disable button
-            btnGen.disabled = !isValid;
-            btnGen.style.opacity = isValid ? '1' : '0.5';
-            btnGen.style.cursor = isValid ? 'pointer' : 'not-allowed';
-        }
-
-        // Attach listeners to all inputs
-        if (fSpeaker) fSpeaker.addEventListener('input', validateFormInputs);
-        if (fDate) fDate.addEventListener('input', validateFormInputs);
-        if (fCerts) fCerts.addEventListener('change', validateFormInputs);
-        if (fTemplate) {
-            fTemplate.addEventListener('input', (e) => {
-                // Keep immediate auto-extract visual update for UX
-                let val = e.target.value.trim();
-                const urlMatch = val.match(/\/d\/([a-zA-Z0-9-_]+)/);
-                if (urlMatch && urlMatch[1]) {
-                    e.target.value = urlMatch[1];
-                }
-                validateFormInputs();
-            });
-        }
     });
     
     // ── Global Form Timer Updater ────────────────────────────

@@ -24,6 +24,13 @@ from backend.utils.db_helper import initialize_database
 
 def create_app(config=None):
     """Application factory for Flask app"""
+    # Pre-import heavy ML libraries to avoid import lock deadlocks in background threads
+    try:
+        import torch
+        import transformers
+        import sentence_transformers
+    except Exception as e:
+        pass
 
     # Key: tell Flask where the frontend is
     frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'frontend')

@@ -76,6 +76,7 @@ function doPost(e) {
       case "create_form": return _handleCreateForm(payload);
       case "get_responses": return _handleGetResponses(payload);
       case "close_form": return _handleCloseForm(payload);
+      case "generate_certificate": return _handleGenerateCertificate(payload);
       case "diagnose": return _handleDiagnose(payload);
       case "ping": return _json(true, "Connectivity Active", { version: CONFIG.VERSION });
       default: return _json(false, "Unknown Action: " + action, null, 404);
@@ -126,16 +127,26 @@ function _handleCreateForm(payload) {
   const form = FormApp.create(`Student Feedback: ${speaker}`);
   form.setDescription(`Session: ${date} | Speaker: ${speaker}\nJoin us in providing feedback for continuous improvement.`);
   form.setCollectEmail(false);
+  form.setRequireLogin(false); // Allow anyone (including personal Gmails) to access the form
   form.setAllowResponseEdits(false);
 
   // Step 1: Student Identity (Matches CSV Headers)
   form.addSectionHeaderItem().setTitle("Step 1: Your Information");
   form.addTextItem().setTitle("Name of Student").setRequired(true);
+  
+  if (payload.send_certificates) {
+    const emailItem = form.addTextItem().setTitle("Email Address").setRequired(true);
+    emailItem.setHelpText("Enter your correct email address to receive your certificate.");
+    emailItem.setValidation(
+      FormApp.createTextValidation()
+        .requireTextIsEmail()
+        .setHelpText("Must be a valid email address.")
+        .build()
+    );
+  }
   form.addMultipleChoiceItem().setTitle("Department").setChoiceValues(CONFIG.DEPARTMENT_OPTIONS).setRequired(true);
   const rollItem = form.addTextItem().setTitle("Roll No.").setRequired(true);
   const rollPattern = "^2[Kk]\\d{2}[A-Za-z]{3,12}\\d{5}$";
-  const emailItem = form.addTextItem().setTitle("Email Address").setRequired(true);
-  emailItem.setHelpText("Enter your correct email address to receive your certificate.");
   rollItem.setHelpText("Format: 2K + 2-digit batch year + programme code + 5 digits (e.g. 2K25EDUN01013, 2K24ECUN03021). No spaces.");
   rollItem.setValidation(
     FormApp.createTextValidation()
@@ -215,6 +226,7 @@ function onFormSubmitTrigger(e) {
       
       // Precision Header Mapping (Matches CSV perfectly)
       if (q.includes("Name of Student")) answers.name_of_student = a;
+      else if (q.includes("Email Address")) answers.student_email = a;
       else if (q.includes("Department")) answers.department_original = a;
       else if (q.includes("Roll No.")) answers.roll_no_original = a;
       else if (q.includes("industry trends")) answers.session_help_understanding = a;
@@ -224,12 +236,21 @@ function onFormSubmitTrigger(e) {
       else if (q.includes("future alumni speakers to cover")) answers.future_topics = a;
     });
 
+    // Fallback if respondent email is collected natively
+    try {
+      const respEmail = e.response.getRespondentEmail();
+      if (respEmail && !answers.student_email) {
+        answers.student_email = respEmail;
+      }
+    } catch (err) {}
+
     const webhookPayload = JSON.stringify({
       form_id: formId,
       event_id: config.event_id,
       timestamp: new Date().toISOString(),
       responses: {
         ...answers,
+        student_email: answers.student_email || "",
         alumni_speaker_name: config.speaker_name,
         date_of_lecture: config.venue_date
       }
@@ -362,7 +383,11 @@ function _handleCloseForm(payload) {
     
     // STRICT CLOSURE
     form.setAcceptingResponses(false);
-    form.setCustomClosedFormMessage("Sorry this form is closed, reach your mentor");
+    try {
+      form.setCustomClosedFormMessage("Sorry this form is closed, reach your mentor");
+    } catch (msgErr) {
+      console.warn("Could not set custom closed message: " + msgErr.toString());
+    }
     
     return _json(true, "Form Strictly Closed on Google Servers", { form_id: formId });
   } catch (e) {
@@ -422,5 +447,97 @@ function ONE_TIME_SET_SECRETS() {
   const p = PropertiesService.getScriptProperties();
   p.setProperty("WEBHOOK_SECRET", "DL_wh_9fK2mPq7vNx4Rt8sLw3");
   p.setProperty("SECRET_KEY", "datalens2026");
-  Logger.log("Saved WEBHOOK_SECRET and SECRET_KEY (must match HF WEBHOOK_SECRET and APPS_SCRIPT_SECRET).");
+  p.setProperty("SENDER_EMAIL", "your-workspace-email@mru.ac.in"); // Restored back to MRU email due to slide permissions
+  Logger.log("Saved WEBHOOK_SECRET, SECRET_KEY, and SENDER_EMAIL.");
+}
+
+function _handleGenerateCertificate(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return _json(false, "Data Error: Payload is required.", null, 400);
+  }
+
+  const templateId = payload.template_id;
+  const studentName = payload.student_name;
+  const studentEmail = payload.student_email;
+  const rollNo = payload.roll_no || "";
+  const department = payload.department || "";
+  const speakerName = payload.speaker_name || "";
+  const venueDate = payload.venue_date || "";
+
+  if (!templateId) return _json(false, "Data Error: template_id is required.", null, 400);
+  if (!studentName) return _json(false, "Data Error: student_name is required.", null, 400);
+  if (!studentEmail) return _json(false, "Data Error: student_email is required.", null, 400);
+
+  try {
+    // 1. Copy the Google Slides template
+    const templateFile = DriveApp.getFileById(templateId);
+    const copyName = `Certificate - ${studentName} - ${rollNo}`;
+    const copyFile = templateFile.makeCopy(copyName);
+    const copyId = copyFile.getId();
+
+    // 2. Open the copy and replace placeholders
+    const presentation = SlidesApp.openById(copyId);
+    const slides = presentation.getSlides();
+    
+    slides.forEach(slide => {
+      slide.getShapes().forEach(shape => {
+        if (shape.hasText()) {
+          const textRange = shape.getText();
+          // Case-insensitive/flexible placeholder replacement
+          textRange.replaceAllText("{{name}}", studentName);
+          textRange.replaceAllText("{{Name}}", studentName);
+          textRange.replaceAllText("{{roll}}", rollNo);
+          textRange.replaceAllText("{{Roll}}", rollNo);
+          textRange.replaceAllText("{{roll_no}}", rollNo);
+          textRange.replaceAllText("{{RollNo}}", rollNo);
+          textRange.replaceAllText("{{dept}}", department);
+          textRange.replaceAllText("{{Dept}}", department);
+          textRange.replaceAllText("{{department}}", department);
+          textRange.replaceAllText("{{speaker}}", speakerName);
+          textRange.replaceAllText("{{Speaker}}", speakerName);
+          textRange.replaceAllText("{{date}}", venueDate);
+          textRange.replaceAllText("{{Date}}", venueDate);
+        }
+      });
+    });
+
+    // Save and close presentation to persist modifications
+    presentation.saveAndClose();
+
+    // 3. Export as PDF
+    const pdfBlob = copyFile.getAs('application/pdf');
+
+    // 4. Send Email
+    const emailSubject = `Certificate of Attendance: Guest Lecture by ${speakerName}`;
+    const emailBody = `Dear ${studentName},\n\n` +
+                      `Thank you for attending the guest lecture by ${speakerName} on ${venueDate}.\n\n` +
+                      `Please find attached your Certificate of Attendance.\n\n` +
+                      `Best regards,\n` +
+                      `Department Team`;
+                      
+    const senderEmail = PropertiesService.getScriptProperties().getProperty("SENDER_EMAIL") || "";
+    const mailOptions = {
+      attachments: [pdfBlob]
+    };
+    if (senderEmail) {
+      mailOptions.from = senderEmail;
+    }
+
+    GmailApp.sendEmail(studentEmail, emailSubject, emailBody, mailOptions);
+
+    // 5. Clean up the copied Google Slides file to save Drive space
+    try {
+      copyFile.setTrashed(true);
+    } catch(cleanupErr) {
+      console.warn("Failed to trash temporary file copy: " + cleanupErr);
+    }
+
+    return _json(true, "Certificate generated and sent successfully", {
+      student_name: studentName,
+      student_email: studentEmail
+    });
+
+  } catch (err) {
+    return _json(false, "Certificate Generation Failure", err.toString(), 500);
+  }
 }
