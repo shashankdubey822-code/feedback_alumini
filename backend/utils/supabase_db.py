@@ -22,7 +22,7 @@ def _get_pool() -> pool.ThreadedConnectionPool:
     """Return (and lazily create) the global connection pool."""
     global _connection_pool
     if _connection_pool is None or _connection_pool.closed:
-        db_url = os.environ.get('DATABASE_URL')
+        db_url = os.environ.get('DATABASE_URL', '').strip()
         if not db_url:
             raise RuntimeError("DATABASE_URL environment variable is not set")
 

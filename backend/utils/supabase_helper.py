@@ -21,13 +21,13 @@ def get_supabase_client() -> Optional[Client]:
         return _supabase_client
 
     config = get_config()()
-    url = config.SUPABASE_URL
+    url = config.SUPABASE_URL.strip() if config.SUPABASE_URL else ''
     # Ensure url has https:// prefix
     if url and not url.startswith('http'):
         url = f"https://{url}"
 
     # Prefer Service Role Key for backend administration (e.g. bypass RLS / write to storage)
-    key = config.SUPABASE_SERVICE_KEY or config.SUPABASE_ANON_KEY
+    key = (config.SUPABASE_SERVICE_KEY or config.SUPABASE_ANON_KEY or '').strip()
 
     if not url or not key:
         logger.warning("Supabase URL or Key not set. Cloud integrations are inactive.")

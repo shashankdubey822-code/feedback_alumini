@@ -31,26 +31,19 @@ class InsightsErrorDetector(ErrorDetector):
 
         # 3. Check that at least some DL-processed rows exist (insights need them)
         try:
-from backend.utils import pg_helper as sqlite3
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute("PRAGMA table_info(dashboard_data)")
-            cols = {row[1] for row in cursor.fetchall()}
-            if "dl_processed" in cols:
-                cursor.execute("SELECT COUNT(*) FROM dashboard_data WHERE dl_processed = 1")
-                processed = cursor.fetchone()[0]
-                cursor.execute("SELECT COUNT(*) FROM dashboard_data")
-                total = cursor.fetchone()[0]
-                conn.close()
-                if processed == 0 and total > 0:
-                    results.append(self._warn("dl_processed_count",
-                        "No DL-processed rows — AI insights will be generic",
-                        "DL worker may not have run yet"))
-                else:
-                    results.append(self._ok("dl_processed_count", f"{processed}/{total} rows DL-processed"))
+            from backend.utils.supabase_db import execute_one
+            row_total = execute_one("SELECT COUNT(*) as count FROM feedback_responses")
+            row_processed = execute_one("SELECT COUNT(*) as count FROM feedback_analysis")
+            
+            total = row_total['count'] if row_total else 0
+            processed = row_processed['count'] if row_processed else 0
+            
+            if processed == 0 and total > 0:
+                results.append(self._warn("dl_processed_count",
+                    "No DL-processed rows — AI insights will be generic",
+                    "DL worker may not have run yet"))
             else:
-                conn.close()
-                results.append(self._warn("dl_processed_count", "dl_processed column missing — cannot verify NLP coverage"))
+                results.append(self._ok("dl_processed_count", f"{processed}/{total} rows DL-processed"))
         except Exception as e:
             results.append(self._warn("dl_processed_count", "Could not check DL processing status", str(e)))
 

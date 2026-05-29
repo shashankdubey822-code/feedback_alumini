@@ -95,17 +95,62 @@ class KPIService:
             raise Exception(f"Error calculating submission velocity: {e}")
 
     def get_all_kpis(self) -> Dict:
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-            futures = {
-                'engagement_rate': executor.submit(self.calculate_engagement_rate),
-                'satisfaction_score': executor.submit(self.calculate_satisfaction_score),
-                'completion_rate': executor.submit(self.calculate_completion_rate),
-                'department_coverage': executor.submit(self.calculate_department_coverage),
-                'submission_velocity_7d': executor.submit(self.calculate_submission_velocity, 7),
-                'submission_velocity_30d': executor.submit(self.calculate_submission_velocity, 30),
+        from backend.services.analytics_engine import analytics_engine
+        import pandas as pd
+        
+        df = analytics_engine.get_dataframe()
+        if df.empty:
+            return {
+                'engagement_rate': 0.0,
+                'satisfaction_score': 0.0,
+                'completion_rate': 0.0,
+                'department_coverage': 0.0,
+                'submission_velocity_7d': 0.0,
+                'submission_velocity_30d': 0.0,
             }
-            return {k: v.result() for k, v in futures.items()}
+            
+        total = len(df)
+        
+        # 1. Engagement Rate (has feedback in improvements or valuable)
+        has_feedback = df['improvements_suggestions'].notna() & (df['improvements_suggestions'] != '') | \
+                       df['aspect_most_valuable'].notna() & (df['aspect_most_valuable'] != '')
+        eng_rate = round((has_feedback.sum() / total) * 100, 2) if total else 0.0
+        
+        # 2. Satisfaction Score (rated >= 4)
+        rated_df = df.dropna(subset=['session_rating'])
+        sat_score = round((len(rated_df[rated_df['session_rating'] >= 4]) / len(rated_df)) * 100, 2) if not rated_df.empty else 0.0
+        
+        # 3. Completion Rate (has name, department, and rating)
+        has_name = df['student_name'].notna() & (df['student_name'] != '')
+        has_dept = df['department'].notna() & (df['department'] != '')
+        has_rating = df['session_rating'].notna()
+        completed = (has_name & has_dept & has_rating).sum()
+        comp_rate = round((completed / total) * 100, 2) if total else 0.0
+        
+        # 4. Department Coverage
+        unique_depts = df['department'].dropna().replace('', pd.NA).dropna().nunique()
+        dept_cov = round((unique_depts / 40) * 100, 2)
+        
+        # 5. Submission Velocity
+        now = pd.Timestamp.utcnow().tz_localize(None)
+        
+        try:
+            # Ensure submitted_at is timezone-naive for comparison
+            df_dates = pd.to_datetime(df['submitted_at']).dt.tz_localize(None)
+            vel_7d = round(len(df[df_dates >= (now - pd.Timedelta(days=7))]) / 7, 2)
+            vel_30d = round(len(df[df_dates >= (now - pd.Timedelta(days=30))]) / 30, 2)
+        except Exception:
+            vel_7d = 0.0
+            vel_30d = 0.0
+            
+        return {
+            'engagement_rate': eng_rate,
+            'satisfaction_score': sat_score,
+            'completion_rate': comp_rate,
+            'department_coverage': dept_cov,
+            'submission_velocity_7d': vel_7d,
+            'submission_velocity_30d': vel_30d,
+        }
 
     def get_kpi_health_status(self) -> Dict:
         kpis = self.get_all_kpis()

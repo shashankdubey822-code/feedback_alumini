@@ -180,12 +180,13 @@ def get_db_sessions():
     """Retrieve unique guest lecture sessions and check if compiled in wiki"""
     try:
         rows = execute_all('''
-            SELECT alumni_speaker_name, date_of_lecture, COUNT(*) AS cnt
-            FROM feedback_responses
-            WHERE alumni_speaker_name IS NOT NULL AND alumni_speaker_name <> ''
-              AND date_of_lecture IS NOT NULL AND date_of_lecture <> ''
-            GROUP BY alumni_speaker_name, date_of_lecture
-            ORDER BY date_of_lecture DESC, alumni_speaker_name ASC
+            SELECT e.speaker_name AS alumni_speaker_name, e.venue_date AS date_of_lecture, COUNT(r.id) AS cnt
+            FROM feedback_responses r
+            JOIN events e ON r.event_id = e.id
+            WHERE e.speaker_name IS NOT NULL AND e.speaker_name <> ''
+              AND e.venue_date IS NOT NULL
+            GROUP BY e.speaker_name, e.venue_date
+            ORDER BY e.venue_date DESC, e.speaker_name ASC
         ''')
 
         service = _get_wiki_service()
