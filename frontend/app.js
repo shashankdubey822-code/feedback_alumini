@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
 let shownCertErrors = new Set();
 async function pollCertificationErrors() {
     try {
-        const resp = await fetch('/api/errors/report');
+        const resp = await fetch('/api/v1/errors/report');
         if (resp.ok) {
             const data = await resp.json();
             const certErrors = (data.by_page && data.by_page.certification) || [];
