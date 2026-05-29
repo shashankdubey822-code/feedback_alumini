@@ -21,3 +21,9 @@ data/exports/*.json
 !data/**/.gitkeep
 !data/README.md
 backend/credentials.json
+
+# User specific configuration/context files
+AI_CONTEXT.md
+AI_CONTENT.md
+start_debug.log
+google_apps_script/
