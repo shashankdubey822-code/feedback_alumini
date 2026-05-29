@@ -33,10 +33,10 @@ class AnalyticsEngine:
                 e.speaker_name,
                 e.venue_date,
                 e.name as event_name,
+                e.department,
                 s.id as student_id,
                 s.name as student_name,
                 s.roll_no,
-                s.department,
                 a.sentiment_label,
                 a.sentiment_score,
                 a.keywords_json

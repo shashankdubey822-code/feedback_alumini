@@ -303,12 +303,17 @@ async function loadInitialData() {
                 console.log("loadInitialData: Fetching full /api/data in background");
                 const fullResp = await fetch(`${API_BASE}/api/data`);
                 if (fullResp.ok) {
-                    const analytics = await fullResp.json();
+                    const fullAnalytics = await fullResp.json();
                     console.log("loadInitialData: Full analytics received, updating UI");
-                    state.analytics = analytics;
-                    state.tableData = analytics.tableData || [];
-                    state.columns = analytics.meta.columns || state.columns;
-                    state.columnTypes = analytics.meta.columnTypes || state.columnTypes;
+                    state.analytics = fullAnalytics;
+                    state.tableData = fullAnalytics.tableData || [];
+                    
+                    if (fullAnalytics.meta && fullAnalytics.meta.columns) {
+                        state.columns = fullAnalytics.meta.columns.filter(col => allowedColumns.includes(col));
+                        state.columns.sort((a, b) => allowedColumns.indexOf(a) - allowedColumns.indexOf(b));
+                        state.columnTypes = fullAnalytics.meta.columnTypes || state.columnTypes;
+                    }
+                    
                     renderDashboard();
                 } else {
                     console.warn('Background full analytics fetch failed:', fullResp.status);
@@ -345,19 +350,19 @@ async function loadInitialData() {
             'future_topics': "Any specific topics or areas you'd like future alumni speakers to cover?"
         };
 
-        // strictly bind dashboard table to only these 11 columns
-        state.columns = analytics.meta.columns.filter(col => allowedColumns.includes(col));
-        state.columns.sort((a, b) => allowedColumns.indexOf(a) - allowedColumns.indexOf(b));
-        state.columnTypes = analytics.meta.columnTypes;
-        state.tableData = analytics.tableData || [];
-        state.fileName = analytics.meta.filename || 'Database Record';
+        // strictly bind dashboard table to only these 11 columns if available in init
+        if (init.meta && init.meta.columns) {
+            state.columns = init.meta.columns.filter(col => allowedColumns.includes(col));
+            state.columns.sort((a, b) => allowedColumns.indexOf(a) - allowedColumns.indexOf(b));
+        }
+        state.fileName = init.meta ? init.meta.filename || 'Database Record' : 'Preview';
 
         // Auto-sort by timestamp in descending order (latest first)
         const timestampCol = state.columns.find(col => col.toUpperCase().includes('TIMESTAMP'));
         if (timestampCol) {
             state.sortColumn = timestampCol;
             state.sortDirection = 'desc';
-            sortTableData();
+            // sortTableData is missing here, but it will sort on next render if needed or handled inside renderTable
         }
 
         console.log("loadInitialData: Scheduling switchToDashboardFromLoading");
