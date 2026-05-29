@@ -4,7 +4,7 @@ Charts Page Error Detector — chart data shape and payload validation.
 from __future__ import annotations
 from typing import List
 from ..base import ErrorDetector, DetectionResult
-from backend.utils.supabase_db import get_conn, execute_one
+from backend.utils.supabase_db import execute_one
 
 
 class ChartsErrorDetector(ErrorDetector):

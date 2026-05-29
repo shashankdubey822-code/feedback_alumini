@@ -4,7 +4,7 @@ DB Error Detector — connectivity, schema, required columns.
 from __future__ import annotations
 from typing import List
 from ..base import ErrorDetector, DetectionResult
-from backend.utils.supabase_db import get_conn, execute_one
+from backend.utils.supabase_db import get_db, execute_one
 
 
 REQUIRED_COLUMNS = [
@@ -34,7 +34,7 @@ class DBErrorDetector(ErrorDetector):
 
         # 2. Required tables
         try:
-            with get_conn() as conn:
+            with get_db() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")
                     existing = {row["table_name"] for row in cursor.fetchall()}
@@ -49,7 +49,7 @@ class DBErrorDetector(ErrorDetector):
 
         # 3. Required columns
         try:
-            with get_conn() as conn:
+            with get_db() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'feedback_responses'")
                     cols = {row["column_name"] for row in cursor.fetchall()}

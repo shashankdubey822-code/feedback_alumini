@@ -2,7 +2,7 @@ import os
 from typing import List
 from datetime import datetime
 from backend.error_detection.base import ErrorDetector, DetectionResult
-from backend.utils.supabase_db import get_conn, execute_one
+from backend.utils.supabase_db import get_db, execute_one
 
 
 class CertificationErrorDetector(ErrorDetector):
@@ -24,7 +24,7 @@ class CertificationErrorDetector(ErrorDetector):
     def run(self) -> List[DetectionResult]:
         results = []
         try:
-            with get_conn() as conn:
+            with get_db() as conn:
                 with conn.cursor() as cursor:
                     results.extend(self._analyze_template_configuration(cursor))
                     

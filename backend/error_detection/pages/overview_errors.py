@@ -4,7 +4,7 @@ Overview Page Error Detector — KPI, filter, and data quality checks.
 from __future__ import annotations
 from typing import List
 from ..base import ErrorDetector, DetectionResult
-from backend.utils.supabase_db import get_conn, execute_one
+from backend.utils.supabase_db import get_db, execute_one
 
 
 class OverviewErrorDetector(ErrorDetector):
@@ -16,7 +16,7 @@ class OverviewErrorDetector(ErrorDetector):
     def run(self) -> List[DetectionResult]:
         results = []
         try:
-            with get_conn() as conn:
+            with get_db() as conn:
                 with conn.cursor() as cursor:
                     # 1. Empty data check
                     cursor.execute("SELECT COUNT(*) as cnt FROM feedback_responses")

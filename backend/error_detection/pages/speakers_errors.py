@@ -4,7 +4,7 @@ Speakers Page Error Detector.
 from __future__ import annotations
 from typing import List
 from ..base import ErrorDetector, DetectionResult
-from backend.utils.supabase_db import get_conn, execute_one
+from backend.utils.supabase_db import get_db, execute_one
 
 
 class SpeakersErrorDetector(ErrorDetector):
@@ -16,7 +16,7 @@ class SpeakersErrorDetector(ErrorDetector):
     def run(self) -> List[DetectionResult]:
         results = []
         try:
-            with get_conn() as conn:
+            with get_db() as conn:
                 with conn.cursor() as cursor:
                     # 1. alumni_speaker_name column exists
                     cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'events'")
