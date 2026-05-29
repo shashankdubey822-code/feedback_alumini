@@ -42,6 +42,48 @@ def health_check():
     }), 200
 
 
+@api_bp.route('/initial', methods=['GET'])
+@log_endpoint_access
+def get_initial():
+    """Return a minimal, fast payload for initial page rendering.
+    Keeps DB work small: total counts and a tiny sample of recent rows.
+    """
+    try:
+        # total responses (cheap aggregate)
+        total_row = execute_one("SELECT COUNT(*) AS cnt FROM feedback_responses WHERE submitted_at IS NOT NULL")
+        total = total_row['cnt'] if total_row else 0
+
+        # small sample of recent rows (only a few columns)
+        sample_rows = execute_all("""
+            SELECT id, submitted_at, alumni_speaker_name, session_rating, aspect_most_valuable
+            FROM feedback_responses
+            WHERE submitted_at IS NOT NULL
+            ORDER BY submitted_at DESC
+            LIMIT 25
+        """)
+
+        # lightweight filters meta (empty placeholder to allow UI render)
+        meta = {
+            'columns': ['submitted_at', 'alumni_speaker_name', 'session_rating', 'aspect_most_valuable'],
+            'columnTypes': {
+                'submitted_at': 'date',
+                'alumni_speaker_name': 'text',
+                'session_rating': 'numeric',
+                'aspect_most_valuable': 'text'
+            },
+            'filename': 'Preview'
+        }
+
+        return jsonify({
+            'meta': meta,
+            'tableData': [dict(r) for r in sample_rows],
+            'totalResponses': total,
+        }), 200
+    except Exception as e:
+        logger.error(f"Error getting initial payload: {e}")
+        return jsonify({'error': 'Failed to fetch initial payload'}), 500
+
+
 @api_bp.route('/charts/all', methods=['GET'])
 @log_endpoint_access
 def get_all_charts():

@@ -268,26 +268,55 @@ async function validateBackendConfiguration() {
 // ========== DATA LOADING ==========
 async function loadInitialData() {
     try {
-        // Validate configuration first
+        // Validate configuration first (non-blocking if it fails)
         await validateBackendConfiguration();
-        
-        console.log("loadInitialData: Fetching /api/data");
-        const response = await fetch(`${API_BASE}/api/data`);
-        console.log("loadInitialData: Response status", response.status);
-        if (!response.ok) {
-            console.log("loadInitialData: No data (404), showing admin prompt");
-            // Show admin prompt if 404
+
+        // 1) Fast initial payload to render UI quickly
+        console.log("loadInitialData: Fetching /api/initial");
+        const initResp = await fetch(`${API_BASE}/api/initial`);
+        if (!initResp.ok) {
+            console.log("loadInitialData: No initial data (404), showing admin prompt");
             document.getElementById('loading-status').textContent = 'No data available. Admin upload required.';
             document.getElementById('loading-status').style.color = '#fbbf24';
             document.getElementById('btn-show-admin').style.display = 'inline-block';
             document.querySelector('#loading-screen .brand-icon').style.animation = 'none';
             return;
         }
-        
-        console.log("loadInitialData: Parsing JSON");
-        const analytics = await response.json();
-        console.log("loadInitialData: Setting state variables");
-        state.analytics = analytics;
+
+        const init = await initResp.json();
+        console.log("loadInitialData: Got initial payload");
+        state.analytics = init;
+        state.columns = init.meta.columns || [];
+        state.columnTypes = init.meta.columnTypes || {};
+        state.tableData = init.tableData || [];
+        state.fileName = init.meta.filename || 'Preview';
+
+        // Render the dashboard immediately from the small payload
+        setTimeout(() => {
+            switchToDashboardFromLoading();
+            renderDashboard();
+        }, 200);
+
+        // 2) Background: fetch full analytics without blocking the UI
+        (async () => {
+            try {
+                console.log("loadInitialData: Fetching full /api/data in background");
+                const fullResp = await fetch(`${API_BASE}/api/data`);
+                if (fullResp.ok) {
+                    const analytics = await fullResp.json();
+                    console.log("loadInitialData: Full analytics received, updating UI");
+                    state.analytics = analytics;
+                    state.tableData = analytics.tableData || [];
+                    state.columns = analytics.meta.columns || state.columns;
+                    state.columnTypes = analytics.meta.columnTypes || state.columnTypes;
+                    renderDashboard();
+                } else {
+                    console.warn('Background full analytics fetch failed:', fullResp.status);
+                }
+            } catch (e) {
+                console.warn('Background analytics fetch error:', e);
+            }
+        })();
         const allowedColumns = [
             'timestamp_original',
             'name_of_student',
