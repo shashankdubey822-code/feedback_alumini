@@ -74,9 +74,10 @@ class CertificationErrorDetector(ErrorDetector):
     def _analyze_failed_jobs(self, cursor) -> List[DetectionResult]:
         results = []
         cursor.execute('''
-            SELECT j.id, j.student_name, j.student_email, j.error_message, e.speaker_name
+            SELECT j.id, s.name as student_name, s.email as student_email, j.error_log as error_message, e.speaker_name
             FROM certificate_jobs j
             LEFT JOIN events e ON j.event_id = e.id
+            LEFT JOIN students s ON j.student_id = s.id
             WHERE j.status = 'failed'
         ''')
         jobs = cursor.fetchall()
@@ -92,8 +93,9 @@ class CertificationErrorDetector(ErrorDetector):
     def _analyze_stuck_jobs(self, cursor) -> List[DetectionResult]:
         results = []
         cursor.execute('''
-            SELECT j.id, j.student_name, j.updated_at
+            SELECT j.id, s.name as student_name, j.generated_at as updated_at
             FROM certificate_jobs j
+            LEFT JOIN students s ON j.student_id = s.id
             WHERE j.status = 'processing'
         ''')
         jobs = cursor.fetchall()
@@ -122,9 +124,10 @@ class CertificationErrorDetector(ErrorDetector):
     def _analyze_missing_emails(self, cursor) -> List[DetectionResult]:
         results = []
         cursor.execute('''
-            SELECT id, student_name, status
-            FROM certificate_jobs 
-            WHERE (student_email IS NULL OR student_email = '') AND status != 'completed'
+            SELECT j.id, s.name as student_name, j.status
+            FROM certificate_jobs j
+            LEFT JOIN students s ON j.student_id = s.id
+            WHERE (s.email IS NULL OR s.email = '') AND j.status != 'completed'
         ''')
         jobs = cursor.fetchall()
         for job in jobs:
