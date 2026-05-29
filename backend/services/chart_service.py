@@ -139,10 +139,13 @@ class ChartService:
             raise Exception(f"Error getting monthly comparison: {e}")
 
     def get_all_chart_data(self) -> Dict:
-        return {
-            'timeline':            self.get_timeline_data(),
-            'department_ratings':  self.get_department_ratings(),
-            'speakers':            self.get_speaker_statistics(),
-            'rating_distribution': self.get_rating_pie_chart(),
-            'monthly_comparison':  self.get_monthly_comparison(),
-        }
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {
+                'timeline':            executor.submit(self.get_timeline_data),
+                'department_ratings':  executor.submit(self.get_department_ratings),
+                'speakers':            executor.submit(self.get_speaker_statistics),
+                'rating_distribution': executor.submit(self.get_rating_pie_chart),
+                'monthly_comparison':  executor.submit(self.get_monthly_comparison),
+            }
+            return {k: v.result() for k, v in futures.items()}

@@ -208,19 +208,30 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
     from ..services.analytics_engine import analytics_engine
     import json
     
-    try:
-        from ..services.kpi_service import KPIService
-        kpi_service = KPIService()
-        kpi_dict = kpi_service.get_all_kpis()
-    except Exception:
-        kpi_dict = {}
+    import concurrent.futures
+    
+    def fetch_kpis():
+        try:
+            from ..services.kpi_service import KPIService
+            return KPIService().get_all_kpis()
+        except Exception as e:
+            logger.error(f"KPI fetch error: {e}")
+            return {}
 
-    try:
-        from ..services.chart_service import ChartService
-        chart_service = ChartService()
-        raw_charts = chart_service.get_all_chart_data()
-    except Exception:
-        raw_charts = {}
+    def fetch_charts():
+        try:
+            from ..services.chart_service import ChartService
+            return ChartService().get_all_chart_data()
+        except Exception as e:
+            logger.error(f"Chart fetch error: {e}")
+            return {}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        kpi_future = executor.submit(fetch_kpis)
+        chart_future = executor.submit(fetch_charts)
+        
+        kpi_dict = kpi_future.result()
+        raw_charts = chart_future.result()
 
     formatted_charts = []
     rd = raw_charts.get('rating_distribution', [])

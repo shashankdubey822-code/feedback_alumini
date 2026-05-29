@@ -95,14 +95,17 @@ class KPIService:
             raise Exception(f"Error calculating submission velocity: {e}")
 
     def get_all_kpis(self) -> Dict:
-        return {
-            'engagement_rate':        self.calculate_engagement_rate(),
-            'satisfaction_score':     self.calculate_satisfaction_score(),
-            'completion_rate':        self.calculate_completion_rate(),
-            'department_coverage':    self.calculate_department_coverage(),
-            'submission_velocity_7d': self.calculate_submission_velocity(7),
-            'submission_velocity_30d':self.calculate_submission_velocity(30),
-        }
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+            futures = {
+                'engagement_rate': executor.submit(self.calculate_engagement_rate),
+                'satisfaction_score': executor.submit(self.calculate_satisfaction_score),
+                'completion_rate': executor.submit(self.calculate_completion_rate),
+                'department_coverage': executor.submit(self.calculate_department_coverage),
+                'submission_velocity_7d': executor.submit(self.calculate_submission_velocity, 7),
+                'submission_velocity_30d': executor.submit(self.calculate_submission_velocity, 30),
+            }
+            return {k: v.result() for k, v in futures.items()}
 
     def get_kpi_health_status(self) -> Dict:
         kpis = self.get_all_kpis()
