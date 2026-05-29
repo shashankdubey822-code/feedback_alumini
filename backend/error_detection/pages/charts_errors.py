@@ -2,9 +2,9 @@
 Charts Page Error Detector — chart data shape and payload validation.
 """
 from __future__ import annotations
-from backend.utils import pg_helper as sqlite3
 from typing import List
 from ..base import ErrorDetector, DetectionResult
+from backend.utils.supabase_db import get_conn, execute_one
 
 
 class ChartsErrorDetector(ErrorDetector):
@@ -17,7 +17,8 @@ class ChartsErrorDetector(ErrorDetector):
         results = []
         try:
             from backend.services.chart_service import ChartService
-            svc = ChartService(self.db_path)
+            # ChartService uses in-memory global analytics_engine or has no arguments
+            svc = ChartService()
             charts = svc.get_all_chart_data()
 
             if not charts:
@@ -46,11 +47,8 @@ class ChartsErrorDetector(ErrorDetector):
 
         # Check session_rating column exists and has data
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM dashboard_data WHERE session_rating IS NOT NULL AND session_rating != ''")
-            rated = cursor.fetchone()[0]
-            conn.close()
+            res = execute_one("SELECT COUNT(*) as count FROM feedback_responses WHERE session_rating IS NOT NULL")
+            rated = res["count"] if res else 0
             if rated == 0:
                 results.append(self._warn("rating_data", "No session_rating data — rating distribution chart will be empty"))
             else:
