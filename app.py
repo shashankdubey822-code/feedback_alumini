@@ -19,7 +19,7 @@ from backend.routes.health import health_bp
 from backend.routes.admin import admin_bp
 from backend.routes.wiki import wiki_bp
 
-from backend.utils.supabase_db import initialize_database, close_pool
+from backend.utils.supabase_db import initialize_database
 
 
 def create_app(config=None):
@@ -75,11 +75,6 @@ def create_app(config=None):
     # Start Certificate background job worker thread
     from backend.services.job_worker import start_job_worker
     start_job_worker(logger)
-
-    # Register pool teardown on app context
-    @app.teardown_appcontext
-    def shutdown_pool(exception=None):
-        close_pool()
 
     # Enable CORS
     CORS(app, resources={

@@ -216,7 +216,7 @@ def get_consolidated_analytics(app, filters=None, search=None):
                r.form_source, r.record_status, r.submitted_at,
                a.sentiment_label  AS dl_sentiment_label,
                a.sentiment_score  AS dl_sentiment_score,
-               a.nlp_payload      AS dl_keywords
+               a.keywords_json    AS dl_keywords
         FROM feedback_responses r
         LEFT JOIN feedback_analysis a ON a.response_id = r.id
     """
