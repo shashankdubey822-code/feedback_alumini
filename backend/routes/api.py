@@ -84,6 +84,14 @@ def get_initial():
         return jsonify({'error': 'Failed to fetch initial payload'}), 500
 
 
+# Backwards-compatible legacy endpoint for older frontend builds that call /api/initial
+@legacy_bp.route('/initial', methods=['GET'])
+@log_endpoint_access
+def legacy_get_initial():
+    """Legacy wrapper to support frontend requests to /api/initial (no version prefix)."""
+    return get_initial()
+
+
 @api_bp.route('/charts/all', methods=['GET'])
 @log_endpoint_access
 def get_all_charts():
@@ -213,12 +221,15 @@ def get_legacy_filter():
         body = request.get_json() or {}
         filters = body.get('filters', {})
         search = body.get('search', '')
-        return jsonify(get_consolidated_analytics(current_app, filters=filters, search=search)), 200
+        # Pagination support
+        page = int(body.get('page', 1)) if body.get('page') else 1
+        page_size = int(body.get('page_size', 25)) if body.get('page_size') else 25
+        return jsonify(get_consolidated_analytics(current_app, filters=filters, search=search, page=page, page_size=page_size)), 200
     except Exception as e:
         logger.error(f"Error in /api/filter: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-def get_consolidated_analytics(app, filters=None, search=None):
+def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size=25):
     """Consolidate analytics data for the dashboard (native Supabase PostgreSQL)."""
 
     # ── 1. KPIs ─────────────────────────────────────────────────────
@@ -296,8 +307,19 @@ def get_consolidated_analytics(app, filters=None, search=None):
     if where_clauses:
         full_query += ' WHERE ' + ' AND '.join(where_clauses)
     full_query += ' ORDER BY r.submitted_at DESC'
+    # Compute total count efficiently
+    try:
+        count_query = 'SELECT COUNT(*) AS cnt FROM (' + full_query + ') AS subcount'
+        count_row = execute_one(count_query, tuple(params) if params else None)
+        total_count = int(count_row['cnt']) if count_row else 0
+    except Exception:
+        total_count = 0
 
-    raw_rows = execute_all(full_query, tuple(params) if params else None)
+    # Apply LIMIT/OFFSET for pagination
+    offset = max((int(page) - 1), 0) * int(page_size)
+    paged_query = full_query + ' LIMIT %s OFFSET %s'
+    paged_params = tuple(params) + (int(page_size), offset) if params else (int(page_size), offset)
+    raw_rows = execute_all(paged_query, paged_params)
     table_data = []
     for r in raw_rows:
         d = dict(r)
@@ -324,8 +346,8 @@ def get_consolidated_analytics(app, filters=None, search=None):
         if opts:
             formatted_filters.append({'column': col, 'type': 'categorical', 'options': opts})
 
-    # ── 4. Total Responses KPI ───────────────────────────────────────
-    total_count = len(table_data)
+    # ── 4. Total Responses KPI (from count query when paginating)
+    # total_count already computed above
 
     # ── 5. Column type detection ─────────────────────────────────────
     num_keywords  = {'rating', 'score', 'count', 'num', 'total', 'age', 'year'}
@@ -762,6 +784,7 @@ def get_consolidated_analytics(app, filters=None, search=None):
         'deepAnalysis': deep_analysis,
         'speakerStats': speaker_stats_payload,
         'tableData':    table_data,
+        'pagination':   {'page': int(page), 'page_size': int(page_size), 'total_count': int(total_count)},
         'meta': {
             'columns':     columns,
             'columnTypes': col_types,
