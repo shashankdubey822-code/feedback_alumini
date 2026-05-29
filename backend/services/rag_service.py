@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Optional
 import numpy as np
 from backend.utils.logger import get_section_logger
 from backend.utils.supabase_helper import get_supabase_client, is_supabase_active
-from backend.utils import pg_helper as sqlite3
+from backend.utils.supabase_db import execute_all
 import json
 
 logger = get_section_logger('rag')
@@ -108,51 +108,7 @@ class RAGService:
         
         # ─── 2. LOCAL SQLITE FALLBACK ─────────────────────────────────────────
         logger.info(f"Running local SQLite search fallback for query: '{query_text}'")
-        from backend.config import get_config
-        db_path = get_config()().DATABASE_PATH
-        
         try:
-            conn = sqlite3.connect(db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            
-            # Simple fallback: retrieve rows that have keywords or run a simple cosine
-            # similarity search if we have embeddings stored locally in the JSON payload
-            cursor.execute('''
-                SELECT id, name_of_student, alumni_speaker_name, aspect_most_valuable, improvements_suggestions, future_topics, session_rating, dl_keywords
-                FROM dashboard_data
-                LIMIT 500
-            ''')
-            rows = cursor.fetchall()
-            conn.close()
-            
-            # Perform python-side cosine similarity if local vectors are present
-            scored_results = []
-            for r in rows:
-                row_dict = dict(r)
-                # Check if we have a vector saved in dl_keywords (e.g. if we cached it locally)
-                saved_vector = None
-                try:
-                    kw_payload = json.loads(row_dict.get('dl_keywords') or '{}')
-                    if isinstance(kw_payload, dict) and 'embedding' in kw_payload:
-                        saved_vector = kw_payload['embedding']
-                except:
-                    pass
-                
-                if saved_vector and len(saved_vector) == len(query_vector):
-                    # Compute cosine similarity
-                    v1 = np.array(query_vector)
-                    v2 = np.array(saved_vector)
-                    sim = float(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
-                    if sim > threshold:
-                        row_dict['similarity'] = sim
-                        scored_results.append(row_dict)
-            
-            if scored_results:
-                scored_results.sort(key=lambda x: x['similarity'], reverse=True)
-                return scored_results[:limit]
-                
-            # If no embeddings, fall back to regex/substring matches
             return self._fallback_keyword_search(query_text, limit)
             
         except Exception as e:
@@ -160,38 +116,30 @@ class RAGService:
             return self._fallback_keyword_search(query_text, limit)
 
     def _fallback_keyword_search(self, query_text: str, limit: int) -> List[Dict[str, Any]]:
-        """Simple substring database search in case vector models fail"""
-        from backend.config import get_config
-        import time
-        db_path = get_config()().DATABASE_PATH
+        """Simple Supabase-backed substring search in case vector models fail"""
         try:
-            conn = sqlite3.connect(db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            
             tokens = [f"%{t}%" for t in query_text.lower().split() if len(t) > 2]
             if not tokens:
                 tokens = [f"%{query_text.lower()}%"]
-                
+
             conditions = []
             params = []
             for t in tokens:
-                conditions.append("(alumni_speaker_name LIKE ? OR aspect_most_valuable LIKE ? OR improvements_suggestions LIKE ? OR future_topics LIKE ?)")
+                conditions.append("(COALESCE(alumni_speaker_name, '') ILIKE %s OR COALESCE(aspect_most_valuable, '') ILIKE %s OR COALESCE(improvements_suggestions, '') ILIKE %s OR COALESCE(future_topics, '') ILIKE %s)")
                 params.extend([t, t, t, t])
-                
+
             query = f'''
-                SELECT id, name_of_student, alumni_speaker_name, aspect_most_valuable, improvements_suggestions, future_topics, session_rating
-                FROM dashboard_data
+                SELECT id, name_of_student, alumni_speaker_name, aspect_most_valuable,
+                       improvements_suggestions, future_topics, session_rating
+                FROM feedback_responses
                 WHERE {' OR '.join(conditions)}
-                LIMIT ?
+                ORDER BY submitted_at DESC
+                LIMIT %s
             '''
-            params.append(limit)
-            cursor.execute(query, params)
-            rows = [dict(r) for r in cursor.fetchall()]
-            conn.close()
-            
+            rows = execute_all(query, tuple(params + [limit]))
+
             for r in rows:
-                r['similarity'] = 0.5  # Neutral default score for substring matches
+                r['similarity'] = 0.5
             return rows
         except Exception as e:
             logger.error(f"Fallback keyword search failed: {str(e)}")

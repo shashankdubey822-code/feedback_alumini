@@ -12,6 +12,7 @@ import urllib.error
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from backend.config import get_config
 from backend.utils.logger import get_section_logger
+from backend.utils.supabase_db import execute_all
 from backend.utils.supabase_helper import (
     supabase_upload_file,
     supabase_download_file,
@@ -1150,9 +1151,6 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
         def run_queue():
             global _ingest_progress, _abort_requested
             logger.info(f"Starting Ingest queue for {len(sessions)} sessions...")
-            from backend.utils.db_helper import get_db_connection
-            
-            db_path = get_config()().DATABASE_PATH
             
             aborted = False
             for idx, (speaker, date_str) in enumerate(sessions):
@@ -1165,20 +1163,20 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
                 
                 try:
                     # Fetch student responses for this session
-                    conn = get_db_connection(db_path)
-                    conn.row_factory = sqlite3.Row
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                        SELECT * FROM dashboard_data 
-                        WHERE alumni_speaker_name = ? AND date_of_lecture = ?
-                    ''', (speaker, date_str))
-                    rows = [dict(r) for r in cursor.fetchall()]
-                    conn.close()
+                    rows = execute_all(
+                        '''
+                        SELECT *
+                        FROM feedback_responses
+                        WHERE alumni_speaker_name = %s AND date_of_lecture = %s
+                        ORDER BY submitted_at ASC
+                        ''',
+                        (speaker, date_str)
+                    )
 
                     if rows:
                         self.compile_session(speaker, date_str, rows)
                     else:
-                        self.log_compilation(f"Skipping: No database records found for '{speaker}' on '{date_str}'.")
+                        self.log_compilation(f"Skipping: No feedback records found for '{speaker}' on '{date_str}'.")
                 except Exception as e:
                     self.log_compilation(f"Error compiling session '{speaker}': {str(e)}")
 
@@ -1451,49 +1449,42 @@ FORMATTING AND LENGTH RULES (CRITICAL):
         }
 
     def suggest_questions(self) -> List[str]:
-        """Dynamically generate analytical query suggestions using SQLite metadata and an LLM"""
-        config = get_config()()
-        db_path = config.DATABASE_PATH
-        
-        # 1. Fetch metadata from local DB
+        """Dynamically generate analytical query suggestions from Supabase-backed feedback."""
         speakers = []
         topics = []
         try:
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            
-            # If DB is empty, don't show any suggestions
-            cursor.execute('SELECT COUNT(*) FROM dashboard_data')
-            if cursor.fetchone()[0] == 0:
-                conn.close()
-                return []
-            
-            # Fetch distinct speakers
-            cursor.execute('''
-                SELECT alumni_speaker_name, COUNT(*) as cnt 
-                FROM dashboard_data 
-                WHERE alumni_speaker_name IS NOT NULL AND alumni_speaker_name != ''
-                GROUP BY alumni_speaker_name 
-                ORDER BY cnt DESC 
+            speaker_rows = execute_all('''
+                SELECT alumni_speaker_name, COUNT(*) AS cnt
+                FROM feedback_responses
+                WHERE alumni_speaker_name IS NOT NULL AND alumni_speaker_name <> ''
+                GROUP BY alumni_speaker_name
+                ORDER BY cnt DESC, alumni_speaker_name ASC
                 LIMIT 5
             ''')
-            speakers = [r[0] for r in cursor.fetchall()]
-            
-            # Fetch common topics
-            cursor.execute('''
-                SELECT future_topics 
-                FROM dashboard_data 
-                WHERE future_topics IS NOT NULL AND future_topics != '' 
+            speakers = [r['alumni_speaker_name'] for r in speaker_rows if r.get('alumni_speaker_name')]
+
+            topic_rows = execute_all('''
+                SELECT future_topics, COUNT(*) AS cnt
+                FROM feedback_responses
+                WHERE future_topics IS NOT NULL AND future_topics <> ''
+                GROUP BY future_topics
+                ORDER BY cnt DESC
                 LIMIT 15
             ''')
-            topics = [r[0] for r in cursor.fetchall() if len(r[0].strip()) > 3]
-            
-            conn.close()
+            topics = [r['future_topics'].strip() for r in topic_rows if r.get('future_topics') and len(r['future_topics'].strip()) > 3]
         except Exception as e:
             logger.error(f"Failed to query metadata for suggestions: {str(e)}")
             return []
-            
-        # 2. Ask the LLM to generate 4 dynamic questions!
+
+        if not speakers and not topics:
+            return [
+                "What is the overall sentiment of guest lectures?",
+                "Who are the top rated speakers and what makes them successful?",
+                "What improvement patterns appear most often?",
+                "Compare the student feedback across different topics.",
+            ]
+
+        # 2. Ask the LLM to generate 4 dynamic questions
         prompt_text = f"""You are an advanced analyst for a student feedback database.
 The database contains feedback on these recent speakers: {', '.join(speakers) if speakers else 'None'}.
 The database contains requests for these future topics: {', '.join(topics) if topics else 'None'}.
@@ -1526,58 +1517,13 @@ Return ONLY the 4 questions, one per line. Do not use bullet points, numbering, 
                     return questions[:4]
             except Exception as e:
                 logger.warning(f"Failed to dynamically generate questions with LLM: {e}")
-                
-        # Fallback offline questions if LLM completely fails
-        return [
+
+        fallback_questions = [
             "What is the overall sentiment of guest lectures?",
             "Who are the top rated speakers and what makes them successful?",
             f"What was the most valuable aspect of {speakers[0] if speakers else 'the last'} lecture?",
-            "Compare the student feedback across different topics."
+            "Compare the student feedback across different topics.",
         ]
-        if speakers:
-            fallback_questions.append(f"What was the most valuable aspect of [[speakers/{speakers[0].replace(' ', '_')}]]'s lecture?")
-            if len(speakers) > 1:
-                fallback_questions.append(f"Compare the student feedback for [[speakers/{speakers[0].replace(' ', '_')}]] and [[speakers/{speakers[1].replace(' ', '_')}]]")
-            else:
-                fallback_questions.append(f"What were the key improvement areas suggested for [[speakers/{speakers[0].replace(' ', '_')}]]?")
-        
-        if not self.gemini_key:
-            return fallback_questions
-            
-        # 2. Try generating via Gemini using the metadata context
-        try:
-            prompt = f"""
-You are the Alumni Feedback AI assistant. Generate exactly 4 distinct, analytical, and highly specific suggested questions that a university administrator might want to ask about our guest lecture feedback database.
-Use the actual speakers and topics list below to construct these questions.
-Format your output as a strict JSON list of strings (no markdown fences, just the JSON).
-
-Metadata:
-- Speakers: {json.dumps(speakers)}
-- Sample Student Topic Requests: {json.dumps(topics[:10])}
-
-Example Output:
-[
-  "What improvements were suggested for SpeakerName's session?",
-  "Did students find the Resume Writing topic valuable?",
-  "What is the historical performance trend of SpeakerName?"
-]
-"""
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.gemini_key}"
-            req_data = json.dumps({
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"responseMimeType": "application/json"}
-            }).encode('utf-8')
-            
-            request = urllib.request.Request(url, data=req_data, headers={'Content-Type': 'application/json'})
-            with urllib.request.urlopen(request, timeout=10) as response:
-                res_body = json.loads(response.read().decode('utf-8'))
-                text_out = res_body['candidates'][0]['content']['parts'][0]['text']
-                questions = json.loads(text_out)
-                if isinstance(questions, list) and len(questions) >= 3:
-                    return [str(q) for q in questions]
-        except Exception as e:
-            logger.error(f"Generative question suggestion failed: {str(e)}")
-            
         return fallback_questions
 
     def get_graph_data(self) -> Dict[str, Any]:

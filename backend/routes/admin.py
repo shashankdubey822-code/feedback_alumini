@@ -101,8 +101,14 @@ def _normalize_df(df, source='csv_upload') -> pd.DataFrame:
         df['is_duplicate'] = pd.to_numeric(df['is_duplicate'], errors='coerce').fillna(0).astype(bool)
     if 'roll_no' in df.columns:
         df['roll_no'] = df['roll_no'].astype(str).str.upper().str.strip()
-    df.setdefault('form_source', source)
-    df.setdefault('record_status', 'active')
+    if 'form_source' not in df.columns:
+        df['form_source'] = source
+    else:
+        df['form_source'] = df['form_source'].fillna(source).replace('', source)
+    if 'record_status' not in df.columns:
+        df['record_status'] = 'active'
+    else:
+        df['record_status'] = df['record_status'].fillna('active').replace('', 'active')
     return df
 
 
