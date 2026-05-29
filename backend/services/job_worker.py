@@ -1,6 +1,6 @@
 import threading
 import time
-import sqlite3
+from backend.utils import pg_helper as sqlite3
 import json
 import urllib.request
 import urllib.error

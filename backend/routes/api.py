@@ -7,7 +7,7 @@ from ..services.chart_service import ChartService
 from ..services.nlp_service import NLPService
 from ..services.kpi_service import KPIService
 from ..utils.logger import get_section_logger, log_endpoint_access
-import sqlite3
+from backend.utils import pg_helper as sqlite3
 import os
 from ..utils.db_helper import get_db_connection
 

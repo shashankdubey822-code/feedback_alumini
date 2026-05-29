@@ -2,7 +2,7 @@
 Speakers Page Error Detector.
 """
 from __future__ import annotations
-import sqlite3
+from backend.utils import pg_helper as sqlite3
 from typing import List
 from ..base import ErrorDetector, DetectionResult
 

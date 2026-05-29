@@ -3,7 +3,7 @@ Webhook Routes - Handle incoming webhooks from Google Forms
 """
 
 from flask import Blueprint, request, jsonify, current_app
-import sqlite3
+from backend.utils import pg_helper as sqlite3
 import os
 import json
 import re

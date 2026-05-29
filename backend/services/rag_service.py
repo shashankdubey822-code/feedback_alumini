@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Optional
 import numpy as np
 from backend.utils.logger import get_section_logger
 from backend.utils.supabase_helper import get_supabase_client, is_supabase_active
-import sqlite3
+from backend.utils import pg_helper as sqlite3
 import json
 
 logger = get_section_logger('rag')

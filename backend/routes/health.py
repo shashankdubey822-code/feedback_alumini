@@ -3,7 +3,7 @@ Health Routes - Service health and status monitoring
 """
 
 from flask import Blueprint, jsonify
-import sqlite3
+from backend.utils import pg_helper as sqlite3
 from ..utils.logger import get_logger
 from ..utils.db_helper import get_db_connection
 

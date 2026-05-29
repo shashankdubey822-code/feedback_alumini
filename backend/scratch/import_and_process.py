@@ -1,7 +1,7 @@
 import os
 import sys
 import pandas as pd
-import sqlite3
+from backend.utils import pg_helper as sqlite3
 import json
 
 # Add backend directory to sys path so we can import services

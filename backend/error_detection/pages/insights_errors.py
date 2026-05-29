@@ -31,7 +31,7 @@ class InsightsErrorDetector(ErrorDetector):
 
         # 3. Check that at least some DL-processed rows exist (insights need them)
         try:
-            import sqlite3
+from backend.utils import pg_helper as sqlite3
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute("PRAGMA table_info(dashboard_data)")

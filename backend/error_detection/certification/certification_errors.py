@@ -1,5 +1,5 @@
 import os
-import sqlite3
+from backend.utils import pg_helper as sqlite3
 from typing import List
 from datetime import datetime
 from backend.error_detection.base import ErrorDetector, DetectionResult

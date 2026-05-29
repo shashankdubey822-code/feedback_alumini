@@ -5,7 +5,7 @@ Wiki Routes - REST Blueprint for Wiki operations
 from flask import Blueprint, jsonify, request, current_app
 from backend.services.wiki_service import WikiService
 from backend.utils.logger import get_section_logger, log_endpoint_access
-import sqlite3
+from backend.utils import pg_helper as sqlite3
 import os
 import re
 

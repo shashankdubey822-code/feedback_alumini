@@ -2,7 +2,7 @@
 Database connection helper to prevent locking issues
 """
 import os
-import sqlite3
+from backend.utils import pg_helper as sqlite3
 
 
 def get_db_connection(db_path, timeout=30.0):

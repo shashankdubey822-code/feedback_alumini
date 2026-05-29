@@ -1,6 +1,6 @@
 import threading
 import time
-import sqlite3
+from backend.utils import pg_helper as sqlite3
 import json
 from backend.services.nlp_service import NLPService
 from backend.config import get_config

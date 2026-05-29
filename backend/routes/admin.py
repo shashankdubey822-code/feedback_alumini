@@ -5,7 +5,7 @@ Fixed all critical issues: orphaned events, webhook validation, duplicate detect
 
 from flask import Blueprint, request, jsonify, current_app
 import os
-import sqlite3
+from backend.utils import pg_helper as sqlite3
 import pandas as pd
 import re
 import urllib.request

@@ -30,3 +30,6 @@ google_apps_script/
 env.example
 .agent/
 agent_runtimes/
+.github/
+.cursor/
+code-review.graph/

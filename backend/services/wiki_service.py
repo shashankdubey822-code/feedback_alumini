@@ -1,6 +1,6 @@
 import os
 import re
-import sqlite3
+from backend.utils import pg_helper as sqlite3
 import json
 import time
 import threading

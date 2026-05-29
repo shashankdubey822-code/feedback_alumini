@@ -2,7 +2,7 @@
 KPI Service - Key Performance Indicators calculation and tracking
 """
 
-import sqlite3
+from backend.utils import pg_helper as sqlite3
 from typing import Dict, Optional
 from datetime import datetime, timedelta
 from backend.utils.db_helper import get_db_connection
