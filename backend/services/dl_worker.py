@@ -119,27 +119,24 @@ def start_dl_worker(logger_unused=None):
                                 write_cur.execute("""
                                     INSERT INTO feedback_analysis
                                         (response_id, sentiment_score, sentiment_label,
-                                         keywords_json, processed_at, model_version)
-                                    VALUES (%s, %s, %s, %s, NOW(), 'v2')
+                                         key_topics, analyzed_at)
+                                    VALUES (%s, %s, %s, %s, NOW())
                                     ON CONFLICT (response_id) DO UPDATE SET
                                         sentiment_score = EXCLUDED.sentiment_score,
                                         sentiment_label = EXCLUDED.sentiment_label,
-                                        keywords_json   = EXCLUDED.keywords_json,
-                                        processed_at    = NOW(),
-                                        model_version   = EXCLUDED.model_version
+                                        key_topics      = EXCLUDED.key_topics,
+                                        analyzed_at     = NOW()
                                 """, (
                                     response_id,
                                     sentiment.get('polarity', 0.0),
                                     sentiment_label,
                                     json.dumps(keywords_payload),
                                 ))
-                            # commit if using a connection that requires it
                             try:
                                 write_conn.commit()
                             except Exception:
                                 pass
                     except Exception as e_row:
-                        # Per-row failure: log and write a minimal marker row so it is not retried forever
                         dl_logger.error(f"DL Worker failed processing response {response_id}: {e_row}")
                         try:
                             err_payload = {
@@ -151,12 +148,11 @@ def start_dl_worker(logger_unused=None):
                                     write_cur2.execute("""
                                         INSERT INTO feedback_analysis
                                             (response_id, sentiment_score, sentiment_label,
-                                             keywords_json, processed_at, model_version)
-                                        VALUES (%s, %s, %s, %s, NOW(), 'v2-error')
+                                             key_topics, analyzed_at)
+                                        VALUES (%s, %s, %s, %s, NOW())
                                         ON CONFLICT (response_id) DO UPDATE SET
-                                            keywords_json = EXCLUDED.keywords_json,
-                                            processed_at  = NOW(),
-                                            model_version = EXCLUDED.model_version
+                                            key_topics  = EXCLUDED.key_topics,
+                                            analyzed_at = NOW()
                                     """, (
                                         response_id,
                                         0.0,

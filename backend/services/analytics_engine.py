@@ -38,7 +38,7 @@ class AnalyticsEngine:
                 s.roll_no,
                 a.sentiment_label,
                 a.sentiment_score,
-                a.keywords_json
+                a.key_topics as keywords_json
             FROM feedback_responses r
             JOIN events e ON r.event_id = e.id
             JOIN students s ON r.student_id = s.id
@@ -86,7 +86,7 @@ class AnalyticsEngine:
                 s.roll_no,
                 a.sentiment_label,
                 a.sentiment_score,
-                a.keywords_json
+                a.key_topics as keywords_json
             FROM feedback_responses r
             JOIN events e ON r.event_id = e.id
             JOIN students s ON r.student_id = s.id
