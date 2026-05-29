@@ -1,9 +1,9 @@
 import os
-from backend.utils import pg_helper as sqlite3
 from typing import List
 from datetime import datetime
 from backend.error_detection.base import ErrorDetector, DetectionResult
-from backend.utils.db_helper import get_db_connection
+from backend.utils.supabase_db import get_conn, execute_one
+
 
 class CertificationErrorDetector(ErrorDetector):
     """
@@ -18,25 +18,25 @@ class CertificationErrorDetector(ErrorDetector):
     page = "certification"
 
     def __init__(self, db_path: str):
+        # db_path is ignored for Supabase integration
         self.db_path = db_path
 
     def run(self) -> List[DetectionResult]:
         results = []
         try:
-            conn = get_db_connection(self.db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+            with get_conn() as conn:
+                with conn.cursor() as cursor:
+                    results.extend(self._analyze_template_configuration(cursor))
+                    
+                    # Ensure certificate_jobs exists before querying
+                    cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name='certificate_jobs'")
+                    if cursor.fetchone():
+                        results.extend(self._analyze_failed_jobs(cursor))
+                        results.extend(self._analyze_stuck_jobs(cursor))
+                        results.extend(self._analyze_missing_emails(cursor))
+                    else:
+                        results.append(self._warn("table_exists", "certificate_jobs table does not exist"))
 
-            results.extend(self._analyze_template_configuration(cursor))
-            
-            # Ensure job_queue exists before querying
-            cursor.execute("PRAGMA table_info(job_queue)")
-            if cursor.fetchall():
-                results.extend(self._analyze_failed_jobs(cursor))
-                results.extend(self._analyze_stuck_jobs(cursor))
-                results.extend(self._analyze_missing_emails(cursor))
-            
-            conn.close()
         except Exception as e:
             results.append(self._critical("db_connection", f"Certification DB Error: {str(e)}"))
 
@@ -59,7 +59,7 @@ class CertificationErrorDetector(ErrorDetector):
         cursor.execute('''
             SELECT id, speaker_name, template_id 
             FROM events 
-            WHERE send_certificates = 1 
+            WHERE send_certificates = true 
             AND (template_id IS NULL OR template_id = '')
         ''')
         events = cursor.fetchall()
@@ -75,7 +75,7 @@ class CertificationErrorDetector(ErrorDetector):
         results = []
         cursor.execute('''
             SELECT j.id, j.student_name, j.student_email, j.error_message, e.speaker_name
-            FROM job_queue j
+            FROM certificate_jobs j
             LEFT JOIN events e ON j.event_id = e.id
             WHERE j.status = 'failed'
         ''')
@@ -93,26 +93,28 @@ class CertificationErrorDetector(ErrorDetector):
         results = []
         cursor.execute('''
             SELECT j.id, j.student_name, j.updated_at
-            FROM job_queue j
+            FROM certificate_jobs j
             WHERE j.status = 'processing'
         ''')
         jobs = cursor.fetchall()
         now = datetime.utcnow()
         for job in jobs:
             try:
-                updated_at_str = job['updated_at']
-                if "T" in updated_at_str:
-                    updated_at = datetime.fromisoformat(updated_at_str.replace('Z', '+00:00')).replace(tzinfo=None)
-                else:
-                    updated_at = datetime.strptime(updated_at_str, "%Y-%m-%d %H:%M:%S")
+                updated_at = job['updated_at']
+                if updated_at:
+                    if isinstance(updated_at, str):
+                        if "T" in updated_at:
+                            updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00')).replace(tzinfo=None)
+                        else:
+                            updated_at = datetime.strptime(updated_at, "%Y-%m-%d %H:%M:%S")
                     
-                age_minutes = (now - updated_at).total_seconds() / 60
-                if age_minutes > 15:
-                    results.append(self._warn(
-                        "stuck_jobs",
-                        f"Job #{job['id']} for {job['student_name']} is stuck in 'processing' state.",
-                        f"Stuck for {age_minutes:.1f} minutes. Consider resetting the status to 'pending'."
-                    ))
+                    age_minutes = (now - updated_at).total_seconds() / 60
+                    if age_minutes > 15:
+                        results.append(self._warn(
+                            "stuck_jobs",
+                            f"Job #{job['id']} for {job['student_name']} is stuck in 'processing' state.",
+                            f"Stuck for {age_minutes:.1f} minutes. Consider resetting the status to 'pending'."
+                        ))
             except Exception as e:
                 pass # Ignore parsing errors for individual jobs
         return results
@@ -121,7 +123,7 @@ class CertificationErrorDetector(ErrorDetector):
         results = []
         cursor.execute('''
             SELECT id, student_name, status
-            FROM job_queue 
+            FROM certificate_jobs 
             WHERE (student_email IS NULL OR student_email = '') AND status != 'completed'
         ''')
         jobs = cursor.fetchall()
@@ -145,3 +147,4 @@ class CertificationErrorDetector(ErrorDetector):
         else:
             results.append(self._ok("apps_script_config", "APPS_SCRIPT_URL is configured."))
         return results
+
