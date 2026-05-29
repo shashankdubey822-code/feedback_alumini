@@ -270,6 +270,24 @@ def receive_form_submission():
         logger.info(f"Webhook submission stored #{record_id}")
         _update_sync_status(True)
 
+        # Real-time WebSocket emission & Analytics Refresh
+        try:
+            from backend.extensions import socketio
+            from backend.services.analytics_engine import analytics_engine
+            
+            # Refresh pandas dataframe to include the new row
+            analytics_engine.refresh_data()
+            
+            # Broadcast the update to all connected clients
+            socketio.emit('new_feedback', {
+                'message': f"New submission from {student_name}",
+                'student_name': student_name,
+                'record_id': record_id
+            })
+            logger.info(f"Emitted real-time new_feedback event for #{record_id}")
+        except Exception as ws_err:
+            logger.error(f"WebSocket emit error: {ws_err}")
+
         return jsonify({'status': 'success', 'record_id': record_id, 'message': 'Stored'}), 200
 
     except Exception as e:

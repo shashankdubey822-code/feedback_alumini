@@ -21,6 +21,7 @@ from backend.routes.webhook import webhook_bp
 from backend.routes.health import health_bp
 from backend.routes.admin import admin_bp
 from backend.routes.wiki import wiki_bp
+from backend.extensions import socketio
 
 from backend.utils.supabase_db import initialize_database
 
@@ -96,6 +97,9 @@ def create_app(config=None):
     app.register_blueprint(admin_bp)
     app.register_blueprint(wiki_bp)
 
+    # Initialize SocketIO
+    socketio.init_app(app)
+
     # Initialize Wiki folders and templates on startup
     try:
         from backend.services.wiki_service import WikiService
@@ -161,9 +165,11 @@ if __name__ == '__main__':
     logger.info(f"Starting server on port {port}")
 
     # Trigger HF Space rebuild for Google Form fix
-    app.run(
+    socketio.run(
+        app,
         host='0.0.0.0',
         port=port,
         debug=debug,
         use_reloader=False,  # Disable reloader for HF Spaces
+        allow_unsafe_werkzeug=True  # Required for dev server with SocketIO
     )

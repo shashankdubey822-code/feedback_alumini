@@ -540,35 +540,30 @@ function setupDashboardHandlers() {
     document.getElementById('btn-clear-filters').addEventListener('click', clearAllFilters);
     document.getElementById('global-search').addEventListener('input', debounce(applyFilters, 400));
 
-    // Auto-refresh the dashboard live (Webhooks sync) - ENHANCED with abort control
-    setInterval(async () => {
-        const dash = document.getElementById('dashboard-screen');
-        if (!dash || !dash.classList.contains('active')) return;
+    // Auto-refresh the dashboard live via WebSockets
+    try {
+        const socket = io();
+        socket.on('new_feedback', async (data) => {
+            console.log('[WEBSOCKET] New feedback received:', data);
+            const dash = document.getElementById('dashboard-screen');
+            if (!dash || !dash.classList.contains('active')) return;
+            
+            const searchVal = document.getElementById('global-search').value.trim();
+            if (searchVal.length > 0) return; // Don't disrupt active searching
+            
+            // Show a non-intrusive toast or indicator
+            showNotification('New feedback received! Updating dashboard...', 'info');
+            
+            // Fetch updated data using the existing flow
+            await applyFilters(true); // silent flag
+        });
         
-        const searchVal = document.getElementById('global-search').value.trim();
-        if (searchVal.length > 0) return; // Don't disrupt active searching
-        
-        try {
-            // Abort any pending auto-refresh request
-            if (currentAutoRefreshController) {
-                currentAutoRefreshController.abort();
-                console.log('[AUTO-REFRESH] Aborted previous request');
-            }
-            
-            // Create new AbortController for this refresh
-            currentAutoRefreshController = new AbortController();
-            
-            // We just re-run the normal filter workflow silently to pull new webhook data
-            await applyFilters(true); // true = silent flag
-            
-            currentAutoRefreshController = null;
-        } catch(e) {
-            if (e.name !== 'AbortError') {
-                console.error('[AUTO-REFRESH] Error:', e);
-            }
-            currentAutoRefreshController = null;
-        }
-    }, 10000);
+        socket.on('connect', () => {
+            console.log('[WEBSOCKET] Connected to server for real-time updates.');
+        });
+    } catch (e) {
+        console.warn('[WEBSOCKET] Could not initialize socket.io:', e);
+    }
 }
 
 // ========== ADMIN AUTH & LOGIC ==========
