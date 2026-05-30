@@ -173,8 +173,10 @@ def store_webhook_submission(payload: dict) -> int:
     if not student_id:
         raise ValueError("Failed to upsert student.")
 
-    # ── Insert into feedback_responses ────────────────────────────
-    fb_res = api_insert('feedback_responses', {
+    from backend.utils.insforge_db import execute_one
+    
+    # ── Insert or update feedback_responses ────────────────────────────
+    payload_data = {
         'event_id': event_id,
         'student_id': student_id,
         'submitted_at': normalized_ts,
@@ -186,8 +188,15 @@ def store_webhook_submission(payload: dict) -> int:
         'future_topics': responses.get('future_topics', ''),
         'form_source': form_id,
         'record_status': 'active'
-    })
-    response_id = fb_res[0]['id'] if fb_res else None
+    }
+
+    fb_check = execute_one("SELECT id FROM feedback_responses WHERE event_id=%s AND student_id=%s", (event_id, student_id))
+    if fb_check:
+        api_update('feedback_responses', 'id', fb_check['id'], payload_data)
+        response_id = fb_check['id']
+    else:
+        fb_res = api_insert('feedback_responses', payload_data)
+        response_id = fb_res[0]['id'] if fb_res else None
 
     # ── Enqueue certificate job if enabled ────────────────────────
     if send_certs and template_id and event_id:
@@ -197,13 +206,17 @@ def store_webhook_submission(payload: dict) -> int:
             job_status = 'failed'
             job_error  = 'No email address provided in form submission'
 
-        api_insert('certificate_jobs', {
-            'student_id': student_id,
-            'event_id': event_id,
-            'status': job_status,
-            'error_log': job_error
-        })
-        logger.info(f"Certificate job enqueued for {student_name} ({student_email or 'no email'})")
+        job_check = execute_one("SELECT id FROM certificate_jobs WHERE event_id=%s AND student_id=%s", (event_id, student_id))
+        if not job_check:
+            api_insert('certificate_jobs', {
+                'student_id': student_id,
+                'event_id': event_id,
+                'status': job_status,
+                'error_log': job_error
+            })
+            logger.info(f"Certificate job enqueued for {student_name} ({student_email or 'no email'})")
+        else:
+            logger.info(f"Certificate job already exists for {student_name}")
 
     return response_id
 
