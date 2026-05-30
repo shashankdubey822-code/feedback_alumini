@@ -112,30 +112,16 @@ def start_dl_worker(logger_unused=None):
                     if sentiment_label not in ('POSITIVE', 'NEUTRAL', 'NEGATIVE'):
                         sentiment_label = 'NEUTRAL'
 
-                    # Upsert into feedback_analysis using a short-lived DB connection
+                    # Upsert into feedback_analysis using REST API
                     try:
-                        with get_db() as write_conn:
-                            with write_conn.cursor() as write_cur:
-                                write_cur.execute("""
-                                    INSERT INTO feedback_analysis
-                                        (response_id, sentiment_score, sentiment_label,
-                                         key_topics, analyzed_at)
-                                    VALUES (%s, %s, %s, %s, NOW())
-                                    ON CONFLICT (response_id) DO UPDATE SET
-                                        sentiment_score = EXCLUDED.sentiment_score,
-                                        sentiment_label = EXCLUDED.sentiment_label,
-                                        key_topics      = EXCLUDED.key_topics,
-                                        analyzed_at     = NOW()
-                                """, (
-                                    response_id,
-                                    sentiment.get('polarity', 0.0),
-                                    sentiment_label,
-                                    json.dumps(keywords_payload),
-                                ))
-                            try:
-                                write_conn.commit()
-                            except Exception:
-                                pass
+                        from backend.utils.insforge_db import api_upsert
+                        api_upsert('feedback_analysis', {
+                            'response_id': response_id,
+                            'sentiment_score': sentiment.get('polarity', 0.0),
+                            'sentiment_label': sentiment_label,
+                            'key_topics': json.dumps(keywords_payload),
+                            'analyzed_at': datetime.now().isoformat()
+                        }, 'response_id')
                     except Exception as e_row:
                         dl_logger.error(f"DL Worker failed processing response {response_id}: {e_row}")
                         try:
@@ -143,26 +129,13 @@ def start_dl_worker(logger_unused=None):
                                 'error': str(e_row),
                                 'notes': 'processing_failed'
                             }
-                            with get_db() as write_conn2:
-                                with write_conn2.cursor() as write_cur2:
-                                    write_cur2.execute("""
-                                        INSERT INTO feedback_analysis
-                                            (response_id, sentiment_score, sentiment_label,
-                                             key_topics, analyzed_at)
-                                        VALUES (%s, %s, %s, %s, NOW())
-                                        ON CONFLICT (response_id) DO UPDATE SET
-                                            key_topics  = EXCLUDED.key_topics,
-                                            analyzed_at = NOW()
-                                    """, (
-                                        response_id,
-                                        0.0,
-                                        None,
-                                        json.dumps(err_payload),
-                                    ))
-                                try:
-                                    write_conn2.commit()
-                                except Exception:
-                                    pass
+                            api_upsert('feedback_analysis', {
+                                'response_id': response_id,
+                                'sentiment_score': 0.0,
+                                'sentiment_label': None,
+                                'key_topics': json.dumps(err_payload),
+                                'analyzed_at': datetime.now().isoformat()
+                            }, 'response_id')
                         except Exception as e_marker:
                             dl_logger.error(f"Failed to write failure marker for {response_id}: {e_marker}")
 

@@ -120,25 +120,33 @@ class DatabaseSyncAgent(BaseAgent):
             return payload
             
         try:
+            from backend.utils.insforge_db import api_upsert
             # 1. Upsert Student
-            stu_row = execute_one("""
-                INSERT INTO students (roll_no, email, name, department)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (roll_no) DO UPDATE SET
-                    name = EXCLUDED.name, email = EXCLUDED.email
-                RETURNING id
-            """, (stu['roll_no'], stu.get('email'), stu['name'], stu['department']))
-            student_id = stu_row['id']
+            stu_row = api_upsert('students', {
+                'roll_no': stu['roll_no'],
+                'email': stu.get('email'),
+                'name': stu['name'],
+                'department': stu['department']
+            }, 'roll_no')
+            student_id = stu_row[0]['id'] if stu_row else None
             
             # 2. Upsert Event
-            evt_row = execute_one("""
-                INSERT INTO events (speaker_name, venue_date, department)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (speaker_name, venue_date) DO UPDATE SET
-                    department = EXCLUDED.department
-                RETURNING id
-            """, (evt['speaker_name'], evt['venue_date'], evt['department']))
-            event_id = evt_row['id']
+            # InsForge REST needs a unique constraint for ON CONFLICT, so if speaker_name,venue_date isn't uniquely constrained, we should just insert or select-first. Let's assume api_upsert works for 'speaker_name,venue_date'.
+            # Since 'speaker_name,venue_date' might not be a valid PostgREST conflict_columns format unless there's a specific unique constraint, let's just do a select first.
+            from backend.utils.insforge_db import api_select, api_insert
+            existing_event = api_select('events', 'speaker_name', evt['speaker_name'])
+            # Actually api_select is match_col=match_val, we need AND venue_date. Let's do it manually via execute_one for SELECT since SELECT is allowed in rawsql!
+            from backend.utils.insforge_db import execute_one
+            evt_row = execute_one("SELECT id FROM events WHERE speaker_name=%s AND venue_date=%s", (evt['speaker_name'], evt['venue_date']))
+            if evt_row:
+                event_id = evt_row['id']
+            else:
+                new_evt = api_insert('events', {
+                    'speaker_name': evt['speaker_name'],
+                    'venue_date': evt['venue_date'],
+                    'department': evt['department']
+                })
+                event_id = new_evt[0]['id'] if new_evt else None
             
             # 3. Upsert Feedback
             sub_at = fb['submitted_at']
@@ -147,28 +155,31 @@ class DatabaseSyncAgent(BaseAgent):
             except:
                 sub_at = datetime.now().isoformat()
 
-            fb_row = execute_one("""
-                INSERT INTO feedback_responses (
-                    event_id, student_id, submitted_at,
-                    session_rating, session_help_understanding, aspect_most_valuable,
-                    improvements_suggestions, future_topics, data_quality_score, is_duplicate
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (event_id, student_id) DO UPDATE SET
-                    submitted_at = EXCLUDED.submitted_at,
-                    session_rating = EXCLUDED.session_rating,
-                    aspect_most_valuable = EXCLUDED.aspect_most_valuable,
-                    improvements_suggestions = EXCLUDED.improvements_suggestions,
-                    future_topics = EXCLUDED.future_topics
-                RETURNING id
-            """, (
-                event_id, student_id, sub_at,
-                fb['session_rating'], fb['session_help_understanding'],
-                fb['aspect_most_valuable'], fb['improvements_suggestions'],
-                fb['future_topics'], fb['data_quality_score'], fb['is_duplicate']
-            ))
+            # For feedback, ON CONFLICT (event_id, student_id)
+            fb_check = execute_one("SELECT id FROM feedback_responses WHERE event_id=%s AND student_id=%s", (event_id, student_id))
             
-            payload['response_id'] = fb_row['id']
-            logger.info(f"Successfully synced feedback ID: {fb_row['id']}")
+            payload_data = {
+                'event_id': event_id,
+                'student_id': student_id,
+                'submitted_at': sub_at,
+                'session_rating': fb['session_rating'],
+                'session_help_understanding': fb['session_help_understanding'],
+                'aspect_most_valuable': fb['aspect_most_valuable'],
+                'improvements_suggestions': fb['improvements_suggestions'],
+                'future_topics': fb['future_topics'],
+                'data_quality_score': fb['data_quality_score'],
+                'is_duplicate': fb['is_duplicate']
+            }
+            if fb_check:
+                from backend.utils.insforge_db import api_update
+                api_update('feedback_responses', 'id', fb_check['id'], payload_data)
+                fb_id = fb_check['id']
+            else:
+                fb_row = api_insert('feedback_responses', payload_data)
+                fb_id = fb_row[0]['id'] if fb_row else None
+            
+            payload['response_id'] = fb_id
+            logger.info(f"Successfully synced feedback ID: {fb_id}")
             
         except Exception as e:
             logger.error(f"DB Sync error: {str(e)}")

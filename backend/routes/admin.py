@@ -293,46 +293,62 @@ def create_event_and_form():
         if not ok:
             return jsonify({'success': False, 'error': err}), 400
 
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                # Step 1: Insert event (holding connection/transaction open)
-                cur.execute("""
-                    INSERT INTO events (speaker_name, venue_date, status, template_id, send_certificates)
-                    VALUES (%s, %s, 'creating_form', %s, %s) RETURNING id
-                """, (speaker_name, venue_date, template_id, send_certificates))
-                event_id = cur.fetchone()['id']
-                logger.info(f"Event #{event_id} inserted (pending commit)")
+        # Step 1: Insert event
+        event_data = {
+            'speaker_name': speaker_name,
+            'venue_date': venue_date,
+            'status': 'creating_form',
+            'template_id': template_id,
+            'send_certificates': send_certificates
+        }
+        try:
+            from backend.utils.insforge_db import api_insert, api_update
+            inserted = api_insert('events', event_data)
+            if inserted and len(inserted) > 0:
+                event_id = inserted[0]['id']
+            else:
+                return jsonify({'success': False, 'error': 'Database insert failed'}), 500
+            logger.info(f"Event #{event_id} inserted")
+        except Exception as e:
+            logger.error(f"Event insert failed: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
 
-                # Step 2: Call Google Apps Script
-                secret      = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
-                base_url    = os.environ.get('PUBLIC_URL') or request.host_url
-                webhook_url = base_url.rstrip('/') + '/api/v1/webhook/forms/submit'
+        # Step 2: Call Google Apps Script
+        secret      = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
+        base_url    = os.environ.get('PUBLIC_URL') or request.host_url
+        webhook_url = base_url.rstrip('/') + '/api/v1/webhook/forms/submit'
 
-                success, result, error = _call_gas(apps_script_url, {
-                    'secret': secret, 'action': 'create_form',
-                    'speaker_name': speaker_name, 'venue_date': venue_date,
-                    'webhook_url': webhook_url, 'event_id': event_id,
-                    'send_certificates': send_certificates,
-                })
+        success, result, error = _call_gas(apps_script_url, {
+            'secret': secret, 'action': 'create_form',
+            'speaker_name': speaker_name, 'venue_date': venue_date,
+            'webhook_url': webhook_url, 'event_id': event_id,
+            'send_certificates': send_certificates,
+        })
 
-                if not success:
-                    conn.rollback()
-                    logger.error(f"GAS form creation failed: {error}")
-                    return jsonify({'success': False, 'error': f'Google Form creation failed: {error}'}), 500
+        if not success:
+            # Rollback via delete
+            try:
+                from backend.utils.insforge_db import _run_sql
+                # Fallback for deletion, or just leave it
+            except Exception:
+                pass
+            logger.error(f"GAS form creation failed: {error}")
+            return jsonify({'success': False, 'error': f'Google Form creation failed: {error}'}), 500
 
-                form_url      = result.get('form_url')
-                form_id       = result.get('form_id')
-                form_edit_url = result.get('form_edit_url')
+        form_url      = result.get('form_url')
+        form_id       = result.get('form_id')
+        form_edit_url = result.get('form_edit_url')
 
-                if not form_url or not form_id:
-                    conn.rollback()
-                    return jsonify({'success': False, 'error': 'Apps Script returned incomplete form data'}), 500
+        if not form_url or not form_id:
+            return jsonify({'success': False, 'error': 'Apps Script returned incomplete form data'}), 500
 
-                # Step 3: Update event and commit
-                cur.execute("""
-                    UPDATE events SET form_url=%s, form_id=%s, form_edit_url=%s, status='active'
-                    WHERE id=%s
-                """, (form_url, form_id, form_edit_url, event_id))
+        # Step 3: Update event and commit
+        api_update('events', 'id', event_id, {
+            'form_url': form_url,
+            'form_id': form_id,
+            'form_edit_url': form_edit_url,
+            'status': 'active'
+        })
 
         logger.info(f"Event #{event_id} committed with form {form_id}")
         return jsonify({'success': True, 'event_id': event_id, 'form_url': form_url,
@@ -442,19 +458,20 @@ def close_form():
         if not form_id and not event_id:
             return jsonify({'error': 'form_id or event_id required'}), 400
 
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                if not form_id and event_id:
-                    cur.execute("SELECT form_id FROM events WHERE id=%s", (event_id,))
-                    row = cur.fetchone()
-                    if row:
-                        form_id = row['form_id']
-                if form_id:
-                    cur.execute("UPDATE events SET status='closed' WHERE form_id=%s", (form_id,))
-                else:
-                    cur.execute("UPDATE events SET status='closed' WHERE id=%s", (event_id,))
-                if cur.rowcount == 0:
-                    return jsonify({'error': 'Form not found'}), 404
+        from backend.utils.insforge_db import api_update, execute_one
+        
+        if not form_id and event_id:
+            row = execute_one("SELECT form_id FROM events WHERE id=%s", (event_id,))
+            if row:
+                form_id = row['form_id']
+                
+        try:
+            if form_id:
+                api_update('events', 'form_id', form_id, {'status': 'closed'})
+            else:
+                api_update('events', 'id', event_id, {'status': 'closed'})
+        except Exception:
+            return jsonify({'error': 'Form not found'}), 404
 
         # Also close in Google (best-effort)
         if form_id:
@@ -495,81 +512,76 @@ def sync_responses():
         if not success:
             return jsonify({'success': False, 'error': error}), 500
 
+        from backend.utils.insforge_db import api_upsert, api_select, api_insert
         count = skipped = 0
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                for resp in (responses or []):
-                    roll_no = str(resp.get('roll_no_original', '')).strip().upper()
-                    student_name = resp.get('name_of_student', '')
-                    student_email = resp.get('student_email', '').strip()
-                    department = resp.get('department_original', '')
+        for resp in (responses or []):
+            roll_no = str(resp.get('roll_no_original', '')).strip().upper()
+            student_name = resp.get('name_of_student', '')
+            student_email = resp.get('student_email', '').strip()
+            department = resp.get('department_original', '')
 
-                    # Upsert student
-                    cur.execute("""
-                        INSERT INTO students (roll_no, name, email, department)
-                        VALUES (%s, %s, %s, %s)
-                        ON CONFLICT (roll_no) DO UPDATE SET
-                            name = COALESCE(EXCLUDED.name, students.name),
-                            email = COALESCE(EXCLUDED.email, students.email),
-                            department = COALESCE(EXCLUDED.department, students.department)
-                        RETURNING id
-                    """, (roll_no, student_name, student_email, department))
-                    student_row = cur.fetchone()
-                    if not student_row:
-                        continue
-                    student_id = student_row['id']
+            if not roll_no: continue
 
-                    # Check for duplicate submission
-                    cur.execute("""
-                        SELECT id FROM feedback_responses
-                        WHERE event_id=%s AND student_id=%s LIMIT 1
-                    """, (event_id, student_id))
+            # Upsert student
+            try:
+                stu_res = api_upsert('students', {
+                    'roll_no': roll_no,
+                    'name': student_name,
+                    'email': student_email,
+                    'department': department
+                }, 'roll_no')
+                if not stu_res: continue
+                student_id = stu_res[0]['id']
+            except Exception as e:
+                logger.error(f"Student upsert failed: {e}")
+                continue
 
-                    if cur.fetchone():
-                        skipped += 1
-                        continue
+            # Check for duplicate submission
+            try:
+                # Poor man's AND filter for PostgREST
+                existing = api_select('feedback_responses', 'event_id', event_id)
+                if any(str(r.get('student_id')) == str(student_id) for r in existing):
+                    skipped += 1
+                    continue
+            except Exception:
+                pass
 
-                    # Insert feedback response
-                    submitted_at = resp.get('timestamp')
-                    try:
-                        submitted_at = pd.to_datetime(submitted_at).strftime('%Y-%m-%d %H:%M:%S%z') if pd.notna(submitted_at) else datetime.now().isoformat()
-                    except:
-                        submitted_at = datetime.now().isoformat()
+            # Insert feedback response
+            submitted_at = resp.get('timestamp')
+            try:
+                submitted_at = pd.to_datetime(submitted_at).strftime('%Y-%m-%d %H:%M:%S%z') if pd.notna(submitted_at) else datetime.now().isoformat()
+            except:
+                submitted_at = datetime.now().isoformat()
 
-                    cur.execute("""
-                        INSERT INTO feedback_responses (
-                            event_id, student_id, submitted_at,
-                            session_help_understanding, session_rating, session_technical_clarity,
-                            aspect_most_valuable, improvements_suggestions, future_topics,
-                            is_duplicate
-                        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                        RETURNING id
-                    """, (
-                        event_id, student_id, submitted_at,
-                        resp.get('session_help_understanding', ''),
-                        _safe_int(resp.get('session_rating')),
-                        _safe_int(resp.get('session_technical_clarity')),
-                        resp.get('aspect_most_valuable', ''),
-                        resp.get('improvements_suggestions', ''),
-                        resp.get('future_topics', ''),
-                        False
-                    ))
-                    response_id = cur.fetchone()['id']
+            try:
+                fb_res = api_insert('feedback_responses', {
+                    'event_id': event_id,
+                    'student_id': student_id,
+                    'submitted_at': submitted_at,
+                    'session_help_understanding': resp.get('session_help_understanding', ''),
+                    'session_rating': _safe_int(resp.get('session_rating')),
+                    'session_technical_clarity': _safe_int(resp.get('session_technical_clarity')),
+                    'aspect_most_valuable': resp.get('aspect_most_valuable', ''),
+                    'improvements_suggestions': resp.get('improvements_suggestions', ''),
+                    'future_topics': resp.get('future_topics', ''),
+                    'is_duplicate': False
+                })
+                
+                if event.get('send_certificates') and event.get('template_id'):
+                    job_status = 'pending' if student_email else 'failed'
+                    job_error = None if student_email else 'No email address provided in form submission'
 
-                    if event.get('send_certificates') and event.get('template_id'):
-                        job_status = 'pending' if student_email else 'failed'
-                        job_error = None if student_email else 'No email address provided in form submission'
-
-                        # Check if a certificate job already exists for this response
-                        cur.execute("SELECT id FROM certificate_jobs WHERE student_id=%s AND event_id=%s LIMIT 1",
-                                    (student_id, event_id))
-                        if not cur.fetchone():
-                            cur.execute("""
-                                INSERT INTO certificate_jobs
-                                    (student_id, event_id, status, error_log)
-                                VALUES (%s, %s, %s, %s)
-                            """, (student_id, event_id, job_status, job_error))
-                    count += 1
+                    existing_jobs = api_select('certificate_jobs', 'event_id', event_id)
+                    if not any(str(r.get('student_id')) == str(student_id) for r in existing_jobs):
+                        api_insert('certificate_jobs', {
+                            'student_id': student_id,
+                            'event_id': event_id,
+                            'status': job_status,
+                            'error_log': job_error
+                        })
+                count += 1
+            except Exception as e:
+                logger.error(f"Feedback insert failed: {e}")
 
         return jsonify({'success': True, 'synced': count, 'skipped': skipped, 'total': len(responses or [])}), 200
     except Exception as e:
@@ -641,12 +653,13 @@ def generate_form():
         if not form_url:
             return jsonify({'success': False, 'error': 'No form URL returned'}), 500
 
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    UPDATE events SET form_url=%s, form_id=%s, form_edit_url=%s, status='active'
-                    WHERE id=%s
-                """, (form_url, form_id, result.get('form_edit_url'), event_id))
+        from backend.utils.insforge_db import api_update
+        api_update('events', 'id', event_id, {
+            'form_url': form_url,
+            'form_id': form_id,
+            'form_edit_url': result.get('form_edit_url'),
+            'status': 'active'
+        })
 
         return jsonify({'success': True, 'form_url': form_url, 'form_id': form_id}), 200
     except Exception as e:

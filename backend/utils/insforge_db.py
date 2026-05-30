@@ -27,6 +27,60 @@ def _get_url():
         raise RuntimeError("INSFORGE_API_BASE_URL environment variable is not set")
     return f"{base_url.rstrip('/')}/api/database/advance/rawsql"
 
+def _get_records_url(table: str):
+    base_url = os.environ.get('INSFORGE_API_BASE_URL', '').strip()
+    if not base_url:
+        raise RuntimeError("INSFORGE_API_BASE_URL environment variable is not set")
+    return f"{base_url.rstrip('/')}/api/database/records/{table}"
+
+def api_insert(table: str, data: list | dict) -> list:
+    """Inserts records using InsForge PostgREST API (returns list of inserted dicts)."""
+    if isinstance(data, dict):
+        data = [data]
+    url = _get_records_url(table)
+    headers = _get_headers()
+    headers['Prefer'] = 'return=representation'
+    
+    resp = requests.post(url, json=data, headers=headers)
+    if not resp.ok:
+        logger.error(f"api_insert failed: {resp.text}")
+    resp.raise_for_status()
+    return resp.json()
+
+def api_upsert(table: str, data: list | dict, conflict_columns: str = 'id') -> list:
+    """Upserts records using InsForge PostgREST API."""
+    if isinstance(data, dict):
+        data = [data]
+    url = f"{_get_records_url(table)}?on_conflict={conflict_columns}"
+    headers = _get_headers()
+    headers['Prefer'] = 'return=representation,resolution=merge-duplicates'
+    
+    resp = requests.post(url, json=data, headers=headers)
+    if not resp.ok:
+        logger.error(f"api_upsert failed: {resp.text}")
+    resp.raise_for_status()
+    return resp.json()
+
+def api_update(table: str, match_col: str, match_val: str, data: dict) -> list:
+    """Updates a record matching the column=val using PostgREST API."""
+    url = f"{_get_records_url(table)}?{match_col}=eq.{match_val}"
+    headers = _get_headers()
+    headers['Prefer'] = 'return=representation'
+    
+    resp = requests.patch(url, json=data, headers=headers)
+    if not resp.ok:
+        logger.error(f"api_update failed: {resp.text}")
+    resp.raise_for_status()
+    return resp.json()
+
+def api_select(table: str, match_col: str, match_val: str) -> list:
+    """Select records matching the criteria using PostgREST API."""
+    url = f"{_get_records_url(table)}?{match_col}=eq.{match_val}"
+    headers = _get_headers()
+    resp = requests.get(url, headers=headers)
+    resp.raise_for_status()
+    return resp.json()
+
 def _convert_placeholders(query: str) -> str:
     """Convert psycopg2 '%s' placeholders to PostgreSQL '$1', '$2', etc."""
     parts = query.split('%s')

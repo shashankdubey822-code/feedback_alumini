@@ -116,14 +116,13 @@ class AnalysisOrchestratorSupervisor(SupervisorAgent):
                     'category': a_data.get('category', 'Other')
                 })
                 
-                execute_one("""
-                    INSERT INTO feedback_analysis (response_id, sentiment_label, sentiment_score, keywords_json)
-                    VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (response_id) DO UPDATE SET
-                        sentiment_label = EXCLUDED.sentiment_label,
-                        sentiment_score = EXCLUDED.sentiment_score,
-                        keywords_json = EXCLUDED.keywords_json
-                """, (response_id, a_data.get('sentiment_label'), a_data.get('sentiment_score'), k_json))
+                from backend.utils.insforge_db import api_upsert
+                api_upsert('feedback_analysis', {
+                    'response_id': response_id,
+                    'sentiment_label': a_data.get('sentiment_label'),
+                    'sentiment_score': a_data.get('sentiment_score'),
+                    'keywords_json': k_json
+                }, 'response_id')
                 logger.info(f"Saved analysis for response {response_id}")
             except Exception as e:
                 logger.error(f"Failed to save analysis: {e}")

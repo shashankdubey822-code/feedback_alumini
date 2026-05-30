@@ -10,6 +10,7 @@ import json
 import urllib.request
 import urllib.error
 import re
+from datetime import datetime
 from backend.config import get_config
 from backend.utils.logger import get_section_logger
 from backend.utils.insforge_db import get_db
@@ -112,23 +113,13 @@ def start_job_worker(logger_unused=None):
                             template_id = match.group(1)
 
                     # Mark as processing to prevent concurrent pickup
-                    with get_db() as update_conn:
-                        with update_conn.cursor() as update_cur:
-                            update_cur.execute("""
-                                UPDATE certificate_jobs
-                                SET status = 'processing'
-                                WHERE id = %s
-                            """, (job_id,))
+                    api_update('certificate_jobs', 'id', job_id, {'status': 'processing'})
 
                     if not template_id:
-                        with get_db() as update_conn:
-                            with update_conn.cursor() as update_cur:
-                                update_cur.execute("""
-                                    UPDATE certificate_jobs
-                                    SET status = 'failed',
-                                        error_log = %s
-                                    WHERE id = %s
-                                """, ('No Google Slides template configured for this event.', job_id))
+                        api_update('certificate_jobs', 'id', job_id, {
+                            'status': 'failed',
+                            'error_log': 'No template configured for event'
+                        })
                         continue
 
                     payload = {
@@ -143,30 +134,25 @@ def start_job_worker(logger_unused=None):
                         'venue_date': venue_date,
                     }
 
-                    success, error_msg = call_apps_script(apps_script_url, payload)
+                    success, error = call_apps_script(apps_script_url, payload)
 
-                    with get_db() as update_conn:
-                        with update_conn.cursor() as update_cur:
-                            if success:
-                                update_cur.execute("""
-                                    UPDATE certificate_jobs
-                                    SET status = 'completed',
-                                        error_log = NULL, generated_at = NOW()
-                                    WHERE id = %s
-                                """, (job_id,))
-                                job_logger.info(
-                                    f"Certificate sent: {student_name} ({student_email})"
-                                )
-                            else:
-                                update_cur.execute("""
-                                    UPDATE certificate_jobs
-                                    SET status = 'failed',
-                                        error_log = %s
-                                    WHERE id = %s
-                                """, (error_msg, job_id))
-                                job_logger.warning(
-                                    f"Job {job_id} failed: {error_msg}"
-                                )
+                    if success:
+                        api_update('certificate_jobs', 'id', job_id, {
+                            'status': 'completed',
+                            'error_log': None,
+                            'generated_at': datetime.now().isoformat()
+                        })
+                        job_logger.info(
+                            f"Certificate sent: {student_name} ({student_email})"
+                        )
+                    else:
+                        api_update('certificate_jobs', 'id', job_id, {
+                            'status': 'failed',
+                            'error_log': str(error)
+                        })
+                        job_logger.error(
+                            f"Certificate generation failed for {student_name}: {error}"
+                        )
 
                 time.sleep(5)
 
