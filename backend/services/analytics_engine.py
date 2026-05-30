@@ -24,6 +24,8 @@ class AnalyticsEngine:
             SELECT 
                 r.id as response_id,
                 r.submitted_at,
+                r.extracted_date,
+                r.extracted_time,
                 r.session_rating,
                 r.aspect_most_valuable,
                 r.improvements_suggestions,
@@ -52,7 +54,7 @@ class AnalyticsEngine:
                 self._df['submitted_at'] = pd.to_datetime(self._df['submitted_at'])
             else:
                 self._df = pd.DataFrame(columns=[
-                    'response_id', 'submitted_at', 'session_rating', 'aspect_most_valuable',
+                    'response_id', 'submitted_at', 'extracted_date', 'extracted_time', 'session_rating', 'aspect_most_valuable',
                     'improvements_suggestions', 'session_help_understanding', 'future_topics',
                     'event_id', 'speaker_name', 'venue_date', 'event_name',
                     'student_id', 'student_name', 'roll_no', 'department',
@@ -72,6 +74,8 @@ class AnalyticsEngine:
             SELECT 
                 r.id as response_id,
                 r.submitted_at,
+                r.extracted_date,
+                r.extracted_time,
                 r.session_rating,
                 r.aspect_most_valuable,
                 r.improvements_suggestions,

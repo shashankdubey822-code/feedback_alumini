@@ -299,6 +299,8 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
         table_data.append({
             'id': row['response_id'],
             'timestamp_display': row['submitted_at'].strftime('%d-%m-%Y %H:%M:%S') if pd.notnull(row['submitted_at']) else '',
+            'extracted_date': row.get('extracted_date', ''),
+            'extracted_time': row.get('extracted_time', ''),
             'name_of_student': row.get('student_name', ''),
             'roll_no': row.get('roll_no', ''),
             'department': row.get('department', ''),
@@ -324,10 +326,9 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
 
     kpi_dict = kpi_dict if isinstance(kpi_dict, dict) else {}
     formatted_kpis = [
+        {'label': 'Total Data', 'value': total_count, 'sub': 'Total number of responses'},
         {'label': 'Engagement Rate', 'value': f"{kpi_dict.get('engagement_rate', 0)}%", 'sub': 'Responses w/ written feedback'},
         {'label': 'Satisfaction Score', 'value': f"{kpi_dict.get('satisfaction_score', 0)}%", 'sub': 'Rated 4 or higher'},
-        {'label': 'Completion Rate', 'value': f"{kpi_dict.get('completion_rate', 0)}%", 'sub': 'Required fields filled'},
-        {'label': 'Department Coverage', 'value': f"{kpi_dict.get('department_coverage', 0)}%", 'sub': 'Departments represented'},
         {'label': 'Submissions (7d)', 'value': kpi_dict.get('submission_velocity_7d', 0), 'sub': 'Responses / day'},
         {'label': 'Submissions (30d)', 'value': kpi_dict.get('submission_velocity_30d', 0), 'sub': 'Responses / day'}
     ]
@@ -351,16 +352,21 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
                 cat = kws.get('category', 'Other')
                 category_counts[cat] = category_counts.get(cat, 0) + 1
 
-    # Calculate timeTrends
+    # Calculate timeTrends using extracted_date
     time_trends = {}
-    if not df.empty and 'submitted_at' in df:
-        df['date'] = df['submitted_at'].dt.date
-        volume = df.groupby('date').size()
-        time_trends = {
-            'labels': [str(d) for d in volume.index],
-            'volume': volume.tolist(),
-            'sentiment': df.groupby('date')['sentiment_score'].mean().fillna(0).tolist() if 'sentiment_score' in df else []
-        }
+    if not df.empty and 'extracted_date' in df:
+        # Filter out empty or null dates
+        valid_dates_df = df[df['extracted_date'].astype(str).str.strip() != ''].copy()
+        if not valid_dates_df.empty:
+            valid_dates_df['parsed_date'] = pd.to_datetime(valid_dates_df['extracted_date'], errors='coerce').dt.date
+            valid_dates_df = valid_dates_df.dropna(subset=['parsed_date'])
+            if not valid_dates_df.empty:
+                volume = valid_dates_df.groupby('parsed_date').size()
+                time_trends = {
+                    'labels': [str(d) for d in volume.index],
+                    'volume': volume.tolist(),
+                    'sentiment': valid_dates_df.groupby('parsed_date')['sentiment_score'].mean().fillna(0).tolist() if 'sentiment_score' in valid_dates_df else []
+                }
 
     # Calculate sentiment array
     avg_score = df['sentiment_score'].mean() if not df.empty and 'sentiment_score' in df else 0

@@ -324,9 +324,14 @@ async function loadInitialData() {
         })();
         const allowedColumns = [
             'timestamp_original',
+            'timestamp_display',
+            'extracted_date',
+            'extracted_time',
             'name_of_student',
             'department_original',
+            'department',
             'roll_no_original',
+            'roll_no',
             'date_of_lecture',
             'alumni_speaker_name',
             'session_help_understanding',
@@ -338,9 +343,14 @@ async function loadInitialData() {
 
         state.friendlyNames = {
             'timestamp_original': 'Timestamp',
+            'timestamp_display': 'Timestamp',
+            'extracted_date': 'Extracted Date',
+            'extracted_time': 'Extracted Time',
             'name_of_student': 'Name of Student',
             'department_original': 'Department',
+            'department': 'Department',
             'roll_no_original': 'Roll No.',
+            'roll_no': 'Roll No.',
             'date_of_lecture': 'Date of the Session',
             'alumni_speaker_name': 'Alumni Speaker Name',
             'session_help_understanding': 'Did the session help you gain a better understanding...?',

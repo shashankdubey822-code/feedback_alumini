@@ -11,14 +11,19 @@ class ChartService:
     """Generate chart data from InsForge PostgreSQL."""
 
     def get_timeline_data(self, df, days: int = 30) -> List[Dict]:
-        if df.empty: return []
+        if df.empty or 'extracted_date' not in df: return []
+        
+        # Convert extracted_date to datetime, handling empty/null strings
+        df['parsed_date'] = pd.to_datetime(df['extracted_date'], errors='coerce')
+        recent = df.dropna(subset=['parsed_date']).copy()
+        
         now = pd.Timestamp.utcnow().tz_localize(None)
-        df_dates = pd.to_datetime(df['submitted_at']).dt.tz_localize(None)
-        mask = df_dates >= (now - pd.Timedelta(days=days))
-        recent = df[mask].copy()
+        mask = recent['parsed_date'] >= (now - pd.Timedelta(days=days))
+        recent = recent[mask]
+        
         if recent.empty: return []
         
-        recent['date_str'] = df_dates[mask].dt.strftime('%Y-%m-%d')
+        recent['date_str'] = recent['parsed_date'].dt.strftime('%Y-%m-%d')
         grouped = recent.groupby('date_str').agg(
             submissions=('response_id', 'count'),
             average_rating=('session_rating', 'mean')
@@ -94,8 +99,8 @@ class ChartService:
         ]
 
     def get_monthly_comparison(self, df) -> List[Dict]:
-        if df.empty: return []
-        df_dates = pd.to_datetime(df['submitted_at']).dropna()
+        if df.empty or 'extracted_date' not in df: return []
+        df_dates = pd.to_datetime(df['extracted_date'], errors='coerce').dropna()
         if df_dates.empty: return []
         
         df_copy = df.loc[df_dates.index].copy()
