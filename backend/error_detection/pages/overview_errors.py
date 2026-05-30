@@ -21,7 +21,7 @@ class OverviewErrorDetector(ErrorDetector):
                     # 1. Empty data check
                     cursor.execute("SELECT COUNT(*) as cnt FROM feedback_responses")
                     total_res = cursor.fetchone()
-                    total = total_res["cnt"] if total_res else 0
+                    total = int(total_res["cnt"]) if total_res and total_res["cnt"] is not None else 0
                     if total == 0:
                         results.append(self._critical("empty_data", "No records in feedback_responses — overview will be blank"))
                         return results
@@ -55,7 +55,7 @@ class OverviewErrorDetector(ErrorDetector):
                     # 4. Null timestamp check
                     cursor.execute("SELECT COUNT(*) as cnt FROM feedback_responses WHERE submitted_at IS NULL")
                     null_ts_res = cursor.fetchone()
-                    null_ts = null_ts_res["cnt"] if null_ts_res else 0
+                    null_ts = int(null_ts_res["cnt"]) if null_ts_res and null_ts_res["cnt"] is not None else 0
                     if null_ts > total * 0.3:
                         results.append(self._warn("timestamp_nulls",
                             f"{null_ts}/{total} rows have null timestamps",

@@ -31,7 +31,7 @@ class SpeakersErrorDetector(ErrorDetector):
                     # 2. At least one speaker exists
                     cursor.execute("SELECT COUNT(DISTINCT speaker_name) as cnt FROM events WHERE speaker_name IS NOT NULL")
                     speaker_res = cursor.fetchone()
-                    speaker_count = speaker_res["cnt"] if speaker_res else 0
+                    speaker_count = int(speaker_res["cnt"]) if speaker_res and speaker_res["cnt"] is not None else 0
                     if speaker_count == 0:
                         results.append(self._warn("speaker_data", "No speaker names found in data"))
                     else:
@@ -57,7 +57,7 @@ class SpeakersErrorDetector(ErrorDetector):
                             AND (CAST(dl_sentiment_score AS REAL) < -1.0 OR CAST(dl_sentiment_score AS REAL) > 1.0)
                         """)
                         range_res = cursor.fetchone()
-                        out_of_range = range_res["cnt"] if range_res else 0
+                        out_of_range = int(range_res["cnt"]) if range_res and range_res["cnt"] is not None else 0
                         if out_of_range > 0:
                             results.append(self._warn("sentiment_range",
                                 f"{out_of_range} rows have dl_sentiment_score outside [-1, 1]",
