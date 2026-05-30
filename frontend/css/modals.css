@@ -399,42 +399,41 @@
     font-weight: 500;
 }
 
-/* === FEEDBACK FORM MANAGER MODAL — Force black text on white card === */
+/* === FEEDBACK FORM MANAGER MODAL === */
 #feedback-modal .modal-content {
-    background: #ffffff;
+    background: var(--bg-elevated);
 }
 #feedback-modal .modal-header {
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--border-subtle);
 }
 #feedback-modal .modal-title,
 #feedback-modal h3,
 #feedback-modal h4 {
-    color: #111827 !important;
+    color: var(--text-primary);
 }
 #feedback-modal p,
 #feedback-modal label,
 #feedback-modal span {
-    color: #374151 !important;
+    color: var(--text-secondary);
 }
 #feedback-modal input[type="text"],
 #feedback-modal input[type="date"] {
-    background: #f9fafb !important;
-    color: #111827 !important;
-    border: 1px solid #d1d5db !important;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
 }
 #feedback-modal input::placeholder {
-    color: #9ca3af !important;
+    color: var(--text-muted);
 }
 #feedback-modal .modal-close {
-    color: #6b7280;
+    color: var(--text-muted);
 }
 #feedback-modal .modal-close:hover {
-    color: #111827;
-    background: #f3f4f6;
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.1);
 }
 #feedback-modal #btn-refresh-events {
-    background: #f3f4f6;
-    border: 1px solid #e5e7eb;
-    color: #374151;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
 }
-

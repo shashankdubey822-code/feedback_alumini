@@ -1,0 +1,45 @@
+# Implementation Plan — Speaker Profile & Department Comparison
+
+Provide a high-fidelity speaker profile view (including historical lectures, trends, and custom AI dossiers) and a department comparison dashboard visualizing sentiment, NPS, and response rates. Also, resolve the schema mismatch in `speakerStats` between the backend and frontend.
+
+## Proposed Changes
+
+### Backend Components
+
+#### [MODIFY] [api.py](file:///c:/Users/hp/OneDrive%20-%20Manav%20Rachna%20Education%20Institutions/Desktop/OWN_2025/mamta_01/backend/routes/api.py)
+- Refactor the `speaker_stats_payload` generation inside `get_consolidated_analytics` to return the structured nested format expected by the frontend (`ss.speakers` containing `{ name, count, sentiment, ratings: { 'Overall Rating': avg_rating } }`).
+- This fixes the current console error where `ss.speakers` is undefined.
+
+---
+
+### Frontend Components
+
+#### [MODIFY] [index.html](file:///c:/Users/hp/OneDrive%20-%20Manav%20Rachna%20Education%20Institutions/Desktop/OWN_2025/mamta_01/frontend/index.html)
+- **Sidebar Nav**: Add a "Departments" nav-item link.
+- **Speakers Section**: Wrap the default list and comparison charts in `#speakers-list-view`, and add a `#speaker-profile-view` container for detail view.
+- **Departments Section**: Add a new `<section class="dashboard-section" id="departments-section">` containing comparison charts (NPS, Sentiment, response volumes) and a summary table.
+
+#### [MODIFY] [app.js](file:///c:/Users/hp/OneDrive%20-%20Manav%20Rachna%20Education%20Institutions/Desktop/OWN_2025/mamta_01/frontend/app.js)
+- **Sidebar Navigation**: Hook up navigation listener for the new "Departments" section.
+- **Speaker Detail View**:
+  - Add event listener to speaker cards to open the detail view instead of the default data modal.
+  - Implement `renderSpeakerProfile(speakerName)` to populate the detail view.
+  - Display aggregate statistics, a Chart.js line chart showing average ratings over time, and a table of lecture sessions.
+  - Fetch the corresponding speaker dossier from `/api/v1/wiki/pages/speakers/{safe_speaker}.md` and display.
+  - If the dossier doesn't exist, show a "Generate AI Dossier" button that triggers batch ingestion for the speaker.
+- **Department Comparison**:
+  - Implement `renderDepartmentComparison()` that aggregates stats per department from the loaded dataset.
+  - Calculate NPS: `NPS = (% Promoters (5) - % Detractors (1-3)) * 100`.
+  - Render three comparison charts (NPS bar chart, average sentiment bar chart, response volume doughnut chart).
+  - Render a responsive summary grid/table.
+
+---
+
+## Verification Plan
+
+### Manual Verification
+- Launch the application locally and check the sidebar navigation.
+- Verify the "Speakers" tab renders the speaker grid and comparison charts correctly without any JavaScript errors.
+- Click a speaker card to navigate to the **Speaker Profile Page**.
+- Verify that historical lectures, timeline chart, and AI summary load successfully. Test the "Generate AI Dossier" trigger if no dossier is available.
+- Go to the **Department Comparison Page** and confirm that the NPS, Sentiment, and response volume charts are correctly populated and matches the dataset logic.

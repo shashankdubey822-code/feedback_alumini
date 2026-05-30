@@ -257,21 +257,36 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
     df = analytics_engine.get_dataframe()
     
     speaker_stats_payload = []
-    if not df.empty and 'speaker_name' in df:
-        for speaker, group in df.groupby('speaker_name'):
-            avg_rating = group['session_rating'].mean() if 'session_rating' in group else 0
-            actionable_count = 0
-            if 'keywords_json' in group:
-                for kws in group['keywords_json'].dropna():
-                    if isinstance(kws, dict) and kws.get('is_actionable') == 1:
-                        actionable_count += 1
+    if not df.empty:
+        speaker_col = 'speaker_name' if 'speaker_name' in df else ('alumni_speaker_name' if 'alumni_speaker_name' in df else None)
+        if speaker_col:
+            speakers_list = []
+            for speaker, group in df.groupby(speaker_col):
+                if not speaker or pd.isnull(speaker):
+                    continue
+                avg_rating = group['session_rating'].mean() if 'session_rating' in group else 0
+                if not pd.notnull(avg_rating):
+                    avg_rating = 0.0
+                
+                avg_sentiment = group['sentiment_score'].mean() if 'sentiment_score' in group else 0.0
+                if not pd.notnull(avg_sentiment):
+                    avg_sentiment = 0.0
+                
+                speakers_list.append({
+                    'name': str(speaker),
+                    'count': int(len(group)),
+                    'sentiment': float(avg_sentiment),
+                    'ratings': {
+                        'Overall Rating': float(avg_rating)
+                    }
+                })
+            
+            speakers_list.sort(key=lambda x: x['count'], reverse=True)
             speaker_stats_payload.append({
-                'speaker_name': speaker,
-                'total_responses': len(group),
-                'average_rating': float(avg_rating) if pd.notnull(avg_rating) else 0.0,
-                'actionable_feedback': actionable_count
+                'column': speaker_col,
+                'speakers': speakers_list
             })
-        speaker_stats_payload.sort(key=lambda x: x['total_responses'], reverse=True)
+
 
     
     if filters:

@@ -501,6 +501,16 @@ function showSection(sectionId) {
         btn.classList.toggle('active', btn.dataset.section === sectionId);
     });
 
+    // Handle section-specific initialization/reset
+    if (sectionId === 'speakers-section') {
+        const listEl = document.getElementById('speakers-list-view');
+        const profEl = document.getElementById('speaker-profile-view');
+        if (listEl) listEl.style.display = 'block';
+        if (profEl) profEl.style.display = 'none';
+    } else if (sectionId === 'departments-section') {
+        renderDepartmentComparison();
+    }
+
     // SCOPING: If leaving overview, reset filters to show global data in other sections
     if (sectionId !== 'overview-section' && Object.keys(state.activeFilters || {}).length > 0) {
         clearAllFilters();
@@ -549,6 +559,101 @@ function setupDashboardHandlers() {
     }
     document.getElementById('btn-clear-filters').addEventListener('click', clearAllFilters);
     document.getElementById('global-search').addEventListener('input', debounce(applyFilters, 400));
+
+    // Speaker profile page handlers
+    const btnBackToSpeakers = document.getElementById('btn-back-to-speakers');
+    if (btnBackToSpeakers) {
+        btnBackToSpeakers.addEventListener('click', () => {
+            document.getElementById('speakers-list-view').style.display = 'block';
+            document.getElementById('speaker-profile-view').style.display = 'none';
+        });
+    }
+
+    const btnCompileDossier = document.getElementById('btn-compile-speaker-dossier');
+    if (btnCompileDossier) {
+        btnCompileDossier.addEventListener('click', async () => {
+            const speakerName = btnCompileDossier.dataset.speaker;
+            if (!speakerName) return;
+            
+            btnCompileDossier.disabled = true;
+            btnCompileDossier.textContent = 'Compiling...';
+            
+            // Find all dates/sessions for this speaker from state.tableData
+            const speakerRows = state.tableData.filter(row => row.alumni_speaker_name === speakerName);
+            const sessions = [];
+            const uniqueSessions = new Set();
+            speakerRows.forEach(row => {
+                const date = row.date_of_lecture || row.extracted_date || row.timestamp_display || '';
+                if (date && !uniqueSessions.has(date)) {
+                    uniqueSessions.add(date);
+                    sessions.push({ speaker: speakerName, date: date });
+                }
+            });
+            
+            if (sessions.length === 0) {
+                sessions.push({ speaker: speakerName, date: '' });
+            }
+            
+            try {
+                const resp = await fetch(`${API_BASE}/api/v1/wiki/ingest`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessions })
+                });
+                
+                if (resp.ok) {
+                    showNotification('AI Dossier compilation started successfully!', 'success');
+                    let attempts = 0;
+                    const pollInterval = setInterval(async () => {
+                        attempts++;
+                        const statusResp = await fetch(`${API_BASE}/api/v1/wiki/ingest/status`);
+                        if (statusResp.ok) {
+                            const statusData = await statusResp.json();
+                            const status = statusData.progress ? statusData.progress.status : 'IDLE';
+                            if (status === 'COMPLETE' || status === 'IDLE' || attempts > 20) {
+                                clearInterval(pollInterval);
+                                const safe_speaker = speakerName.replace(/ /g, '_').replace(/\./g, '');
+                                const wikiResp = await fetch(`${API_BASE}/api/v1/wiki/pages/speakers/${safe_speaker}.md`);
+                                if (wikiResp.ok) {
+                                    const wikiData = await wikiResp.json();
+                                    document.getElementById('speaker-ai-summary').innerHTML = wikiData.html || `<pre>${wikiData.markdown}</pre>`;
+                                    btnCompileDossier.style.display = 'none';
+                                } else {
+                                    document.getElementById('speaker-ai-summary').textContent = 'AI Dossier compilation complete, but failed to fetch compiled page.';
+                                }
+                                btnCompileDossier.disabled = false;
+                                btnCompileDossier.textContent = 'Compile Dossier';
+                            }
+                        } else {
+                            clearInterval(pollInterval);
+                            btnCompileDossier.disabled = false;
+                            btnCompileDossier.textContent = 'Compile Dossier';
+                        }
+                    }, 2000);
+                } else {
+                    const err = await resp.json();
+                    showNotification(`Failed to compile dossier: ${err.error || 'Unknown error'}`, 'error');
+                    btnCompileDossier.disabled = false;
+                    btnCompileDossier.textContent = 'Compile Dossier';
+                }
+            } catch (e) {
+                console.error(e);
+                showNotification('Error compiling dossier.', 'error');
+                btnCompileDossier.disabled = false;
+                btnCompileDossier.textContent = 'Compile Dossier';
+            }
+        });
+    }
+
+    // Department comparison handlers
+    const deptSearchInput = document.getElementById('dept-search-input');
+    if (deptSearchInput) {
+        deptSearchInput.addEventListener('input', debounce(renderDepartmentComparison, 300));
+    }
+    const deptSortSelect = document.getElementById('dept-sort-select');
+    if (deptSortSelect) {
+        deptSortSelect.addEventListener('change', renderDepartmentComparison);
+    }
 
     // Auto-refresh the dashboard live via WebSockets
     try {
@@ -691,9 +796,11 @@ function renderDashboard() {
     try { renderKeywords(a.keywords); } catch(e) { console.error("Error renderKeywords:", e); }
     try { renderSpeakers(a.speakerStats); } catch(e) { console.error("Error renderSpeakers:", e); }
     try { renderTable(); } catch(e) { console.error("Error renderTable:", e); }
+    try { renderDepartmentComparison(); } catch(e) { console.error("Error renderDepartmentComparison:", e); }
 
     // Hide sections with no data
     try { toggleSectionVisibility('speakers-section', a.speakerStats && a.speakerStats.length > 0); } catch(e) {}
+    try { toggleSectionVisibility('departments-section', state.tableData && state.tableData.length > 0); } catch(e) {}
 }
 
 function toggleSectionVisibility(sectionId, hasData) {
@@ -1351,7 +1458,7 @@ function renderSpeakers(speakerStats) {
             `;
             
             card.addEventListener('click', () => {
-                openDataModal('Speaker Analysis', speaker.name, speaker.count, ss.column, 'categorical', null);
+                renderSpeakerProfile(speaker.name, color);
             });
 
             cardsContainer.appendChild(card);
@@ -1988,6 +2095,472 @@ class SmartCalendar {
                 if (this.onSelect) this.onSelect();
             });
         }
+    }
+}
+
+
+// ========================================================
+//  SPEAKER PROFILE & DEPARTMENT COMPARISON RENDERING
+// ========================================================
+
+async function renderSpeakerProfile(speakerName, avatarColor) {
+    // Hide speaker list, show speaker profile
+    const listEl = document.getElementById('speakers-list-view');
+    const profEl = document.getElementById('speaker-profile-view');
+    if (listEl) listEl.style.display = 'none';
+    if (profEl) profEl.style.display = 'block';
+
+    // Populate header details
+    const nameEl = document.getElementById('speaker-profile-name');
+    if (nameEl) nameEl.textContent = speakerName;
+    const avatar = document.getElementById('speaker-profile-avatar');
+    if (avatar) {
+        avatar.textContent = speakerName.charAt(0).toUpperCase();
+        avatar.style.backgroundColor = avatarColor || '#6366f1';
+    }
+
+    // Set data attribute on compile dossier button
+    const btnCompileDossier = document.getElementById('btn-compile-speaker-dossier');
+    if (btnCompileDossier) {
+        btnCompileDossier.dataset.speaker = speakerName;
+        btnCompileDossier.style.display = 'none'; // Hidden by default until we check status
+    }
+
+    // Filter rows for this speaker
+    const speakerRows = state.tableData.filter(row => row.alumni_speaker_name === speakerName);
+    
+    // Total Responses
+    const countEl = document.getElementById('speaker-profile-count');
+    if (countEl) countEl.textContent = `${speakerRows.length} response${speakerRows.length !== 1 ? 's' : ''}`;
+
+    // Average Rating
+    let totalRating = 0;
+    let ratingCount = 0;
+    speakerRows.forEach(row => {
+        const rating = parseFloat(row.session_rating);
+        if (!isNaN(rating)) {
+            totalRating += rating;
+            ratingCount++;
+        }
+    });
+    const avgRating = ratingCount > 0 ? (totalRating / ratingCount).toFixed(2) : 'N/A';
+    const ratingBadgeEl = document.getElementById('speaker-profile-rating-badge');
+    if (ratingBadgeEl) {
+        ratingBadgeEl.textContent = `★ ${avgRating} Avg Rating`;
+        ratingBadgeEl.style.color = avgRating !== 'N/A' && parseFloat(avgRating) >= 4.0 ? '#fbbf24' : '#ef4444';
+    }
+
+    // Average Sentiment
+    let totalSentiment = 0;
+    let sentimentCount = 0;
+    speakerRows.forEach(row => {
+        const score = parseFloat(row.dl_sentiment_score || row.sentiment_score);
+        if (!isNaN(score)) {
+            totalSentiment += score;
+            sentimentCount++;
+        }
+    });
+    const avgSentiment = sentimentCount > 0 ? (totalSentiment / sentimentCount).toFixed(2) : 'N/A';
+    const sentimentBadgeEl = document.getElementById('speaker-profile-sentiment-badge');
+    
+    if (sentimentBadgeEl) {
+        if (avgSentiment !== 'N/A') {
+            const score = parseFloat(avgSentiment);
+            let sentLabel = '😐 Neutral';
+            let sentColor = '#9ca3af';
+            if (score > 0.1) {
+                sentLabel = '😊 Positive';
+                sentColor = '#10b981';
+            } else if (score < -0.1) {
+                sentLabel = '😟 Negative';
+                sentColor = '#ef4444';
+            }
+            sentimentBadgeEl.textContent = `${sentLabel} (${avgSentiment})`;
+            sentimentBadgeEl.style.color = sentColor;
+        } else {
+            sentimentBadgeEl.textContent = 'Sentiment: N/A';
+            sentimentBadgeEl.style.color = '#9ca3af';
+        }
+    }
+
+    // Render Lectures list
+    const tbody = document.querySelector('#speaker-lectures-table tbody');
+    if (tbody) {
+        tbody.innerHTML = '';
+        
+        speakerRows.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid var(--border)';
+            
+            // Date
+            const date = row.date_of_lecture || row.extracted_date || row.timestamp_display || 'N/A';
+            // Department
+            const dept = row.department || 'N/A';
+            // Rating
+            const rating = row.session_rating || 'N/A';
+            // Sentiment Label
+            const sentScore = parseFloat(row.dl_sentiment_score || row.sentiment_score || 0);
+            const badgeClass = sentScore > 0.1 ? 'positive' : sentScore < -0.1 ? 'negative' : 'neutral';
+            const badgeLabel = sentScore > 0.1 ? '😊 Positive' : sentScore < -0.1 ? '😟 Negative' : '😐 Neutral';
+            
+            // Excerpt valuable aspect / improvements
+            const valuable = row.aspect_most_valuable || '';
+            const suggestions = row.improvements_suggestions || '';
+            const feedbackSnippet = `
+                <div class="feedback-snippet" style="display:flex; flex-direction:column; gap:4px; max-width:350px; overflow:hidden; text-overflow:ellipsis;">
+                    ${valuable ? `<div><strong style="color:var(--text-primary);">Valuable:</strong> <span style="color:var(--text-secondary);">${esc(valuable)}</span></div>` : ''}
+                    ${suggestions ? `<div><strong style="color:var(--text-primary);">Suggestions:</strong> <span style="color:var(--text-secondary);">${esc(suggestions)}</span></div>` : ''}
+                </div>
+            `;
+
+            tr.innerHTML = `
+                <td style="padding: 10px; white-space: nowrap; color: var(--text-primary);">${esc(date)}</td>
+                <td style="padding: 10px;"><span class="dept-badge" style="background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; font-size: 0.85em; color: var(--text-secondary);">${esc(dept)}</span></td>
+                <td style="padding: 10px;"><div style="display:flex; align-items:center; gap:4px; color: var(--text-primary);"><span style="color:#fbbf24;">★</span> <strong>${rating}</strong></div></td>
+                <td style="padding: 10px;"><span class="speaker-sentiment-pill ${badgeClass}" style="display:inline-block; font-size:0.85em; padding:2px 8px;">${badgeLabel}</span></td>
+                <td style="padding: 10px;">${feedbackSnippet}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // Populate/Render trend chart: Avg Rating vs Date
+    renderSpeakerTrendChart(speakerRows);
+
+    // Load AI summary dossier
+    const summaryContainer = document.getElementById('speaker-ai-summary');
+    if (summaryContainer) {
+        summaryContainer.innerHTML = '<div style="display:flex; justify-content:center; align-items:center; height:120px;"><div style="animation:spin 1s linear infinite; border:3px solid rgba(255,255,255,0.1); border-top-color:#6366f1; width:28px; height:28px; border-radius:50%;"></div><span style="margin-left:12px; color:#9ca3af;">Loading AI Dossier...</span></div>';
+
+        const safe_speaker = speakerName.replace(/ /g, '_').replace(/\./g, '');
+        try {
+            const wikiResp = await fetch(`${API_BASE}/api/v1/wiki/pages/speakers/${safe_speaker}.md`);
+            if (wikiResp.ok) {
+                const wikiData = await wikiResp.json();
+                summaryContainer.innerHTML = wikiData.html || `<pre style="white-space:pre-wrap; background:rgba(0,0,0,0.2); padding:16px; border-radius:8px; color:#e5e7eb;">${wikiData.markdown}</pre>`;
+            } else {
+                summaryContainer.innerHTML = `
+                    <div style="background:rgba(255,255,255,0.02); border:1px dashed rgba(255,255,255,0.1); border-radius:8px; padding:24px; text-align:center;">
+                        <div style="font-size:2em; margin-bottom:8px;">📁</div>
+                        <h4 style="margin:0 0 8px 0; color:#e5e7eb;">No AI Dossier Found</h4>
+                        <p style="margin:0 0 16px 0; font-size:0.9em; color:#9ca3af;">An AI dossier has not been generated for ${speakerName} yet. Compile feedback responses into a comprehensive executive summary.</p>
+                    </div>
+                `;
+                if (btnCompileDossier) {
+                    btnCompileDossier.style.display = 'inline-block';
+                }
+            }
+        } catch (e) {
+            console.error(e);
+            summaryContainer.innerHTML = '<p style="color:#ef4444;">Error loading AI Dossier.</p>';
+        }
+    }
+}
+
+function renderSpeakerTrendChart(speakerRows) {
+    if (window.speakerTrendChart) {
+        window.speakerTrendChart.destroy();
+        window.speakerTrendChart = null;
+    }
+
+    const dateGroups = {};
+    speakerRows.forEach(row => {
+        const date = row.date_of_lecture || row.extracted_date || row.timestamp_display || 'N/A';
+        const rating = parseFloat(row.session_rating);
+        if (!isNaN(rating)) {
+            if (!dateGroups[date]) {
+                dateGroups[date] = { total: 0, count: 0 };
+            }
+            dateGroups[date].total += rating;
+            dateGroups[date].count++;
+        }
+    });
+
+    const sortedDates = Object.keys(dateGroups).sort((a, b) => {
+        return new Date(a) - new Date(b);
+    });
+
+    const chartData = sortedDates.map(date => {
+        const group = dateGroups[date];
+        return (group.total / group.count).toFixed(2);
+    });
+
+    const canvas = document.getElementById('speaker-trend-chart');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    window.speakerTrendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: sortedDates,
+            datasets: [{
+                label: 'Average Session Rating',
+                data: chartData,
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                borderWidth: 3,
+                tension: 0.3,
+                fill: true,
+                pointBackgroundColor: '#6366f1',
+                pointHoverRadius: 7
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    min: 1,
+                    max: 5,
+                    ticks: {
+                        stepSize: 1,
+                        color: 'rgba(255, 255, 255, 0.6)'
+                    },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                },
+                x: {
+                    ticks: { color: 'rgba(255, 255, 255, 0.6)' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                }
+            }
+        }
+    });
+}
+
+function renderDepartmentComparison() {
+    if (!state.tableData) return;
+    
+    const searchVal = document.getElementById('dept-search-input')?.value.toLowerCase() || '';
+    const sortBy = document.getElementById('dept-sort-select')?.value || 'rating';
+
+    const deptGroups = {};
+    state.tableData.forEach(row => {
+        const dept = row.department || 'Unknown';
+        if (!deptGroups[dept]) {
+            deptGroups[dept] = {
+                name: dept,
+                ratings: [],
+                sentimentScores: [],
+                sentimentLabels: []
+            };
+        }
+
+        const rating = parseFloat(row.session_rating);
+        if (!isNaN(rating)) {
+            deptGroups[dept].ratings.push(rating);
+        }
+
+        const score = parseFloat(row.dl_sentiment_score || row.sentiment_score);
+        if (!isNaN(score)) {
+            deptGroups[dept].sentimentScores.push(score);
+        }
+
+        const label = row.dl_sentiment_label || row.sentiment_label;
+        if (label) {
+            deptGroups[dept].sentimentLabels.push(label);
+        }
+    });
+
+    const depts = [];
+    Object.values(deptGroups).forEach(group => {
+        const total = group.ratings.length;
+        if (total === 0) return;
+
+        const avgRating = group.ratings.reduce((sum, r) => sum + r, 0) / total;
+        const avgSentiment = group.sentimentScores.length > 0
+            ? group.sentimentScores.reduce((sum, s) => sum + s, 0) / group.sentimentScores.length
+            : 0;
+
+        let promoters = 0;
+        let detractors = 0;
+        group.ratings.forEach(r => {
+            if (r >= 4.5) promoters++;
+            else if (r < 3.5) detractors++;
+        });
+
+        const nps = total > 0 ? Math.round(((promoters - detractors) / total) * 100) : 0;
+
+        depts.push({
+            name: group.name,
+            count: total,
+            avgRating,
+            avgSentiment,
+            nps
+        });
+    });
+
+    let filteredDepts = depts;
+    if (searchVal) {
+        filteredDepts = depts.filter(d => d.name.toLowerCase().includes(searchVal));
+    }
+
+    if (sortBy === 'rating') {
+        filteredDepts.sort((a, b) => b.avgRating - a.avgRating);
+    } else if (sortBy === 'volume') {
+        filteredDepts.sort((a, b) => b.count - a.count);
+    } else if (sortBy === 'sentiment') {
+        filteredDepts.sort((a, b) => b.avgSentiment - a.avgSentiment);
+    } else if (sortBy === 'nps') {
+        filteredDepts.sort((a, b) => b.nps - a.nps);
+    }
+
+    const tbody = document.querySelector('#dept-metrics-table tbody');
+    if (tbody) {
+        tbody.innerHTML = '';
+        if (filteredDepts.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:24px; color:var(--text-secondary);">No departments found.</td></tr>`;
+        } else {
+            filteredDepts.forEach(d => {
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid var(--border)';
+                
+                let npsClass = 'neutral';
+                let npsStatus = 'Good';
+                if (d.nps >= 50) {
+                    npsClass = 'positive';
+                    npsStatus = 'Excellent';
+                } else if (d.nps < 0) {
+                    npsClass = 'negative';
+                    npsStatus = 'Needs Attention';
+                }
+                
+                const ratingStr = d.avgRating.toFixed(2);
+                const sentimentStr = d.avgSentiment.toFixed(2);
+                
+                tr.innerHTML = `
+                    <td style="padding: 12px 10px; font-weight:600; color:var(--text-primary);">${esc(d.name)}</td>
+                    <td style="padding: 12px 10px; color:var(--text-secondary);">${d.count}</td>
+                    <td style="padding: 12px 10px; color:var(--text-primary);"><strong>${ratingStr} ★</strong></td>
+                    <td style="padding: 12px 10px; color:var(--text-primary); font-weight:600;">${d.nps > 0 ? '+' : ''}${d.nps}</td>
+                    <td style="padding: 12px 10px; color:var(--text-secondary);">${sentimentStr}</td>
+                    <td style="padding: 12px 10px;"><span class="speaker-sentiment-pill ${npsClass}" style="display:inline-block; font-size:0.85em; padding:2px 8px;">${npsStatus}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+    }
+
+    renderDepartmentCharts(filteredDepts);
+}
+
+function renderDepartmentCharts(depts) {
+    if (window.deptNpsChart) window.deptNpsChart.destroy();
+    if (window.deptSentimentChart) window.deptSentimentChart.destroy();
+    if (window.deptVolumeChart) window.deptVolumeChart.destroy();
+
+    const topDepts = depts.slice(0, 10);
+    const labels = topDepts.map(d => d.name);
+
+    // 1) NPS Chart
+    const canvasNps = document.getElementById('dept-nps-chart');
+    if (canvasNps) {
+        const ctxNps = canvasNps.getContext('2d');
+        window.deptNpsChart = new Chart(ctxNps, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Net Promoter Score (NPS)',
+                    data: topDepts.map(d => d.nps),
+                    backgroundColor: topDepts.map(d => d.nps >= 50 ? 'rgba(16, 185, 129, 0.6)' : d.nps < 0 ? 'rgba(239, 68, 68, 0.6)' : 'rgba(245, 158, 11, 0.6)'),
+                    borderColor: topDepts.map(d => d.nps >= 50 ? '#10b981' : d.nps < 0 ? '#ef4444' : '#f59e0b'),
+                    borderWidth: 1.5,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        min: -100,
+                        max: 100,
+                        ticks: { color: 'rgba(255, 255, 255, 0.6)' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    },
+                    x: {
+                        ticks: { color: 'rgba(255, 255, 255, 0.6)', font: { size: 10 } },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    }
+
+    // 2) Sentiment Chart
+    const canvasSentiment = document.getElementById('dept-sentiment-chart');
+    if (canvasSentiment) {
+        const ctxSentiment = canvasSentiment.getContext('2d');
+        window.deptSentimentChart = new Chart(ctxSentiment, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Avg Sentiment Polarity',
+                    data: topDepts.map(d => d.avgSentiment),
+                    backgroundColor: 'rgba(99, 102, 241, 0.6)',
+                    borderColor: '#6366f1',
+                    borderWidth: 1.5,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        min: -1,
+                        max: 1,
+                        ticks: { color: 'rgba(255, 255, 255, 0.6)' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    },
+                    x: {
+                        ticks: { color: 'rgba(255, 255, 255, 0.6)', font: { size: 10 } },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    }
+
+    // 3) Volume Chart
+    const canvasVolume = document.getElementById('dept-volume-chart');
+    if (canvasVolume) {
+        const ctxVolume = canvasVolume.getContext('2d');
+        window.deptVolumeChart = new Chart(ctxVolume, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Response Volume',
+                    data: topDepts.map(d => d.count),
+                    backgroundColor: 'rgba(14, 165, 233, 0.6)',
+                    borderColor: '#0ea5e9',
+                    borderWidth: 1.5,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        ticks: { color: 'rgba(255, 255, 255, 0.6)', precision: 0 },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    },
+                    x: {
+                        ticks: { color: 'rgba(255, 255, 255, 0.6)', font: { size: 10 } },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
     }
 }
 

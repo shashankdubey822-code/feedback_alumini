@@ -293,6 +293,10 @@ def create_event_and_form():
             match = re.search(r'/d/([a-zA-Z0-9-_]+)', template_id_raw)
             template_id = match.group(1) if match else template_id_raw
 
+        form_url = None
+        form_id = None
+        form_edit_url = None
+
         if not speaker_name or not venue_date:
             return jsonify({'success': False, 'error': 'speaker_name and venue_date required'}), 400
 
@@ -307,7 +311,10 @@ def create_event_and_form():
             'venue_date': venue_date,
             'status': 'creating_form',
             'template_id': template_id,
-            'send_certificates': send_certificates
+            'send_certificates': send_certificates,
+            'form_url': form_url,
+            'form_id': form_id,
+            'form_edit_url': form_edit_url
         }
         try:
             from backend.utils.insforge_db import api_insert, api_update

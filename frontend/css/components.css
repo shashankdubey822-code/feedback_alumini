@@ -547,3 +547,26 @@
 
 /* ── Deep Analysis ── */
 #deep-actionable-grid { margin-top: 16px; }
+
+/* ── PIPELINE BANNER ── */
+.pipeline { display: flex; align-items: center; justify-content: center; gap: 0; margin-bottom: 32px; flex-wrap: wrap; margin-top: 16px; }
+.pipe-step { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; font-size: 12px; color: var(--text-primary); text-align: center; min-width: 110px; box-shadow: var(--shadow-sm); }
+.pipe-step .icon { font-size: 20px; display: block; margin-bottom: 4px; }
+.pipe-step .label { font-weight: 600; color: var(--accent); display: block; }
+.pipe-arrow { color: var(--border); font-size: 20px; padding: 0 4px; font-weight: bold; }
+
+/* ── SCHEMA GRID ── */
+.schema-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; margin-top: 16px; margin-bottom: 32px; }
+.schema-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.schema-header { padding: 12px 16px; font-weight: 700; font-size: 14px; letter-spacing: .5px; display: flex; align-items: center; gap: 8px; color: var(--text-primary); }
+.schema-header .count { font-size: 11px; font-weight: 400; background: var(--bg-elevated); padding: 2px 8px; border-radius: 10px; color: var(--text-secondary); margin-left: auto; }
+.schema-row { display: flex; align-items: flex-start; gap: 10px; padding: 7px 16px; border-top: 1px solid var(--border-subtle); font-size: 12px; }
+.schema-row:hover { background: var(--bg-card-hover); }
+.schema-name { font-weight: 600; color: var(--text-primary); min-width: 150px; }
+.schema-type { color: var(--text-secondary); font-size: 11px; flex: 1; }
+.schema-badge { font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600; white-space: nowrap; }
+.badge-pk   { background: rgba(240, 136, 62, 0.15); color: #f0883e; border: 1px solid rgba(240, 136, 62, 0.3); }
+.badge-fk   { background: rgba(88, 166, 255, 0.15); color: #58a6ff; border: 1px solid rgba(88, 166, 255, 0.3); }
+.badge-miss { background: rgba(248, 81, 73, 0.15); color: #f85149; border: 1px solid rgba(248, 81, 73, 0.3); }
+.badge-ok   { background: rgba(63, 185, 80, 0.15); color: #3fb950; border: 1px solid rgba(63, 185, 80, 0.3); }
+.badge-new  { background: rgba(163, 113, 247, 0.15); color: #a371f7; border: 1px solid rgba(163, 113, 247, 0.3); }

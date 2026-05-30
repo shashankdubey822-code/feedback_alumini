@@ -14,6 +14,7 @@ from datetime import datetime
 from backend.config import get_config
 from backend.utils.logger import get_section_logger
 from backend.utils.insforge_db import get_db
+from backend.utils.insforge_db import api_update
 
 _job_thread = None
 
