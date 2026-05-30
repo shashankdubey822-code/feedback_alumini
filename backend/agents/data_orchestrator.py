@@ -26,7 +26,7 @@ def _call_openrouter(system_prompt: str, user_content: str, max_tokens: int = 15
                 "Content-Type": "application/json"
             },
             json={
-                "model": "meta-llama/llama-3-8b-instruct:free", # Fast fallback model
+                "model": "meta-llama/llama-3.1-8b-instruct:free", # Fast fallback model
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content}
@@ -52,11 +52,15 @@ class IdentityResolutionAgent(BaseAgent):
         
     def execute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         row = payload.get('row', {})
+        def safe_str(val):
+            if pd.isna(val): return ''
+            return str(val).strip()
+            
         payload['student_data'] = {
-            'email': row.get('student_email', '').strip() or None,
-            'roll_no': row.get('roll_no', '').strip(),
-            'name': row.get('name_of_student', '').strip(),
-            'department': row.get('department', '').strip()
+            'email': safe_str(row.get('student_email')) or None,
+            'roll_no': safe_str(row.get('roll_no')),
+            'name': safe_str(row.get('name_of_student')),
+            'department': safe_str(row.get('department'))
         }
         return payload
 
@@ -67,7 +71,7 @@ class EventNormalizationAgent(BaseAgent):
     def execute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         logger.info(f"Executing {self.name}")
         row = payload.get('row', {})
-        raw_speaker = row.get('alumni_speaker_name', '').strip()
+        raw_speaker = str(row.get('alumni_speaker_name', '')).strip() if not pd.isna(row.get('alumni_speaker_name')) else ''
         date_str = row.get('date_of_lecture', '')
         
         # Standardize Date
@@ -90,7 +94,7 @@ class EventNormalizationAgent(BaseAgent):
         payload['event_data'] = {
             'speaker_name': clean_speaker or "Unknown Speaker",
             'venue_date': venue_date,
-            'department': row.get('department', '').strip(),
+            'department': str(row.get('department', '')).strip() if not pd.isna(row.get('department')) else '',
             'name': f"Guest Lecture by {clean_speaker or 'Unknown Speaker'}"
         }
         return payload
@@ -105,15 +109,19 @@ class FeedbackExtractionAgent(BaseAgent):
             try: return int(float(str(val)))
             except: return None
             
+        def safe_str(val):
+            if pd.isna(val): return ''
+            return str(val).strip()
+
         payload['feedback_data'] = {
             'submitted_at': row.get('submitted_at'),
-            'extracted_date': row.get('extracted_date'),
-            'extracted_time': row.get('extracted_time'),
+            'extracted_date': safe_str(row.get('extracted_date')),
+            'extracted_time': safe_str(row.get('extracted_time')),
             'session_rating': safe_int(row.get('session_rating')),
-            'session_help_understanding': row.get('session_help_understanding', ''),
-            'aspect_most_valuable': row.get('aspect_most_valuable', ''),
-            'improvements_suggestions': row.get('improvements_suggestions', ''),
-            'future_topics': row.get('future_topics', '')
+            'session_help_understanding': safe_str(row.get('session_help_understanding')),
+            'aspect_most_valuable': safe_str(row.get('aspect_most_valuable')),
+            'improvements_suggestions': safe_str(row.get('improvements_suggestions')),
+            'future_topics': safe_str(row.get('future_topics'))
         }
         return payload
 
@@ -200,8 +208,8 @@ class DatabaseSyncAgent(BaseAgent):
                 'event_id': event_id,
                 'student_id': student_id,
                 'submitted_at': sub_at,
-                'extracted_date': str(fb.get('extracted_date')) if fb.get('extracted_date') else None,
-                'extracted_time': str(fb.get('extracted_time')) if fb.get('extracted_time') else None,
+                'extracted_date': str(fb.get('extracted_date')) if fb.get('extracted_date') and str(fb.get('extracted_date')).strip() else None,
+                'extracted_time': str(fb.get('extracted_time')) if fb.get('extracted_time') and str(fb.get('extracted_time')).strip() else None,
                 'session_rating': fb['session_rating'],
                 'session_help_understanding': fb['session_help_understanding'],
                 'aspect_most_valuable': fb['aspect_most_valuable'],
