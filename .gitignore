@@ -1,0 +1,44 @@
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+*.db
+.env
+*.log
+logs/
+.vscode/
+scripts/
+
+# Data folder structure (tracked), but ignore actual data files
+data/uploads/*.csv
+data/backups/*.db
+data/backups/*.sql
+data/exports/*.json
+# Keep .gitkeep files to maintain folder structure
+!data/**/.gitkeep
+!data/README.md
+backend/credentials.json
+
+# User specific configuration/context files
+AI_CONTEXT.md
+AI_INSTRUCTIONS.md
+start_debug.log
+google_apps_script/
+env.example
+.agent/
+agent_runtimes/
+.github/
+.cursor/
+code-review.graph/
+scratch/
+temp/
+new.html
+
+
+
+*.msi
+*.exe
+*.dmg

@@ -1,0 +1,229 @@
+/* ============================================================
+   Base — Screens, Layout, Loading
+   ============================================================ */
+
+/* ── Ambient Background Blobs (White Glassmorphism) ── */
+.ambient-blobs {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    opacity: 0.8;
+}
+
+.ambient-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(140px);
+    opacity: 0.6;
+    animation: floatBlob 25s infinite ease-in-out alternate;
+}
+
+.ambient-blob.blob-1 {
+    width: 600px; height: 600px;
+    background: var(--blob-1);
+    top: -10%; left: -10%;
+}
+
+.ambient-blob.blob-2 {
+    width: 500px; height: 500px;
+    background: var(--blob-2);
+    bottom: -10%; right: -5%;
+    animation-delay: -5s;
+}
+
+.ambient-blob.blob-3 {
+    width: 700px; height: 700px;
+    background: var(--blob-3);
+    top: 30%; left: 40%;
+    opacity: 0.4;
+    animation-delay: -12s;
+}
+
+.ambient-blob.blob-4 {
+    width: 400px; height: 400px;
+    background: var(--blob-4);
+    bottom: 20%; left: 10%;
+    opacity: 0.5;
+    animation-delay: -8s;
+}
+
+@keyframes floatBlob {
+    0% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(5%, 5%) scale(1.1); }
+    66% { transform: translate(-3%, 8%) scale(0.9); }
+    100% { transform: translate(2%, -4%) scale(1.05); }
+}
+
+/* ── Screens ── */
+.screen {
+    display: none;
+    width: 100%;
+    min-height: 100vh;
+    position: relative;
+    z-index: 10;
+}
+.screen.active { display: flex; }
+
+/* ── Loading Screen ── */
+#loading-screen {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-base); /* Will let blobs show slightly if we make it transparent, but let's keep it solid base or glass */
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+}
+
+.loading-logo {
+    width: 72px; height: 72px;
+    border-radius: 20px;
+    background: var(--grad-accent);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 28px;
+    box-shadow: 0 0 40px rgba(14, 165, 233, 0.2);
+    animation: loadPulse 2s ease-in-out infinite;
+}
+
+@keyframes loadPulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(14, 165, 233, 0.2); }
+    50%       { transform: scale(1.06); box-shadow: 0 0 60px rgba(14, 165, 233, 0.4); }
+}
+
+.loading-title {
+    font-size: 22px; font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.3px;
+    margin-bottom: 8px;
+}
+
+.loading-subtitle {
+    font-size: 14px; color: var(--text-secondary);
+    margin-bottom: 32px;
+}
+
+.loading-bar-wrap {
+    width: 200px; height: 3px;
+    background: rgba(0,0,0,0.06);
+    border-radius: 99px; overflow: hidden;
+    margin-bottom: 24px;
+}
+
+.loading-bar-fill {
+    height: 100%;
+    background: var(--grad-accent);
+    border-radius: 99px;
+    animation: loadBar 1.8s ease-in-out infinite;
+}
+
+@keyframes loadBar {
+    0%   { width: 0%; margin-left: 0; }
+    50%  { width: 60%; margin-left: 20%; }
+    100% { width: 0%; margin-left: 100%; }
+}
+
+#btn-show-admin {
+    padding: 9px 20px;
+    border-radius: var(--r-sm);
+    background: rgba(0,0,0,0.05);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    font-family: inherit; font-size: 13px; font-weight: 500;
+    transition: var(--t-base);
+    display: none;
+}
+#btn-show-admin:hover {
+    background: rgba(0,0,0,0.08);
+    color: var(--text-primary);
+}
+
+/* ── Dashboard Layout ── */
+#dashboard-screen {
+    flex-direction: row;
+    background: transparent; /* Let ambient blobs show through */
+}
+
+/* ── Main Content ── */
+.main-content {
+    flex: 1;
+    margin-left: var(--sidebar-w);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    transition: margin-left var(--t-slow);
+    overflow-x: hidden;
+}
+
+/* ── Sections ── */
+.dashboard-section {
+    display: none;
+    flex-direction: column;
+    padding: 32px 36px 60px;
+    flex: 1;
+    animation: sectionIn 0.3s ease-out;
+}
+.dashboard-section.active { display: flex; }
+
+@keyframes sectionIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Section Header ── */
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.section-title {
+    font-size: 24px; font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.5px;
+    display: flex; align-items: center; gap: 10px;
+}
+
+.section-title svg {
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.subsection {
+    margin-top: 40px;
+    padding-top: 36px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.subsection-title {
+    font-size: 16px; font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    display: flex; align-items: center; gap: 8px;
+}
+
+.subsection-note {
+    font-size: 13px; color: var(--text-muted);
+    margin-bottom: 20px;
+    line-height: 1.6;
+}
+
+/* ── Empty State ── */
+.empty-state {
+    padding: 48px 24px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--r-lg);
+    background: var(--bg-glass);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
