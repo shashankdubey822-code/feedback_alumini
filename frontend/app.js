@@ -250,10 +250,6 @@ async function validateBackendConfiguration() {
                 }
             }
             
-            if (issues.length > 0) {
-                showNotification(`⚠️ Configuration warnings: ${issues.join(', ')}`, 'error');
-            }
-            
             return false;
         }
         
@@ -305,7 +301,12 @@ async function loadInitialData() {
                     console.log("loadInitialData: Full analytics received, updating UI");
                     state.analytics = fullAnalytics;
                     state.tableData = fullAnalytics.tableData || [];
-                    
+
+                    // Defensive: Extract filters from meta if not at top level
+                    if (!state.analytics.filters && fullAnalytics.meta && fullAnalytics.meta.filters) {
+                        state.analytics.filters = fullAnalytics.meta.filters;
+                    }
+
                     if (fullAnalytics.meta && fullAnalytics.meta.columns) {
                         state.columns = fullAnalytics.meta.columns.filter(col => allowedColumns.includes(col));
                         state.columns.sort((a, b) => allowedColumns.indexOf(a) - allowedColumns.indexOf(b));

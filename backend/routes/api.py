@@ -366,14 +366,17 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
     category_counts = {}
     
     if not df.empty and 'keywords_json' in df:
-        for kws in df['keywords_json'].dropna():
-            if isinstance(kws, dict):
-                if kws.get('is_actionable') == 1:
-                    actionable_stats['actionable'] += 1
-                else:
-                    actionable_stats['non_actionable'] += 1
-                cat = kws.get('category', 'Other')
-                category_counts[cat] = category_counts.get(cat, 0) + 1
+        for kws_raw in df['keywords_json'].dropna():
+            try:
+                kws = json.loads(kws_raw) if isinstance(kws_raw, str) else kws_raw
+            except Exception:
+                continue
+            if kws.get('is_actionable'):
+                actionable_stats['actionable'] += 1
+            else:
+                actionable_stats['non_actionable'] += 1
+            cat = kws.get('category', 'Other')
+            category_counts[cat] = category_counts.get(cat, 0) + 1
 
     # Calculate timeTrends using extracted_date
     time_trends = {}
@@ -404,17 +407,19 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
 
     # Calculate aiInsights
     ai_insights = [
-        {'type': 'info', 'title': 'Data Loaded', 'message': f'Successfully analyzed {total_count} responses.'}
+        {'type': 'info', 'icon': 'ℹ', 'title': 'Data Loaded', 'message': f'Successfully analyzed {total_count} responses.'}
     ]
     if actionable_stats.get('actionable', 0) > 0:
         ai_insights.append({
             'type': 'success', 
+            'icon': '✓',
             'title': 'Actionable Feedback', 
             'message': f"Found {actionable_stats['actionable']} actionable suggestions."
         })
     if sentiment_counts.get('NEGATIVE', 0) > (total_count * 0.2):
         ai_insights.append({
             'type': 'warning',
+            'icon': '⚠',
             'title': 'High Negative Sentiment',
             'message': 'Over 20% of responses have negative sentiment.'
         })
@@ -423,28 +428,29 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
     keywords_data = []
     if not df.empty and 'keywords_json' in df:
         word_counts = {}
-        for kws in df['keywords_json'].dropna():
-            if isinstance(kws, dict) and 'keywords' in kws:
-                for word in kws.get('keywords', []):
-                    word_counts[word] = word_counts.get(word, 0) + 1
+        for kws_raw in df['keywords_json'].dropna():
+            try:
+                kws = json.loads(kws_raw) if isinstance(kws_raw, str) else kws_raw
+            except Exception:
+                continue
+            for word in kws.get('general_keywords', []):
+                w = word.get('text', word) if isinstance(word, dict) else str(word)
+                word_counts[w] = word_counts.get(w, 0) + 1
         words_list = [{'text': k, 'count': v, 'type': 'word'} for k, v in word_counts.items()]
         words_list.sort(key=lambda x: x['count'], reverse=True)
         if words_list:
-            keywords_data.append({
-                'column': 'Key Topics',
-                'words': words_list[:25]
-            })
+            keywords_data.append({'column': 'Key Topics', 'words': words_list[:25]})
 
     return {
         'meta': {
             'columns': columns,
             'columnTypes': col_types,
-            'filters': formatted_filters,
             'filename': 'Analytics',
             'page': page,
             'pageSize': page_size,
             'totalPages': (total_count // int(page_size)) + (1 if total_count % int(page_size) > 0 else 0)
         },
+        'filters': formatted_filters,
         'tableData': table_data,
         'charts': formatted_charts,
         'kpis': formatted_kpis,

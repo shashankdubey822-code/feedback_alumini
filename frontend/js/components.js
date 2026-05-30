@@ -48,7 +48,8 @@ function renderAIInsights(insights) {
         card.innerHTML = `
             <div class="insight-icon">${insight.icon}</div>
             <div class="insight-content">
-                <p class="insight-text">${esc(insight.text)}</p>
+                <strong>${esc(insight.title || '')}</strong>
+                <p class="insight-text">${esc(insight.message || insight.text || '')}</p>
             </div>
         `;
         card.classList.add(typeClass);

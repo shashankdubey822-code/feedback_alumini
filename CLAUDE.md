@@ -20,7 +20,30 @@ RULE 7: Do not explain. Do not summarize. Do not suggest. Just edit and log.
 
 ---
 
-## 🔴 CURRENT TASK — TASK 1 (UNLOCKED)
+## 🔴 CURRENT TASK — GROQ POPUP FIX (UNLOCKED)
+
+**Status:** UNLOCKED ✅
+**File:** `frontend/app.js`
+**Action:** DELETE 3 lines only.
+**Find these exact 3 lines (around line 253):**
+```javascript
+            if (issues.length > 0) {
+                showNotification(`⚠️ Configuration warnings: ${issues.join(', ')}`, 'error');
+            }
+```
+**Delete only those 3 lines. Do NOT touch anything before or after them.**
+**Do NOT delete the validateBackendConfiguration function itself.**
+**Do NOT touch any other file.**
+
+After deleting, append to `ANTIGRAVITY.md` under `## Haiku Log`:
+```
+### GROQ POPUP FIX — DONE
+- File: frontend/app.js
+- Deleted: 3 lines — the showNotification config warning popup
+- Lines removed: approx 253-255
+- Waiting for Antigravity review.
+```
+Then STOP.
 
 **Status:** UNLOCKED ✅
 **File:** `backend/services/job_worker.py`

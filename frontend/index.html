@@ -28,22 +28,21 @@
     </div>
 
     <!-- ======================== LOADING SCREEN ======================== -->
-    <div
-      id="loading-screen"
-      class="screen active"
-    >
-      <div style="
-        background: rgba(255, 255, 255, 0.85);
-        border: 1px solid rgba(255, 255, 255, 0.8);
-        border-radius: 24px;
-        padding: 48px;
-        box-shadow: 0 25px 50px -12px rgba(31, 38, 135, 0.15);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-      ">
+    <div id="loading-screen" class="screen active">
+      <div
+        style="
+          background: rgba(255, 255, 255, 0.85);
+          border: 1px solid rgba(255, 255, 255, 0.8);
+          border-radius: 24px;
+          padding: 48px;
+          box-shadow: 0 25px 50px -12px rgba(31, 38, 135, 0.15);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+        "
+      >
         <div
           class="brand-icon"
           style="
@@ -71,10 +70,23 @@
             </defs>
           </svg>
         </div>
-        <h2 style="color: var(--text-primary); font-size: 28px; font-weight: 700; margin-bottom: 8px; text-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+        <h2
+          style="
+            color: var(--text-primary);
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+          "
+        >
           Loading Dashboard
         </h2>
-        <p id="loading-status" style="color: var(--text-secondary); font-size: 15px;">Connecting to database...</p>
+        <p
+          id="loading-status"
+          style="color: var(--text-secondary); font-size: 15px"
+        >
+          Connecting to database...
+        </p>
         <button
           id="btn-show-admin"
           style="
@@ -95,7 +107,6 @@
         </button>
       </div>
     </div>
-
 
     <!-- ======================== DASHBOARD SCREEN ======================== -->
     <div id="dashboard-screen" class="screen">
@@ -261,15 +272,21 @@
               stroke-linejoin="round"
             >
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+              <path
+                d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
+              />
             </svg>
             <span>AI Knowledge Wiki</span>
           </button>
         </div>
 
-
         <div class="sidebar-footer">
-          <button class="nav-item" data-section="upload-section" id="btn-upload-data" title="Upload Past Data">
+          <button
+            class="nav-item"
+            data-section="upload-section"
+            id="btn-upload-data"
+            title="Upload Past Data"
+          >
             <svg
               width="20"
               height="20"
@@ -360,7 +377,16 @@
         <section class="dashboard-section" id="upload-section">
           <div class="section-header">
             <h2 class="section-title">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                 <polyline points="17 8 12 3 7 8" />
                 <line x1="12" y1="3" x2="12" y2="15" />
@@ -369,11 +395,27 @@
             </h2>
           </div>
 
-          <div class="upload-container-nested" style="max-width: 800px; margin: 40px auto;">
-            <div id="drop-zone" class="drop-zone" style="background: rgba(255, 255, 255, 0.03);">
+          <div
+            class="upload-container-nested"
+            style="max-width: 800px; margin: 40px auto"
+          >
+            <div
+              id="drop-zone"
+              class="drop-zone"
+              style="background: rgba(255, 255, 255, 0.03)"
+            >
               <div class="drop-zone-content">
                 <div class="upload-icon">
-                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <svg
+                    width="48"
+                    height="48"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                     <polyline points="17 8 12 3 7 8" />
                     <line x1="12" y1="3" x2="12" y2="15" />
@@ -382,22 +424,68 @@
                 <p class="drop-text">Drag & drop your CSV file here</p>
                 <p class="drop-subtext">or</p>
                 <label for="file-input" class="browse-btn">Browse Files</label>
-                <input type="file" id="file-input" accept=".csv,.tsv,.txt" hidden />
+                <input
+                  type="file"
+                  id="file-input"
+                  accept=".csv,.tsv,.txt"
+                  hidden
+                />
                 <p class="file-hint">Supports .csv, .tsv files</p>
-                
-                <div style="margin-top: 32px; border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 32px;">
-                  <p class="drop-text" style="font-size: 16px; margin-bottom: 12px">Or load from Google Sheets / Drive</p>
-                  <input type="text" id="google-link-input" placeholder="Paste full Google Sheets share link..." class="filter-input" style="width: 80%; display: block; margin: 0 auto; padding: 12px; font-size: 14px; text-align: center; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(0, 0, 0, 0.2); color: #fff; outline: none;" />
-                  <button id="btn-google-fetch" class="browse-btn" style="margin-top: 16px; display: inline-block">Fetch Data</button>
+
+                <div
+                  style="
+                    margin-top: 32px;
+                    border-top: 1px solid rgba(255, 255, 255, 0.05);
+                    padding-top: 32px;
+                  "
+                >
+                  <p
+                    class="drop-text"
+                    style="font-size: 16px; margin-bottom: 12px"
+                  >
+                    Or load from Google Sheets / Drive
+                  </p>
+                  <input
+                    type="text"
+                    id="google-link-input"
+                    placeholder="Paste full Google Sheets share link..."
+                    class="filter-input"
+                    style="
+                      width: 80%;
+                      display: block;
+                      margin: 0 auto;
+                      padding: 12px;
+                      font-size: 14px;
+                      text-align: center;
+                      border-radius: 8px;
+                      border: 1px solid rgba(255, 255, 255, 0.1);
+                      background: rgba(0, 0, 0, 0.2);
+                      color: #fff;
+                      outline: none;
+                    "
+                  />
+                  <button
+                    id="btn-google-fetch"
+                    class="browse-btn"
+                    style="margin-top: 16px; display: inline-block"
+                  >
+                    Fetch Data
+                  </button>
                 </div>
               </div>
             </div>
 
-            <div id="upload-progress" class="upload-progress hidden" style="margin-top: 24px;">
+            <div
+              id="upload-progress"
+              class="upload-progress hidden"
+              style="margin-top: 24px"
+            >
               <div class="progress-bar">
                 <div class="progress-fill" id="progress-fill"></div>
               </div>
-              <p class="progress-text" id="progress-text">Uploading to database...</p>
+              <p class="progress-text" id="progress-text">
+                Uploading to database...
+              </p>
             </div>
           </div>
         </section>
@@ -423,21 +511,6 @@
               </svg>
               Overview
             </h2>
-          </div>
-
-          <!-- PIPELINE -->
-          <div class="pipeline">
-            <div class="pipe-step"><span class="icon">📋</span><span class="label">Google Form</span>Generated by GAS</div>
-            <div class="pipe-arrow">→</div>
-            <div class="pipe-step"><span class="icon">🔗</span><span class="label">Webhook</span>/api/v1/webhook/forms/submit</div>
-            <div class="pipe-arrow">→</div>
-            <div class="pipe-step"><span class="icon">🤖</span><span class="label">Orchestrator</span>5 LLM Agents</div>
-            <div class="pipe-arrow">→</div>
-            <div class="pipe-step"><span class="icon">🗄️</span><span class="label">InsForge DB</span>5 Tables</div>
-            <div class="pipe-arrow">→</div>
-            <div class="pipe-step"><span class="icon">🧠</span><span class="label">DL Worker</span>NLP + Sentiment</div>
-            <div class="pipe-arrow">→</div>
-            <div class="pipe-step"><span class="icon">📊</span><span class="label">Dashboard</span>Analytics Engine</div>
           </div>
 
           <!-- KPI Cards -->
@@ -471,10 +544,27 @@
           </div>
 
           <!-- Data Table (Embedded in Overview) -->
-          <div class="subsection" id="table-area" style="margin-top: 40px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 32px;">
-            <div class="section-header" style="margin-bottom: 20px;">
+          <div
+            class="subsection"
+            id="table-area"
+            style="
+              margin-top: 40px;
+              border-top: 1px solid rgba(255, 255, 255, 0.05);
+              padding-top: 32px;
+            "
+          >
+            <div class="section-header" style="margin-bottom: 20px">
               <h3 class="subsection-title">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
                   <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
                   <line x1="3" y1="9" x2="21" y2="9" />
                   <line x1="3" y1="15" x2="21" y2="15" />
@@ -482,7 +572,9 @@
                 </svg>
                 Detailed Student Feedback
               </h3>
-              <span id="showing-count" class="showing-count">Showing 0 of 0 rows</span>
+              <span id="showing-count" class="showing-count"
+                >Showing 0 of 0 rows</span
+              >
             </div>
             <div class="table-wrapper">
               <table id="data-table">
@@ -540,8 +632,11 @@
             </h2>
           </div>
           <div class="charts-grid" id="charts-grid"></div>
-          <div class="charts-grid" id="trends-grid" style="margin-top: 24px"></div>
-
+          <div
+            class="charts-grid"
+            id="trends-grid"
+            style="margin-top: 24px"
+          ></div>
         </section>
 
         <!-- ███ NLP ANALYSIS SECTION ███ -->
@@ -567,9 +662,18 @@
           </div>
 
           <!-- Deep Analysis: Actionable & Categories -->
-          <div class="subsection" id="deep-actionable-subsection" style="display: none;">
-            <h3 class="subsection-title">Actionability & Categories (Suggestions)</h3>
-            <p class="subsection-note">AI automatically classifies written suggestions by their actionability and subject categorization.</p>
+          <div
+            class="subsection"
+            id="deep-actionable-subsection"
+            style="display: none"
+          >
+            <h3 class="subsection-title">
+              Actionability & Categories (Suggestions)
+            </h3>
+            <p class="subsection-note">
+              AI automatically classifies written suggestions by their
+              actionability and subject categorization.
+            </p>
             <div class="charts-grid" id="deep-actionable-grid"></div>
           </div>
 
@@ -617,53 +721,167 @@
             ></div>
           </div>
 
-          <div id="speaker-profile-view" style="display: none;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-              <button class="btn btn-secondary" id="btn-back-to-speakers" style="display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); cursor: pointer; font-weight: 500; font-family: inherit; transition: var(--t-base);">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <div id="speaker-profile-view" style="display: none">
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 20px;
+              "
+            >
+              <button
+                class="btn btn-secondary"
+                id="btn-back-to-speakers"
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                  padding: 8px 16px;
+                  border-radius: var(--r-sm);
+                  border: 1px solid var(--border);
+                  background: var(--bg-card);
+                  color: var(--text-primary);
+                  cursor: pointer;
+                  font-weight: 500;
+                  font-family: inherit;
+                  transition: var(--t-base);
+                "
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
                   <line x1="19" y1="12" x2="5" y2="12"></line>
                   <polyline points="12 19 5 12 12 5"></polyline>
                 </svg>
                 Back to Speakers
               </button>
             </div>
-            
-            <div class="speaker-profile-header-card" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-md); padding: 24px; display: flex; align-items: center; gap: 24px; margin-bottom: 24px;">
-              <div id="speaker-profile-avatar" style="width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; color: white;"></div>
-              <div style="flex-grow: 1;">
-                <h3 id="speaker-profile-name" style="font-size: 24px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;"></h3>
-                <div style="display: flex; gap: 16px; align-items: center;">
-                  <span id="speaker-profile-count" style="font-size: 14px; color: var(--text-secondary);"></span>
-                  <span id="speaker-profile-rating-badge" style="font-size: 14px; font-weight: 600;"></span>
-                  <span id="speaker-profile-sentiment-badge" style="font-size: 14px; font-weight: 600;"></span>
+
+            <div
+              class="speaker-profile-header-card"
+              style="
+                background: var(--bg-card);
+                border: 1px solid var(--border);
+                border-radius: var(--r-md);
+                padding: 24px;
+                display: flex;
+                align-items: center;
+                gap: 24px;
+                margin-bottom: 24px;
+              "
+            >
+              <div
+                id="speaker-profile-avatar"
+                style="
+                  width: 64px;
+                  height: 64px;
+                  border-radius: 50%;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  font-size: 28px;
+                  font-weight: 700;
+                  color: white;
+                "
+              ></div>
+              <div style="flex-grow: 1">
+                <h3
+                  id="speaker-profile-name"
+                  style="
+                    font-size: 24px;
+                    font-weight: 700;
+                    color: var(--text-primary);
+                    margin-bottom: 4px;
+                  "
+                ></h3>
+                <div style="display: flex; gap: 16px; align-items: center">
+                  <span
+                    id="speaker-profile-count"
+                    style="font-size: 14px; color: var(--text-secondary)"
+                  ></span>
+                  <span
+                    id="speaker-profile-rating-badge"
+                    style="font-size: 14px; font-weight: 600"
+                  ></span>
+                  <span
+                    id="speaker-profile-sentiment-badge"
+                    style="font-size: 14px; font-weight: 600"
+                  ></span>
                 </div>
               </div>
             </div>
-            
-            <div class="speaker-profile-layout" style="display: grid; grid-template-columns: 3fr 2fr; gap: 24px; align-items: start;">
-              <div class="speaker-profile-main" style="display: flex; flex-direction: column; gap: 24px;">
-                <div class="chart-card" style="width: 100%;">
+
+            <div
+              class="speaker-profile-layout"
+              style="
+                display: grid;
+                grid-template-columns: 3fr 2fr;
+                gap: 24px;
+                align-items: start;
+              "
+            >
+              <div
+                class="speaker-profile-main"
+                style="display: flex; flex-direction: column; gap: 24px"
+              >
+                <div class="chart-card" style="width: 100%">
                   <div class="chart-card-header">
-                    <div class="chart-card-title">Average Rating Trend Over Time</div>
+                    <div class="chart-card-title">
+                      Average Rating Trend Over Time
+                    </div>
                   </div>
-                  <div class="chart-canvas-wrapper" style="position: relative; height: 260px; width: 100%;">
+                  <div
+                    class="chart-canvas-wrapper"
+                    style="position: relative; height: 260px; width: 100%"
+                  >
                     <canvas id="speaker-trend-chart"></canvas>
                   </div>
                 </div>
-                
-                <div class="chart-card" style="width: 100%; overflow: hidden;">
+
+                <div class="chart-card" style="width: 100%; overflow: hidden">
                   <div class="chart-card-header">
-                    <div class="chart-card-title">Lecture History & Student Feedback</div>
+                    <div class="chart-card-title">
+                      Lecture History & Student Feedback
+                    </div>
                   </div>
-                  <div style="padding: 16px; overflow-x: auto; max-height: 400px; overflow-y: auto;">
-                    <table class="data-table" id="speaker-lectures-table" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+                  <div
+                    style="
+                      padding: 16px;
+                      overflow-x: auto;
+                      max-height: 400px;
+                      overflow-y: auto;
+                    "
+                  >
+                    <table
+                      class="data-table"
+                      id="speaker-lectures-table"
+                      style="
+                        width: 100%;
+                        border-collapse: collapse;
+                        text-align: left;
+                        font-size: 13px;
+                      "
+                    >
                       <thead>
-                        <tr style="border-bottom: 1px solid var(--border); color: var(--text-secondary);">
-                          <th style="padding: 10px;">Date</th>
-                          <th style="padding: 10px;">Department</th>
-                          <th style="padding: 10px;">Rating</th>
-                          <th style="padding: 10px;">Sentiment</th>
-                          <th style="padding: 10px;">Key Feedback</th>
+                        <tr
+                          style="
+                            border-bottom: 1px solid var(--border);
+                            color: var(--text-secondary);
+                          "
+                        >
+                          <th style="padding: 10px">Date</th>
+                          <th style="padding: 10px">Department</th>
+                          <th style="padding: 10px">Rating</th>
+                          <th style="padding: 10px">Sentiment</th>
+                          <th style="padding: 10px">Key Feedback</th>
                         </tr>
                       </thead>
                       <tbody></tbody>
@@ -671,17 +889,47 @@
                   </div>
                 </div>
               </div>
-              
-              <div class="speaker-profile-sidebar" style="display: flex; flex-direction: column; gap: 24px;">
-                <div class="chart-card" style="width: 100%;">
-                  <div class="chart-card-header" style="display: flex; justify-content: space-between; align-items: center;">
+
+              <div
+                class="speaker-profile-sidebar"
+                style="display: flex; flex-direction: column; gap: 24px"
+              >
+                <div class="chart-card" style="width: 100%">
+                  <div
+                    class="chart-card-header"
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: center;
+                    "
+                  >
                     <div class="chart-card-title">AI Dossier Summary</div>
-                    <button class="btn btn-secondary" id="btn-compile-speaker-dossier" style="font-size: 11px; padding: 4px 10px; border-radius: var(--r-xs); border: 1px solid var(--border-accent); display: none;">
+                    <button
+                      class="btn btn-secondary"
+                      id="btn-compile-speaker-dossier"
+                      style="
+                        font-size: 11px;
+                        padding: 4px 10px;
+                        border-radius: var(--r-xs);
+                        border: 1px solid var(--border-accent);
+                        display: none;
+                      "
+                    >
                       Compile Dossier
                     </button>
                   </div>
-                  <div style="padding: 20px; max-height: 700px; overflow-y: auto;">
-                    <div id="speaker-ai-summary" class="wiki-markdown-body" style="font-size: 13.5px; line-height: 1.6; color: var(--text-secondary);">
+                  <div
+                    style="padding: 20px; max-height: 700px; overflow-y: auto"
+                  >
+                    <div
+                      id="speaker-ai-summary"
+                      class="wiki-markdown-body"
+                      style="
+                        font-size: 13.5px;
+                        line-height: 1.6;
+                        color: var(--text-secondary);
+                      "
+                    >
                       No AI dossier compiled yet.
                     </div>
                   </div>
@@ -693,7 +941,16 @@
 
         <!-- ███ DEPARTMENTS SECTION ███ -->
         <section class="dashboard-section" id="departments-section">
-          <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+          <div
+            class="section-header"
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              flex-wrap: wrap;
+              gap: 16px;
+            "
+          >
             <h2 class="section-title">
               <svg
                 width="20"
@@ -710,18 +967,74 @@
               </svg>
               Department Comparison
             </h2>
-            
-            <div class="department-filters-bar" style="display: flex; align-items: center; gap: 12px;">
-              <div class="search-box-top" style="margin: 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 6px 12px; display: flex; align-items: center; gap: 8px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+            <div
+              class="department-filters-bar"
+              style="display: flex; align-items: center; gap: 12px"
+            >
+              <div
+                class="search-box-top"
+                style="
+                  margin: 0;
+                  background: var(--bg-card);
+                  border: 1px solid var(--border);
+                  border-radius: var(--r-sm);
+                  padding: 6px 12px;
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                "
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
                   <circle cx="11" cy="11" r="8"></circle>
                   <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                 </svg>
-                <input type="text" id="dept-search-input" placeholder="Search departments..." style="background: transparent; border: none; color: var(--text-primary); font-size: 13px; outline: none; width: 180px;" />
+                <input
+                  type="text"
+                  id="dept-search-input"
+                  placeholder="Search departments..."
+                  style="
+                    background: transparent;
+                    border: none;
+                    color: var(--text-primary);
+                    font-size: 13px;
+                    outline: none;
+                    width: 180px;
+                  "
+                />
               </div>
-              <div class="sort-box" style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-size: 13px; color: var(--text-secondary);">Sort by:</span>
-                <select id="dept-sort-select" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px 12px; color: var(--text-primary); font-size: 13.5px; outline: none; cursor: pointer; font-family: inherit; font-weight: 500; transition: var(--t-base);">
+              <div
+                class="sort-box"
+                style="display: flex; align-items: center; gap: 8px"
+              >
+                <span style="font-size: 13px; color: var(--text-secondary)"
+                  >Sort by:</span
+                >
+                <select
+                  id="dept-sort-select"
+                  style="
+                    background: var(--bg-card);
+                    border: 1px solid var(--border);
+                    border-radius: var(--r-sm);
+                    padding: 8px 12px;
+                    color: var(--text-primary);
+                    font-size: 13.5px;
+                    outline: none;
+                    cursor: pointer;
+                    font-family: inherit;
+                    font-weight: 500;
+                    transition: var(--t-base);
+                  "
+                >
                   <option value="rating">Average Rating</option>
                   <option value="volume">Response Volume</option>
                   <option value="sentiment">Sentiment Score</option>
@@ -730,50 +1043,82 @@
               </div>
             </div>
           </div>
-          
+
           <div class="charts-grid" id="department-charts-grid">
             <div class="chart-card">
               <div class="chart-card-header">
-                <div class="chart-card-title">Net Promoter Score (NPS) Comparison</div>
+                <div class="chart-card-title">
+                  Net Promoter Score (NPS) Comparison
+                </div>
               </div>
-              <div class="chart-canvas-wrapper" style="position: relative; height: 260px; width: 100%;">
+              <div
+                class="chart-canvas-wrapper"
+                style="position: relative; height: 260px; width: 100%"
+              >
                 <canvas id="dept-nps-chart"></canvas>
               </div>
             </div>
-            
+
             <div class="chart-card">
               <div class="chart-card-header">
-                <div class="chart-card-title">Average Sentiment Polarity Comparison</div>
+                <div class="chart-card-title">
+                  Average Sentiment Polarity Comparison
+                </div>
               </div>
-              <div class="chart-canvas-wrapper" style="position: relative; height: 260px; width: 100%;">
+              <div
+                class="chart-canvas-wrapper"
+                style="position: relative; height: 260px; width: 100%"
+              >
                 <canvas id="dept-sentiment-chart"></canvas>
               </div>
             </div>
-            
+
             <div class="chart-card">
               <div class="chart-card-header">
-                <div class="chart-card-title">Response Volume by Department</div>
+                <div class="chart-card-title">
+                  Response Volume by Department
+                </div>
               </div>
-              <div class="chart-canvas-wrapper" style="position: relative; height: 260px; width: 100%;">
+              <div
+                class="chart-canvas-wrapper"
+                style="position: relative; height: 260px; width: 100%"
+              >
                 <canvas id="dept-volume-chart"></canvas>
               </div>
             </div>
           </div>
-          
-          <div class="chart-card" style="margin-top: 24px; overflow: hidden; width: 100%;">
+
+          <div
+            class="chart-card"
+            style="margin-top: 24px; overflow: hidden; width: 100%"
+          >
             <div class="chart-card-header">
               <div class="chart-card-title">Department Metrics Matrix</div>
             </div>
-            <div style="padding: 16px; overflow-x: auto;">
-              <table class="data-table" id="dept-metrics-table" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+            <div style="padding: 16px; overflow-x: auto">
+              <table
+                class="data-table"
+                id="dept-metrics-table"
+                style="
+                  width: 100%;
+                  border-collapse: collapse;
+                  text-align: left;
+                  font-size: 13px;
+                "
+              >
                 <thead>
-                  <tr style="border-bottom: 1px solid var(--border); color: var(--text-secondary);">
-                    <th style="padding: 12px 10px;">Department</th>
-                    <th style="padding: 12px 10px;">Responses</th>
-                    <th style="padding: 12px 10px;">Avg Rating</th>
-                    <th style="padding: 12px 10px;">Net Promoter Score (NPS)</th>
-                    <th style="padding: 12px 10px;">Avg Sentiment</th>
-                    <th style="padding: 12px 10px;">NPS Status</th>
+                  <tr
+                    style="
+                      border-bottom: 1px solid var(--border);
+                      color: var(--text-secondary);
+                    "
+                  >
+                    <th style="padding: 12px 10px">Department</th>
+                    <th style="padding: 12px 10px">Responses</th>
+                    <th style="padding: 12px 10px">Avg Rating</th>
+                    <th style="padding: 12px 10px">Net Promoter Score (NPS)</th>
+                    <th style="padding: 12px 10px">Avg Sentiment</th>
+                    <th style="padding: 12px 10px">NPS Status</th>
                   </tr>
                 </thead>
                 <tbody></tbody>
@@ -784,137 +1129,634 @@
 
         <!-- ███ AI KNOWLEDGE WIKI SECTION ███ -->
         <section class="dashboard-section" id="wiki-section">
-          <div class="section-header" style="justify-content: space-between; align-items: center;">
+          <div
+            class="section-header"
+            style="justify-content: space-between; align-items: center"
+          >
             <h2 class="section-title">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                <path
+                  d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
+                />
               </svg>
               AI Knowledge Wiki
             </h2>
-            
+
             <!-- Wiki Subtabs -->
-            <div class="wiki-subtabs" style="display: flex; gap: 8px;">
-              <button class="wiki-subtab active" data-tab="wiki-tab-explore">Explorer &amp; Graph</button>
-              <button class="wiki-subtab" data-tab="wiki-tab-ingest">Compile Data</button>
-              <button class="wiki-subtab" data-tab="wiki-tab-schema">Database Schema</button>
-              <button class="wiki-subtab" data-tab="wiki-tab-settings">Wiki Settings</button>
+            <div class="wiki-subtabs" style="display: flex; gap: 8px">
+              <button class="wiki-subtab active" data-tab="wiki-tab-explore">
+                Explorer &amp; Graph
+              </button>
+              <button class="wiki-subtab" data-tab="wiki-tab-ingest">
+                Compile Data
+              </button>
+              <button class="wiki-subtab" data-tab="wiki-tab-schema">
+                Database Schema
+              </button>
+              <button class="wiki-subtab" data-tab="wiki-tab-settings">
+                Wiki Settings
+              </button>
             </div>
           </div>
 
           <!-- SUBTAB 1: EXPLORER AND GRAPH (THE NEON OBSERVATORY) -->
           <div class="wiki-tab-content active-content" id="wiki-tab-explore">
-            <div class="wiki-grid-layout" style="display: grid; grid-template-columns: 260px 1fr 340px; gap: 20px; min-height: 600px; margin-top: 16px;">
-              
+            <div
+              class="wiki-grid-layout"
+              style="
+                display: grid;
+                grid-template-columns: 260px 1fr 340px;
+                gap: 20px;
+                min-height: 600px;
+                margin-top: 16px;
+              "
+            >
               <!-- Left Sidebar: Obsidian-style file tree -->
-              <div class="wiki-explorer-card" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; height: 600px;">
-                <h4 style="margin: 0 0 12px; font-size: 13px; text-transform: uppercase; color: #a855f7; letter-spacing: 1px; font-weight: 700;">Wiki Explorer</h4>
-                <input type="text" id="wiki-search-box" placeholder="Search pages..." style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-input); color: var(--text-primary); font-size: 12px; outline: none; margin-bottom: 12px; box-sizing: border-box;" />
-                <div id="wiki-tree-container" style="flex: 1; overflow-y: auto; font-size: 13px; line-height: 1.6;">
+              <div
+                class="wiki-explorer-card"
+                style="
+                  background: var(--bg-card);
+                  border: 1px solid var(--border);
+                  border-radius: 12px;
+                  padding: 16px;
+                  display: flex;
+                  flex-direction: column;
+                  height: 600px;
+                "
+              >
+                <h4
+                  style="
+                    margin: 0 0 12px;
+                    font-size: 13px;
+                    text-transform: uppercase;
+                    color: #a855f7;
+                    letter-spacing: 1px;
+                    font-weight: 700;
+                  "
+                >
+                  Wiki Explorer
+                </h4>
+                <input
+                  type="text"
+                  id="wiki-search-box"
+                  placeholder="Search pages..."
+                  style="
+                    width: 100%;
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    border: 1px solid var(--border-strong);
+                    background: var(--bg-input);
+                    color: var(--text-primary);
+                    font-size: 12px;
+                    outline: none;
+                    margin-bottom: 12px;
+                    box-sizing: border-box;
+                  "
+                />
+                <div
+                  id="wiki-tree-container"
+                  style="
+                    flex: 1;
+                    overflow-y: auto;
+                    font-size: 13px;
+                    line-height: 1.6;
+                  "
+                >
                   <!-- Dynamically populated page hierarchy -->
-                  <div style="color: var(--text-muted); text-align: center; padding: 20px;">Initializing tree...</div>
+                  <div
+                    style="
+                      color: var(--text-muted);
+                      text-align: center;
+                      padding: 20px;
+                    "
+                  >
+                    Initializing tree...
+                  </div>
                 </div>
               </div>
 
               <!-- Center Reading Panel: Obsidian Reader -->
-              <div class="wiki-reader-card" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; height: 600px; box-sizing: border-box; position: relative;">
-                
+              <div
+                class="wiki-reader-card"
+                style="
+                  background: var(--bg-card);
+                  border: 1px solid var(--border);
+                  border-radius: 12px;
+                  padding: 24px;
+                  display: flex;
+                  flex-direction: column;
+                  height: 600px;
+                  box-sizing: border-box;
+                  position: relative;
+                "
+              >
                 <!-- Card HeaderCap (Stitch design system) -->
-                <div style="position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, #00ffff, #bf5fff); border-top-left-radius: 12px; border-top-right-radius: 12px;"></div>
-                
-                <div class="wiki-reader-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-subtle); padding-bottom: 12px; margin-bottom: 16px;">
-                  <h3 id="wiki-page-title" style="margin: 0; font-size: 20px; color: var(--text-primary); font-weight: 600;">Welcome.md</h3>
-                  <div style="display: flex; gap: 8px;">
-                    <button id="btn-wiki-edit" class="btn-clear" style="padding: 6px 12px; font-size: 12px; background: rgba(255,255,255,0.04); border-radius: 6px; border: 1px solid var(--border-strong); color: var(--text-muted); cursor: pointer; display: none;">Edit Page</button>
-                    <span id="wiki-badge-category" class="file-badge" style="background: rgba(0, 255, 255, 0.1); color: var(--cyan); border: 1px solid rgba(0, 255, 255, 0.2);">System</span>
+                <div
+                  style="
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    height: 2px;
+                    background: linear-gradient(90deg, #00ffff, #bf5fff);
+                    border-top-left-radius: 12px;
+                    border-top-right-radius: 12px;
+                  "
+                ></div>
+
+                <div
+                  class="wiki-reader-header"
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    border-bottom: 1px solid var(--border-subtle);
+                    padding-bottom: 12px;
+                    margin-bottom: 16px;
+                  "
+                >
+                  <h3
+                    id="wiki-page-title"
+                    style="
+                      margin: 0;
+                      font-size: 20px;
+                      color: var(--text-primary);
+                      font-weight: 600;
+                    "
+                  >
+                    Welcome.md
+                  </h3>
+                  <div style="display: flex; gap: 8px">
+                    <button
+                      id="btn-wiki-edit"
+                      class="btn-clear"
+                      style="
+                        padding: 6px 12px;
+                        font-size: 12px;
+                        background: rgba(255, 255, 255, 0.04);
+                        border-radius: 6px;
+                        border: 1px solid var(--border-strong);
+                        color: var(--text-muted);
+                        cursor: pointer;
+                        display: none;
+                      "
+                    >
+                      Edit Page
+                    </button>
+                    <span
+                      id="wiki-badge-category"
+                      class="file-badge"
+                      style="
+                        background: rgba(0, 255, 255, 0.1);
+                        color: var(--cyan);
+                        border: 1px solid rgba(0, 255, 255, 0.2);
+                      "
+                      >System</span
+                    >
                   </div>
                 </div>
-                
+
                 <!-- Markdown Content Viewport -->
-                <div id="wiki-page-content" class="wiki-markdown-body" style="flex: 1; overflow-y: auto; color: var(--text-secondary); line-height: 1.7; font-size: 14px; padding-right: 8px;">
+                <div
+                  id="wiki-page-content"
+                  class="wiki-markdown-body"
+                  style="
+                    flex: 1;
+                    overflow-y: auto;
+                    color: var(--text-secondary);
+                    line-height: 1.7;
+                    font-size: 14px;
+                    padding-right: 8px;
+                  "
+                >
                   <!-- Rendered markdown/HTML -->
-                  <p>Select a file from the explorer to begin reading, or compile database sessions in the compilation manager.</p>
+                  <p>
+                    Select a file from the explorer to begin reading, or compile
+                    database sessions in the compilation manager.
+                  </p>
                 </div>
-                
+
                 <!-- Document Footer (Backlinks) -->
-                <div id="wiki-backlinks-panel" style="border-top: 1px solid var(--border-subtle); padding-top: 12px; margin-top: 12px; display: none;">
-                  <h4 style="margin: 0 0 6px; font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600; letter-spacing: 0.5px;">Linked Backlinks</h4>
-                  <div id="wiki-backlinks-list" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+                <div
+                  id="wiki-backlinks-panel"
+                  style="
+                    border-top: 1px solid var(--border-subtle);
+                    padding-top: 12px;
+                    margin-top: 12px;
+                    display: none;
+                  "
+                >
+                  <h4
+                    style="
+                      margin: 0 0 6px;
+                      font-size: 11px;
+                      text-transform: uppercase;
+                      color: var(--text-muted);
+                      font-weight: 600;
+                      letter-spacing: 0.5px;
+                    "
+                  >
+                    Linked Backlinks
+                  </h4>
+                  <div
+                    id="wiki-backlinks-list"
+                    style="display: flex; gap: 8px; flex-wrap: wrap"
+                  ></div>
                 </div>
               </div>
 
               <!-- Right Panel: Graph & RAG Chat -->
-              <div id="wiki-right-panel" style="display: flex; flex-direction: column; gap: 20px; height: 600px; position: relative;">
-                
+              <div
+                id="wiki-right-panel"
+                style="
+                  display: flex;
+                  flex-direction: column;
+                  gap: 20px;
+                  height: 600px;
+                  position: relative;
+                "
+              >
                 <!-- Top Right: Force Graph visualizer -->
-                <div id="wiki-graph-container" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; flex: 1; display: flex; flex-direction: column; min-height: 240px; box-sizing: border-box; transition: all 0.3s ease;">
-                  <h4 style="margin: 0 0 8px; font-size: 12px; text-transform: uppercase; color: var(--cyan); letter-spacing: 0.5px; font-weight: 700;">Knowledge Graph Connections</h4>
-                  <div style="flex: 1; position: relative; background: var(--bg-input); border-radius: 8px; border: 1px solid var(--bg-card); overflow: hidden;">
-                    <canvas id="wiki-graph-canvas" style="display: block; width: 100%; height: 100%;"></canvas>
-                    <div style="position: absolute; bottom: 8px; left: 8px; font-size: 9px; color: var(--text-muted); background: var(--bg-glass); padding: 2px 6px; border-radius: 4px;">Drag nodes to explore</div>
+                <div
+                  id="wiki-graph-container"
+                  style="
+                    background: var(--bg-card);
+                    border: 1px solid var(--border);
+                    border-radius: 12px;
+                    padding: 16px;
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    min-height: 240px;
+                    box-sizing: border-box;
+                    transition: all 0.3s ease;
+                  "
+                >
+                  <h4
+                    style="
+                      margin: 0 0 8px;
+                      font-size: 12px;
+                      text-transform: uppercase;
+                      color: var(--cyan);
+                      letter-spacing: 0.5px;
+                      font-weight: 700;
+                    "
+                  >
+                    Knowledge Graph Connections
+                  </h4>
+                  <div
+                    style="
+                      flex: 1;
+                      position: relative;
+                      background: var(--bg-input);
+                      border-radius: 8px;
+                      border: 1px solid var(--bg-card);
+                      overflow: hidden;
+                    "
+                  >
+                    <canvas
+                      id="wiki-graph-canvas"
+                      style="display: block; width: 100%; height: 100%"
+                    ></canvas>
+                    <div
+                      style="
+                        position: absolute;
+                        bottom: 8px;
+                        left: 8px;
+                        font-size: 9px;
+                        color: var(--text-muted);
+                        background: var(--bg-glass);
+                        padding: 2px 6px;
+                        border-radius: 4px;
+                      "
+                    >
+                      Drag nodes to explore
+                    </div>
                   </div>
                 </div>
- 
+
                 <!-- Bottom Right: Wiki RAG Chat -->
-                <div id="wiki-rag-container" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; flex: 1.2; display: flex; flex-direction: column; min-height: 280px; box-sizing: border-box; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <h4 style="margin: 0; font-size: 12px; text-transform: uppercase; color: var(--purple); letter-spacing: 0.5px; font-weight: 700;">Wiki RAG Assistant</h4>
-                    <button id="btn-wiki-chat-clear" style="background: transparent; border: none; color: var(--text-muted); font-size: 10px; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; transition: color 0.2s;" onmouseover="this.style.color='var(--purple)'" onmouseout="this.style.color='var(--text-muted)'">
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                <div
+                  id="wiki-rag-container"
+                  style="
+                    background: var(--bg-card);
+                    border: 1px solid var(--border);
+                    border-radius: 12px;
+                    padding: 16px;
+                    flex: 1.2;
+                    display: flex;
+                    flex-direction: column;
+                    min-height: 280px;
+                    box-sizing: border-box;
+                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                    position: relative;
+                  "
+                >
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: center;
+                      margin-bottom: 8px;
+                    "
+                  >
+                    <h4
+                      style="
+                        margin: 0;
+                        font-size: 12px;
+                        text-transform: uppercase;
+                        color: var(--purple);
+                        letter-spacing: 0.5px;
+                        font-weight: 700;
+                      "
+                    >
+                      Wiki RAG Assistant
+                    </h4>
+                    <button
+                      id="btn-wiki-chat-clear"
+                      style="
+                        background: transparent;
+                        border: none;
+                        color: var(--text-muted);
+                        font-size: 10px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        gap: 4px;
+                        padding: 2px 6px;
+                        border-radius: 4px;
+                        transition: color 0.2s;
+                      "
+                      onmouseover="this.style.color = 'var(--purple)'"
+                      onmouseout="this.style.color = 'var(--text-muted)'"
+                    >
+                      <svg
+                        width="10"
+                        height="10"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path
+                          d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                        ></path>
+                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                      </svg>
                       Clear Memory
                     </button>
                   </div>
-                  
-                  <!-- Dynamic AI Suggested Questions -->
-                  <div id="wiki-suggested-questions" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; font-size: 11px;"></div>
 
-                  <div id="wiki-chat-box" style="flex: 1; overflow-y: auto; background: var(--bg-input); border-radius: 8px; padding: 8px; border: 1px solid var(--bg-card); margin-bottom: 8px; font-size: 12px; display: flex; flex-direction: column; gap: 8px; max-height: 190px; transition: max-height 0.3s ease;">
-                    <div class="chat-msg system" style="color: var(--text-muted); font-style: italic;">Ask questions regarding speakers, lectures, and improvement recommendations compiled in your wiki.</div>
+                  <!-- Dynamic AI Suggested Questions -->
+                  <div
+                    id="wiki-suggested-questions"
+                    style="
+                      display: flex;
+                      gap: 6px;
+                      flex-wrap: wrap;
+                      margin-bottom: 8px;
+                      font-size: 11px;
+                    "
+                  ></div>
+
+                  <div
+                    id="wiki-chat-box"
+                    style="
+                      flex: 1;
+                      overflow-y: auto;
+                      background: var(--bg-input);
+                      border-radius: 8px;
+                      padding: 8px;
+                      border: 1px solid var(--bg-card);
+                      margin-bottom: 8px;
+                      font-size: 12px;
+                      display: flex;
+                      flex-direction: column;
+                      gap: 8px;
+                      max-height: 190px;
+                      transition: max-height 0.3s ease;
+                    "
+                  >
+                    <div
+                      class="chat-msg system"
+                      style="color: var(--text-muted); font-style: italic"
+                    >
+                      Ask questions regarding speakers, lectures, and
+                      improvement recommendations compiled in your wiki.
+                    </div>
                   </div>
-                  <div style="display: flex; gap: 8px;">
-                    <input type="text" id="wiki-chat-input" placeholder="Ask the Wiki..." style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-input); color: var(--text-primary); font-size: 13px; outline: none;" />
-                    <button id="btn-wiki-chat-send" style="padding: 10px 16px; border-radius: 6px; background: linear-gradient(135deg, #6366f1, #a855f7); color: #fff; border: none; font-weight: 600; cursor: pointer; font-size: 13px;">Send</button>
+                  <div style="display: flex; gap: 8px">
+                    <input
+                      type="text"
+                      id="wiki-chat-input"
+                      placeholder="Ask the Wiki..."
+                      style="
+                        flex: 1;
+                        padding: 10px;
+                        border-radius: 6px;
+                        border: 1px solid var(--border-strong);
+                        background: var(--bg-input);
+                        color: var(--text-primary);
+                        font-size: 13px;
+                        outline: none;
+                      "
+                    />
+                    <button
+                      id="btn-wiki-chat-send"
+                      style="
+                        padding: 10px 16px;
+                        border-radius: 6px;
+                        background: linear-gradient(135deg, #6366f1, #a855f7);
+                        color: #fff;
+                        border: none;
+                        font-weight: 600;
+                        cursor: pointer;
+                        font-size: 13px;
+                      "
+                    >
+                      Send
+                    </button>
                   </div>
                 </div>
- 
               </div>
-
             </div>
           </div>
 
           <!-- SUBTAB 2: COMPILATION MANAGER (INGEST / QUEUE) -->
-          <div class="wiki-tab-content" id="wiki-tab-ingest" style="display: none; padding: 16px 0;">
-            <div style="display: grid; grid-template-columns: 1fr 400px; gap: 20px; min-height: 500px;">
-              
+          <div
+            class="wiki-tab-content"
+            id="wiki-tab-ingest"
+            style="display: none; padding: 16px 0"
+          >
+            <div
+              style="
+                display: grid;
+                grid-template-columns: 1fr 400px;
+                gap: 20px;
+                min-height: 500px;
+              "
+            >
               <!-- Sessions List -->
-              <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; display: flex; flex-direction: column;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <div
+                style="
+                  background: var(--bg-card);
+                  border: 1px solid var(--border);
+                  border-radius: 12px;
+                  padding: 20px;
+                  display: flex;
+                  flex-direction: column;
+                "
+              >
+                <div
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 16px;
+                  "
+                >
                   <div>
-                    <h3 style="margin:0; font-size: 16px; color: var(--text-primary);">Lecture Compilation Manager</h3>
-                    <p style="margin:4px 0 0; font-size:12px; color: var(--text-muted);">Select lecture sessions from the SQL database to compile into compounding Wiki Markdown files.</p>
+                    <h3
+                      style="
+                        margin: 0;
+                        font-size: 16px;
+                        color: var(--text-primary);
+                      "
+                    >
+                      Lecture Compilation Manager
+                    </h3>
+                    <p
+                      style="
+                        margin: 4px 0 0;
+                        font-size: 12px;
+                        color: var(--text-muted);
+                      "
+                    >
+                      Select lecture sessions from the SQL database to compile
+                      into compounding Wiki Markdown files.
+                    </p>
                   </div>
-                  <div style="display:flex; gap: 8px; align-items: center;">
-                    <button id="btn-wiki-select-all" class="browse-btn" style="padding: 6px 12px; font-size:12px; border-radius: 6px; cursor:pointer;">Select All</button>
-                    <button id="btn-wiki-compile-start" style="padding: 6px 16px; border-radius: 6px; background: var(--cyan); color: #fff; border: none; font-weight: bold; cursor: pointer; font-size: 12px;">Compile Selected</button>
-                    <button id="btn-wiki-compile-abort" style="padding: 6px 16px; border-radius: 6px; background: #ef4444; color: #fff; border: none; font-weight: bold; cursor: pointer; font-size: 12px; display: none;">Abort Ingestion</button>
+                  <div style="display: flex; gap: 8px; align-items: center">
+                    <button
+                      id="btn-wiki-select-all"
+                      class="browse-btn"
+                      style="
+                        padding: 6px 12px;
+                        font-size: 12px;
+                        border-radius: 6px;
+                        cursor: pointer;
+                      "
+                    >
+                      Select All
+                    </button>
+                    <button
+                      id="btn-wiki-compile-start"
+                      style="
+                        padding: 6px 16px;
+                        border-radius: 6px;
+                        background: var(--cyan);
+                        color: #fff;
+                        border: none;
+                        font-weight: bold;
+                        cursor: pointer;
+                        font-size: 12px;
+                      "
+                    >
+                      Compile Selected
+                    </button>
+                    <button
+                      id="btn-wiki-compile-abort"
+                      style="
+                        padding: 6px 16px;
+                        border-radius: 6px;
+                        background: #ef4444;
+                        color: #fff;
+                        border: none;
+                        font-weight: bold;
+                        cursor: pointer;
+                        font-size: 12px;
+                        display: none;
+                      "
+                    >
+                      Abort Ingestion
+                    </button>
                   </div>
                 </div>
 
-                <div style="flex: 1; overflow-y: auto; max-height: 400px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input);">
-                  <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;" id="wiki-sessions-table">
+                <div
+                  style="
+                    flex: 1;
+                    overflow-y: auto;
+                    max-height: 400px;
+                    border: 1px solid var(--border);
+                    border-radius: 8px;
+                    background: var(--bg-input);
+                  "
+                >
+                  <table
+                    style="
+                      width: 100%;
+                      border-collapse: collapse;
+                      text-align: left;
+                      font-size: 13px;
+                    "
+                    id="wiki-sessions-table"
+                  >
                     <thead>
-                      <tr style="border-bottom: 1px solid var(--border-subtle); background: var(--bg-card);">
-                        <th style="padding: 12px; width: 40px;">Select</th>
-                        <th style="padding: 12px;">Speaker Name</th>
-                        <th style="padding: 12px; width: 120px;">Lecture Date</th>
-                        <th style="padding: 12px; width: 80px; text-align: center;">Responses</th>
-                        <th style="padding: 12px; width: 120px; text-align: center;">Wiki Status</th>
+                      <tr
+                        style="
+                          border-bottom: 1px solid var(--border-subtle);
+                          background: var(--bg-card);
+                        "
+                      >
+                        <th style="padding: 12px; width: 40px">Select</th>
+                        <th style="padding: 12px">Speaker Name</th>
+                        <th style="padding: 12px; width: 120px">
+                          Lecture Date
+                        </th>
+                        <th
+                          style="padding: 12px; width: 80px; text-align: center"
+                        >
+                          Responses
+                        </th>
+                        <th
+                          style="
+                            padding: 12px;
+                            width: 120px;
+                            text-align: center;
+                          "
+                        >
+                          Wiki Status
+                        </th>
                       </tr>
                     </thead>
                     <tbody id="wiki-sessions-list-body">
                       <!-- Dynamically populated list of sessions -->
                       <tr>
-                        <td colspan="5" style="padding: 20px; text-align: center; color: var(--text-muted);">Querying database sessions...</td>
+                        <td
+                          colspan="5"
+                          style="
+                            padding: 20px;
+                            text-align: center;
+                            color: var(--text-muted);
+                          "
+                        >
+                          Querying database sessions...
+                        </td>
                       </tr>
                     </tbody>
                   </table>
@@ -922,182 +1764,743 @@
               </div>
 
               <!-- Terminal Logging & Progress -->
-              <div style="display: flex; flex-direction: column; gap: 20px;">
-                
+              <div style="display: flex; flex-direction: column; gap: 20px">
                 <!-- Progress Box -->
-                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px;">
-                  <h4 style="margin:0 0 12px; font-size:13px; text-transform:uppercase; color:#00ffff; letter-spacing:0.5px;">Compile Progress</h4>
-                  <div id="wiki-progress-empty" style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 10px 0;">No active compilation queue.</div>
-                  
-                  <div id="wiki-progress-container" style="display: none;">
-                    <div style="display: flex; justify-content: space-between; font-size: 13px; color: var(--text-primary); margin-bottom: 6px;">
+                <div
+                  style="
+                    background: var(--bg-card);
+                    border: 1px solid var(--border);
+                    border-radius: 12px;
+                    padding: 20px;
+                  "
+                >
+                  <h4
+                    style="
+                      margin: 0 0 12px;
+                      font-size: 13px;
+                      text-transform: uppercase;
+                      color: #00ffff;
+                      letter-spacing: 0.5px;
+                    "
+                  >
+                    Compile Progress
+                  </h4>
+                  <div
+                    id="wiki-progress-empty"
+                    style="
+                      color: var(--text-muted);
+                      font-size: 13px;
+                      text-align: center;
+                      padding: 10px 0;
+                    "
+                  >
+                    No active compilation queue.
+                  </div>
+
+                  <div id="wiki-progress-container" style="display: none">
+                    <div
+                      style="
+                        display: flex;
+                        justify-content: space-between;
+                        font-size: 13px;
+                        color: var(--text-primary);
+                        margin-bottom: 6px;
+                      "
+                    >
                       <span id="wiki-progress-status">COMPILING...</span>
                       <span id="wiki-progress-ratio">0 / 0</span>
                     </div>
-                    <div class="progress-bar" style="height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
-                      <div id="wiki-progress-bar-fill" style="width: 0%; height: 100%; background: var(--cyan); border-radius: 4px; transition: width 0.3s ease;"></div>
+                    <div
+                      class="progress-bar"
+                      style="
+                        height: 8px;
+                        background: var(--border);
+                        border-radius: 4px;
+                        overflow: hidden;
+                        margin-bottom: 8px;
+                      "
+                    >
+                      <div
+                        id="wiki-progress-bar-fill"
+                        style="
+                          width: 0%;
+                          height: 100%;
+                          background: var(--cyan);
+                          border-radius: 4px;
+                          transition: width 0.3s ease;
+                        "
+                      ></div>
                     </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted);">
-                      <div>Active: <span id="wiki-progress-active-file" style="color: var(--text-primary); font-family: monospace;">-</span></div>
-                      <button id="btn-wiki-compile-abort-mini" style="background: transparent; border: 1px solid #ef4444; color: #ef4444; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#ef4444'; this.style.color='#fff';" onmouseout="this.style.background='transparent'; this.style.color='#ef4444';">Abort</button>
+                    <div
+                      style="
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        font-size: 12px;
+                        color: var(--text-muted);
+                      "
+                    >
+                      <div>
+                        Active:
+                        <span
+                          id="wiki-progress-active-file"
+                          style="
+                            color: var(--text-primary);
+                            font-family: monospace;
+                          "
+                          >-</span
+                        >
+                      </div>
+                      <button
+                        id="btn-wiki-compile-abort-mini"
+                        style="
+                          background: transparent;
+                          border: 1px solid #ef4444;
+                          color: #ef4444;
+                          padding: 2px 8px;
+                          border-radius: 4px;
+                          font-size: 10px;
+                          font-weight: 600;
+                          cursor: pointer;
+                          transition: all 0.2s;
+                        "
+                        onmouseover="
+                          this.style.background = '#ef4444';
+                          this.style.color = '#fff';
+                        "
+                        onmouseout="
+                          this.style.background = 'transparent';
+                          this.style.color = '#ef4444';
+                        "
+                      >
+                        Abort
+                      </button>
                     </div>
                   </div>
                 </div>
 
                 <!-- Logs Box -->
-                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; flex: 1; display: flex; flex-direction: column; min-height: 280px; box-sizing: border-box;">
-                  <h4 style="margin:0 0 10px; font-size:13px; text-transform:uppercase; color:#bf5fff; letter-spacing:0.5px;">Compiler Console Logs</h4>
-                  <div id="wiki-console-logs" style="flex: 1; background: var(--bg-elevated); border-radius: 8px; border: 1px solid var(--border); padding: 12px; font-family: monospace; font-size: 11px; color: #34d399; overflow-y: auto; max-height: 240px; line-height: 1.5; white-space: pre-wrap;">
+                <div
+                  style="
+                    background: var(--bg-card);
+                    border: 1px solid var(--border);
+                    border-radius: 12px;
+                    padding: 20px;
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    min-height: 280px;
+                    box-sizing: border-box;
+                  "
+                >
+                  <h4
+                    style="
+                      margin: 0 0 10px;
+                      font-size: 13px;
+                      text-transform: uppercase;
+                      color: #bf5fff;
+                      letter-spacing: 0.5px;
+                    "
+                  >
+                    Compiler Console Logs
+                  </h4>
+                  <div
+                    id="wiki-console-logs"
+                    style="
+                      flex: 1;
+                      background: var(--bg-elevated);
+                      border-radius: 8px;
+                      border: 1px solid var(--border);
+                      padding: 12px;
+                      font-family: monospace;
+                      font-size: 11px;
+                      color: #34d399;
+                      overflow-y: auto;
+                      max-height: 240px;
+                      line-height: 1.5;
+                      white-space: pre-wrap;
+                    "
+                  >
                     [SYSTEM] Console ready.
                   </div>
                 </div>
-
               </div>
-
             </div>
           </div>
 
           <!-- SUBTAB 3: CONFIGURATION / SETTINGS -->
-          <div class="wiki-tab-content" id="wiki-tab-settings" style="display: none; padding: 16px 0;">
-            <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 30px; max-width: 600px; margin: 0 auto; position: relative;">
+          <div
+            class="wiki-tab-content"
+            id="wiki-tab-settings"
+            style="display: none; padding: 16px 0"
+          >
+            <div
+              style="
+                background: var(--bg-card);
+                border: 1px solid var(--border);
+                border-radius: 12px;
+                padding: 30px;
+                max-width: 600px;
+                margin: 0 auto;
+                position: relative;
+              "
+            >
               <!-- Header Cap -->
-              <div style="position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, #bf5fff, #ff716c); border-top-left-radius: 12px; border-top-right-radius: 12px;"></div>
-              
-              <h3 style="margin:0 0 6px; font-size: 18px; color: var(--text-primary); font-weight: 600;">Wiki Keys &amp; Storage Configuration</h3>
-              <p style="margin:0 0 24px; font-size: 13px; color: var(--text-muted);">Provide API keys to unlock advanced generative AI and persistent InsForge storage syncing.</p>
+              <div
+                style="
+                  position: absolute;
+                  top: 0;
+                  left: 0;
+                  right: 0;
+                  height: 2px;
+                  background: linear-gradient(90deg, #bf5fff, #ff716c);
+                  border-top-left-radius: 12px;
+                  border-top-right-radius: 12px;
+                "
+              ></div>
 
-              <div style="display: grid; gap: 16px;">
+              <h3
+                style="
+                  margin: 0 0 6px;
+                  font-size: 18px;
+                  color: var(--text-primary);
+                  font-weight: 600;
+                "
+              >
+                Wiki Keys &amp; Storage Configuration
+              </h3>
+              <p
+                style="
+                  margin: 0 0 24px;
+                  font-size: 13px;
+                  color: var(--text-muted);
+                "
+              >
+                Provide API keys to unlock advanced generative AI and persistent
+                InsForge storage syncing.
+              </p>
+
+              <div style="display: grid; gap: 16px">
                 <div>
-                  <label style="display:block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; font-weight: 500;">Google Gemini API Key (AI Studio)</label>
-                  <input type="password" id="cfg-gemini-key" placeholder="Enter Gemini API Key..." class="filter-input" style="width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-input); color: var(--text-primary);" />
-                  <p style="margin: 4px 0 0; font-size: 11px; color: var(--text-muted);">Runs the advanced Wiki Compiler and Chat generator. Completely free-of-charge.</p>
+                  <label
+                    style="
+                      display: block;
+                      font-size: 12px;
+                      color: var(--text-muted);
+                      margin-bottom: 6px;
+                      font-weight: 500;
+                    "
+                    >Google Gemini API Key (AI Studio)</label
+                  >
+                  <input
+                    type="password"
+                    id="cfg-gemini-key"
+                    placeholder="Enter Gemini API Key..."
+                    class="filter-input"
+                    style="
+                      width: 100%;
+                      box-sizing: border-box;
+                      padding: 10px;
+                      border-radius: 6px;
+                      border: 1px solid var(--border-strong);
+                      background: var(--bg-input);
+                      color: var(--text-primary);
+                    "
+                  />
+                  <p
+                    style="
+                      margin: 4px 0 0;
+                      font-size: 11px;
+                      color: var(--text-muted);
+                    "
+                  >
+                    Runs the advanced Wiki Compiler and Chat generator.
+                    Completely free-of-charge.
+                  </p>
                 </div>
 
-                <div style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: 8px;">
-                  <h4 style="margin: 0 0 12px; font-size: 13px; color: var(--text-primary); font-weight: 600;">InsForge Storage Sync (Recommended for Hugging Face)</h4>
-                  
-                  <div style="display: grid; gap: 12px; margin-bottom: 12px;">
+                <div
+                  style="
+                    border-top: 1px solid var(--border);
+                    padding-top: 16px;
+                    margin-top: 8px;
+                  "
+                >
+                  <h4
+                    style="
+                      margin: 0 0 12px;
+                      font-size: 13px;
+                      color: var(--text-primary);
+                      font-weight: 600;
+                    "
+                  >
+                    InsForge Storage Sync (Recommended for Hugging Face)
+                  </h4>
+
+                  <div style="display: grid; gap: 12px; margin-bottom: 12px">
                     <div>
-                      <label style="display:block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">InsForge Project URL</label>
-                      <input type="text" id="cfg-insforge-url" placeholder="https://your-project.insforge.co" class="filter-input" style="width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-input); color: var(--text-primary);" />
+                      <label
+                        style="
+                          display: block;
+                          font-size: 11px;
+                          color: var(--text-muted);
+                          margin-bottom: 4px;
+                        "
+                        >InsForge Project URL</label
+                      >
+                      <input
+                        type="text"
+                        id="cfg-insforge-url"
+                        placeholder="https://your-project.insforge.co"
+                        class="filter-input"
+                        style="
+                          width: 100%;
+                          box-sizing: border-box;
+                          padding: 10px;
+                          border-radius: 6px;
+                          border: 1px solid var(--border-strong);
+                          background: var(--bg-input);
+                          color: var(--text-primary);
+                        "
+                      />
                     </div>
                     <div>
-                      <label style="display:block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">InsForge Service Role Key (or Anon Key)</label>
-                      <input type="password" id="cfg-insforge-key" placeholder="Enter InsForge API Key..." class="filter-input" style="width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-input); color: var(--text-primary);" />
+                      <label
+                        style="
+                          display: block;
+                          font-size: 11px;
+                          color: var(--text-muted);
+                          margin-bottom: 4px;
+                        "
+                        >InsForge Service Role Key (or Anon Key)</label
+                      >
+                      <input
+                        type="password"
+                        id="cfg-insforge-key"
+                        placeholder="Enter InsForge API Key..."
+                        class="filter-input"
+                        style="
+                          width: 100%;
+                          box-sizing: border-box;
+                          padding: 10px;
+                          border-radius: 6px;
+                          border: 1px solid var(--border-strong);
+                          background: var(--bg-input);
+                          color: var(--text-primary);
+                        "
+                      />
                     </div>
                   </div>
-                  <p style="margin: 4px 0 0; font-size: 11px; color: var(--text-muted);">Saves Wiki Markdown pages to your InsForge bucket so they compound forever across cloud container restarts.</p>
+                  <p
+                    style="
+                      margin: 4px 0 0;
+                      font-size: 11px;
+                      color: var(--text-muted);
+                    "
+                  >
+                    Saves Wiki Markdown pages to your InsForge bucket so they
+                    compound forever across cloud container restarts.
+                  </p>
                 </div>
 
-                <button id="btn-save-cfg" class="browse-btn" style="margin-top: 12px; padding: 12px; background: linear-gradient(135deg, #00ffff, #bf5fff); color: #fff; border: none; font-weight: 700; cursor: pointer; border-radius: 6px;">Save Configuration</button>
-                <div id="cfg-status-msg" style="display:none; padding: 10px; border-radius: 6px; font-size:12px; text-align:center; font-weight:600;"></div>
+                <button
+                  id="btn-save-cfg"
+                  class="browse-btn"
+                  style="
+                    margin-top: 12px;
+                    padding: 12px;
+                    background: linear-gradient(135deg, #00ffff, #bf5fff);
+                    color: #fff;
+                    border: none;
+                    font-weight: 700;
+                    cursor: pointer;
+                    border-radius: 6px;
+                  "
+                >
+                  Save Configuration
+                </button>
+                <div
+                  id="cfg-status-msg"
+                  style="
+                    display: none;
+                    padding: 10px;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    text-align: center;
+                    font-weight: 600;
+                  "
+                ></div>
               </div>
             </div>
           </div>
 
           <!-- SUBTAB 4: DATABASE SCHEMA -->
-          <div class="wiki-tab-content" id="wiki-tab-schema" style="display: none; padding: 16px 0;">
-            <h3 style="margin-top: 16px; margin-bottom: 8px; color: var(--text-primary);">Database Schema</h3>
-            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 24px;">InsForge PostgreSQL · 6 Tables · RLS Enabled</p>
+          <div
+            class="wiki-tab-content"
+            id="wiki-tab-schema"
+            style="display: none; padding: 16px 0"
+          >
+            <h3
+              style="
+                margin-top: 16px;
+                margin-bottom: 8px;
+                color: var(--text-primary);
+              "
+            >
+              Database Schema
+            </h3>
+            <p
+              style="
+                color: var(--text-secondary);
+                font-size: 13px;
+                margin-bottom: 24px;
+              "
+            >
+              InsForge PostgreSQL · 6 Tables · RLS Enabled
+            </p>
 
             <div class="schema-grid">
               <!-- STUDENTS -->
               <div class="schema-card">
-                <div class="schema-header" style="background:#0d1b2a; border-bottom:2px solid #58a6ff;">
+                <div
+                  class="schema-header"
+                  style="background: #0d1b2a; border-bottom: 2px solid #58a6ff"
+                >
                   👤 students <span class="count">231 rows</span>
                 </div>
-                <div class="schema-row"><div class="schema-name">id</div><div class="schema-type">uuid (gen_random)</div><span class="schema-badge badge-pk">PK</span></div>
-                <div class="schema-row"><div class="schema-name">roll_no</div><div class="schema-type">varchar · UNIQUE</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">email</div><div class="schema-type">varchar · UNIQUE nullable</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">name</div><div class="schema-type">varchar</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">department</div><div class="schema-type">varchar nullable</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">created_at</div><div class="schema-type">timestamptz · now()</div><span class="schema-badge badge-ok">OK</span></div>
+                <div class="schema-row">
+                  <div class="schema-name">id</div>
+                  <div class="schema-type">uuid (gen_random)</div>
+                  <span class="schema-badge badge-pk">PK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">roll_no</div>
+                  <div class="schema-type">varchar · UNIQUE</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">email</div>
+                  <div class="schema-type">varchar · UNIQUE nullable</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">name</div>
+                  <div class="schema-type">varchar</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">department</div>
+                  <div class="schema-type">varchar nullable</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">created_at</div>
+                  <div class="schema-type">timestamptz · now()</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
               </div>
 
               <!-- EVENTS -->
               <div class="schema-card">
-                <div class="schema-header" style="background:#1a1a0d; border-bottom:2px solid #f0883e;">
+                <div
+                  class="schema-header"
+                  style="background: #1a1a0d; border-bottom: 2px solid #f0883e"
+                >
                   🎤 events <span class="count">41 rows</span>
                 </div>
-                <div class="schema-row"><div class="schema-name">id</div><div class="schema-type">uuid (gen_random)</div><span class="schema-badge badge-pk">PK</span></div>
-                <div class="schema-row"><div class="schema-name">speaker_name</div><div class="schema-type">varchar</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">venue_date</div><div class="schema-type">date</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">department</div><div class="schema-type">varchar nullable</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">status</div><div class="schema-type">varchar · default 'completed'</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">template_id</div><div class="schema-type">varchar nullable</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">send_certificates</div><div class="schema-type">boolean · default false</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">created_at</div><div class="schema-type">timestamptz · now()</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row" style="background:rgba(248,81,73,0.05)"><div class="schema-name">form_url</div><div class="schema-type">text nullable</div><span class="schema-badge badge-miss">MISSING</span></div>
-                <div class="schema-row" style="background:rgba(248,81,73,0.05)"><div class="schema-name">form_id</div><div class="schema-type">varchar nullable</div><span class="schema-badge badge-miss">MISSING</span></div>
-                <div class="schema-row" style="background:rgba(248,81,73,0.05)"><div class="schema-name">form_edit_url</div><div class="schema-type">text nullable</div><span class="schema-badge badge-miss">MISSING</span></div>
+                <div class="schema-row">
+                  <div class="schema-name">id</div>
+                  <div class="schema-type">uuid (gen_random)</div>
+                  <span class="schema-badge badge-pk">PK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">speaker_name</div>
+                  <div class="schema-type">varchar</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">venue_date</div>
+                  <div class="schema-type">date</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">department</div>
+                  <div class="schema-type">varchar nullable</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">status</div>
+                  <div class="schema-type">varchar · default 'completed'</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">template_id</div>
+                  <div class="schema-type">varchar nullable</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">send_certificates</div>
+                  <div class="schema-type">boolean · default false</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">created_at</div>
+                  <div class="schema-type">timestamptz · now()</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div
+                  class="schema-row"
+                  style="background: rgba(248, 81, 73, 0.05)"
+                >
+                  <div class="schema-name">form_url</div>
+                  <div class="schema-type">text nullable</div>
+                  <span class="schema-badge badge-miss">MISSING</span>
+                </div>
+                <div
+                  class="schema-row"
+                  style="background: rgba(248, 81, 73, 0.05)"
+                >
+                  <div class="schema-name">form_id</div>
+                  <div class="schema-type">varchar nullable</div>
+                  <span class="schema-badge badge-miss">MISSING</span>
+                </div>
+                <div
+                  class="schema-row"
+                  style="background: rgba(248, 81, 73, 0.05)"
+                >
+                  <div class="schema-name">form_edit_url</div>
+                  <div class="schema-type">text nullable</div>
+                  <span class="schema-badge badge-miss">MISSING</span>
+                </div>
               </div>
 
               <!-- FEEDBACK_RESPONSES -->
               <div class="schema-card">
-                <div class="schema-header" style="background:#0d1a0d; border-bottom:2px solid #3fb950;">
+                <div
+                  class="schema-header"
+                  style="background: #0d1a0d; border-bottom: 2px solid #3fb950"
+                >
                   📝 feedback_responses <span class="count">287 rows</span>
                 </div>
-                <div class="schema-row"><div class="schema-name">id</div><div class="schema-type">uuid (gen_random)</div><span class="schema-badge badge-pk">PK</span></div>
-                <div class="schema-row"><div class="schema-name">event_id</div><div class="schema-type">uuid → events.id</div><span class="schema-badge badge-fk">FK</span></div>
-                <div class="schema-row"><div class="schema-name">student_id</div><div class="schema-type">uuid → students.id</div><span class="schema-badge badge-fk">FK</span></div>
-                <div class="schema-row"><div class="schema-name">submitted_at</div><div class="schema-type">timestamptz · now()</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">session_rating</div><div class="schema-type">int4 · CHECK 1–5</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">session_help_understanding</div><div class="schema-type">text nullable</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">aspect_most_valuable</div><div class="schema-type">text nullable</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">improvements_suggestions</div><div class="schema-type">text nullable</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">future_topics</div><div class="schema-type">text nullable</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">data_quality_score</div><div class="schema-type">float8 nullable</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">is_duplicate</div><div class="schema-type">boolean · default false</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row" style="background:rgba(248,81,73,0.05)"><div class="schema-name">extracted_date</div><div class="schema-type">date nullable</div><span class="schema-badge badge-miss">MISSING</span></div>
-                <div class="schema-row" style="background:rgba(248,81,73,0.05)"><div class="schema-name">extracted_time</div><div class="schema-type">time nullable</div><span class="schema-badge badge-miss">MISSING</span></div>
-                <div class="schema-row" style="background:rgba(248,81,73,0.05)"><div class="schema-name">session_technical_clarity</div><div class="schema-type">int4 nullable</div><span class="schema-badge badge-miss">MISSING</span></div>
-                <div class="schema-row" style="background:rgba(248,81,73,0.05)"><div class="schema-name">form_source</div><div class="schema-type">varchar nullable</div><span class="schema-badge badge-miss">MISSING</span></div>
-                <div class="schema-row" style="background:rgba(248,81,73,0.05)"><div class="schema-name">record_status</div><div class="schema-type">varchar · default 'active'</div><span class="schema-badge badge-miss">MISSING</span></div>
+                <div class="schema-row">
+                  <div class="schema-name">id</div>
+                  <div class="schema-type">uuid (gen_random)</div>
+                  <span class="schema-badge badge-pk">PK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">event_id</div>
+                  <div class="schema-type">uuid → events.id</div>
+                  <span class="schema-badge badge-fk">FK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">student_id</div>
+                  <div class="schema-type">uuid → students.id</div>
+                  <span class="schema-badge badge-fk">FK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">submitted_at</div>
+                  <div class="schema-type">timestamptz · now()</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">session_rating</div>
+                  <div class="schema-type">int4 · CHECK 1–5</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">session_help_understanding</div>
+                  <div class="schema-type">text nullable</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">aspect_most_valuable</div>
+                  <div class="schema-type">text nullable</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">improvements_suggestions</div>
+                  <div class="schema-type">text nullable</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">future_topics</div>
+                  <div class="schema-type">text nullable</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">data_quality_score</div>
+                  <div class="schema-type">float8 nullable</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">is_duplicate</div>
+                  <div class="schema-type">boolean · default false</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div
+                  class="schema-row"
+                  style="background: rgba(248, 81, 73, 0.05)"
+                >
+                  <div class="schema-name">extracted_date</div>
+                  <div class="schema-type">date nullable</div>
+                  <span class="schema-badge badge-miss">MISSING</span>
+                </div>
+                <div
+                  class="schema-row"
+                  style="background: rgba(248, 81, 73, 0.05)"
+                >
+                  <div class="schema-name">extracted_time</div>
+                  <div class="schema-type">time nullable</div>
+                  <span class="schema-badge badge-miss">MISSING</span>
+                </div>
+                <div
+                  class="schema-row"
+                  style="background: rgba(248, 81, 73, 0.05)"
+                >
+                  <div class="schema-name">session_technical_clarity</div>
+                  <div class="schema-type">int4 nullable</div>
+                  <span class="schema-badge badge-miss">MISSING</span>
+                </div>
+                <div
+                  class="schema-row"
+                  style="background: rgba(248, 81, 73, 0.05)"
+                >
+                  <div class="schema-name">form_source</div>
+                  <div class="schema-type">varchar nullable</div>
+                  <span class="schema-badge badge-miss">MISSING</span>
+                </div>
+                <div
+                  class="schema-row"
+                  style="background: rgba(248, 81, 73, 0.05)"
+                >
+                  <div class="schema-name">record_status</div>
+                  <div class="schema-type">varchar · default 'active'</div>
+                  <span class="schema-badge badge-miss">MISSING</span>
+                </div>
               </div>
 
               <!-- FEEDBACK_ANALYSIS -->
               <div class="schema-card">
-                <div class="schema-header" style="background:#1a0d2d; border-bottom:2px solid #a371f7;">
+                <div
+                  class="schema-header"
+                  style="background: #1a0d2d; border-bottom: 2px solid #a371f7"
+                >
                   🧠 feedback_analysis <span class="count">287 rows</span>
                 </div>
-                <div class="schema-row"><div class="schema-name">response_id</div><div class="schema-type">uuid → feedback_responses.id</div><span class="schema-badge badge-pk">PK + FK</span></div>
-                <div class="schema-row"><div class="schema-name">sentiment_score</div><div class="schema-type">float8 nullable</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">sentiment_label</div><div class="schema-type">varchar (POS/NEU/NEG)</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">key_topics</div><div class="schema-type">jsonb nullable</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">actionable_insights</div><div class="schema-type">text nullable</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">analyzed_at</div><div class="schema-type">timestamptz · now()</div><span class="schema-badge badge-ok">OK</span></div>
+                <div class="schema-row">
+                  <div class="schema-name">response_id</div>
+                  <div class="schema-type">uuid → feedback_responses.id</div>
+                  <span class="schema-badge badge-pk">PK + FK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">sentiment_score</div>
+                  <div class="schema-type">float8 nullable</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">sentiment_label</div>
+                  <div class="schema-type">varchar (POS/NEU/NEG)</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">key_topics</div>
+                  <div class="schema-type">jsonb nullable</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">actionable_insights</div>
+                  <div class="schema-type">text nullable</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">analyzed_at</div>
+                  <div class="schema-type">timestamptz · now()</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
               </div>
 
               <!-- CERTIFICATE_JOBS -->
               <div class="schema-card">
-                <div class="schema-header" style="background:#1a0d0d; border-bottom:2px solid #f85149;">
+                <div
+                  class="schema-header"
+                  style="background: #1a0d0d; border-bottom: 2px solid #f85149"
+                >
                   🎓 certificate_jobs <span class="count">0 rows</span>
                 </div>
-                <div class="schema-row"><div class="schema-name">id</div><div class="schema-type">uuid (gen_random)</div><span class="schema-badge badge-pk">PK</span></div>
-                <div class="schema-row"><div class="schema-name">student_id</div><div class="schema-type">uuid → students.id</div><span class="schema-badge badge-fk">FK</span></div>
-                <div class="schema-row"><div class="schema-name">event_id</div><div class="schema-type">uuid → events.id</div><span class="schema-badge badge-fk">FK</span></div>
-                <div class="schema-row"><div class="schema-name">status</div><div class="schema-type">varchar · default 'pending'</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">certificate_url</div><div class="schema-type">text nullable</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">generated_at</div><div class="schema-type">timestamptz nullable</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">error_log</div><div class="schema-type">text nullable</div><span class="schema-badge badge-ok">OK</span></div>
-                <div class="schema-row"><div class="schema-name">created_at</div><div class="schema-type">timestamptz · now()</div><span class="schema-badge badge-ok">OK</span></div>
+                <div class="schema-row">
+                  <div class="schema-name">id</div>
+                  <div class="schema-type">uuid (gen_random)</div>
+                  <span class="schema-badge badge-pk">PK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">student_id</div>
+                  <div class="schema-type">uuid → students.id</div>
+                  <span class="schema-badge badge-fk">FK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">event_id</div>
+                  <div class="schema-type">uuid → events.id</div>
+                  <span class="schema-badge badge-fk">FK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">status</div>
+                  <div class="schema-type">varchar · default 'pending'</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">certificate_url</div>
+                  <div class="schema-type">text nullable</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">generated_at</div>
+                  <div class="schema-type">timestamptz nullable</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">error_log</div>
+                  <div class="schema-type">text nullable</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
+                <div class="schema-row">
+                  <div class="schema-name">created_at</div>
+                  <div class="schema-type">timestamptz · now()</div>
+                  <span class="schema-badge badge-ok">OK</span>
+                </div>
               </div>
-              
+
               <!-- SPEAKERS TABLE -->
-              <div class="schema-card" style="border:1px dashed #a371f7;">
-                <div class="schema-header" style="background:rgba(163,113,247,0.1); border-bottom:2px dashed #a371f7;">
+              <div class="schema-card" style="border: 1px dashed #a371f7">
+                <div
+                  class="schema-header"
+                  style="
+                    background: rgba(163, 113, 247, 0.1);
+                    border-bottom: 2px dashed #a371f7;
+                  "
+                >
                   🆕 speakers <span class="count">NEW</span>
                 </div>
-                <div class="schema-row" style="background:rgba(163,113,247,0.05)"><div class="schema-name">id</div><div class="schema-type">uuid PK</div><span class="schema-badge badge-new">NEW</span></div>
-                <div class="schema-row" style="background:rgba(163,113,247,0.05)"><div class="schema-name">name</div><div class="schema-type">varchar UNIQUE</div><span class="schema-badge badge-new">NEW</span></div>
+                <div
+                  class="schema-row"
+                  style="background: rgba(163, 113, 247, 0.05)"
+                >
+                  <div class="schema-name">id</div>
+                  <div class="schema-type">uuid PK</div>
+                  <span class="schema-badge badge-new">NEW</span>
+                </div>
+                <div
+                  class="schema-row"
+                  style="background: rgba(163, 113, 247, 0.05)"
+                >
+                  <div class="schema-name">name</div>
+                  <div class="schema-type">varchar UNIQUE</div>
+                  <span class="schema-badge badge-new">NEW</span>
+                </div>
               </div>
             </div>
           </div>
-
         </section>
-
       </main>
-
 
       <!-- ███ DATA MODAL ███ -->
       <div id="data-modal" class="modal-overlay hidden">
@@ -1132,7 +2535,14 @@
           <div class="modal-header">
             <h3 class="modal-title">Admin Access</h3>
             <button id="admin-login-close" class="modal-close">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
@@ -1140,7 +2550,11 @@
           </div>
           <div class="modal-body">
             <label for="admin-password">Admin Password</label>
-            <input type="password" id="admin-password" placeholder="Enter Admin Password" />
+            <input
+              type="password"
+              id="admin-password"
+              placeholder="Enter Admin Password"
+            />
             <button id="btn-admin-submit">Login</button>
             <p id="admin-login-error">Invalid password</p>
           </div>
@@ -1149,100 +2563,481 @@
 
       <!-- ███ FEEDBACK FORM MODAL ███ -->
       <div id="feedback-modal" class="modal-overlay hidden">
-        <div class="modal-content" style="max-width:560px;padding:0;overflow:hidden;">
-          <div class="modal-header" style="padding:24px 28px 20px;border-bottom:1px solid rgba(255,255,255,0.07);position:relative;">
-            <div style="display:flex;align-items:center;gap:12px;">
-              <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#a855f7);display:flex;align-items:center;justify-content:center;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        <div
+          class="modal-content"
+          style="max-width: 560px; padding: 0; overflow: hidden"
+        >
+          <div
+            class="modal-header"
+            style="
+              padding: 24px 28px 20px;
+              border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+              position: relative;
+            "
+          >
+            <div style="display: flex; align-items: center; gap: 12px">
+              <div
+                style="
+                  width: 36px;
+                  height: 36px;
+                  border-radius: 10px;
+                  background: linear-gradient(135deg, #6366f1, #a855f7);
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                "
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="white"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                  />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                </svg>
               </div>
               <div>
-                <h3 class="modal-title" style="margin:0;font-size:17px;">Feedback Form Manager</h3>
-                <p style="margin:0;font-size:12px;color:#8b8b9e;">Create events &amp; generate Google Forms</p>
+                <h3 class="modal-title" style="margin: 0; font-size: 17px">
+                  Feedback Form Manager
+                </h3>
+                <p style="margin: 0; font-size: 12px; color: #8b8b9e">
+                  Create events &amp; generate Google Forms
+                </p>
               </div>
             </div>
-            <button id="feedback-modal-close" class="modal-close" style="position:absolute;right:20px;top:50%;transform:translateY(-50%);">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            <button
+              id="feedback-modal-close"
+              class="modal-close"
+              style="
+                position: absolute;
+                right: 20px;
+                top: 50%;
+                transform: translateY(-50%);
+              "
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
             </button>
           </div>
-          <div class="modal-body" style="padding:24px 28px;">
-
+          <div class="modal-body" style="padding: 24px 28px">
             <!-- Create Event -->
-            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:20px;margin-bottom:20px;">
-              <h4 style="margin:0 0 16px;font-size:14px;font-weight:600;color:#f0f0f5;">+ Create New Event &amp; Generate Form</h4>
-              <div style="display:grid;gap:12px;">
+            <div
+              style="
+                background: rgba(255, 255, 255, 0.03);
+                border: 1px solid rgba(255, 255, 255, 0.07);
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 20px;
+              "
+            >
+              <h4
+                style="
+                  margin: 0 0 16px;
+                  font-size: 14px;
+                  font-weight: 600;
+                  color: #f0f0f5;
+                "
+              >
+                + Create New Event &amp; Generate Form
+              </h4>
+              <div style="display: grid; gap: 12px">
                 <div>
-                  <label style="display:block;font-size:12px;color:#8b8b9e;margin-bottom:6px;font-weight:500;">Speaker Name</label>
+                  <label
+                    style="
+                      display: block;
+                      font-size: 12px;
+                      color: #8b8b9e;
+                      margin-bottom: 6px;
+                      font-weight: 500;
+                    "
+                    >Speaker Name</label
+                  >
                   <div class="autocomplete-wrapper fb-autocomplete-block">
-                    <input type="text" id="fb-speaker-name" placeholder="Type speaker name (suggestions from your data)..." autocomplete="off"
-                        style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #111827;background:#fff;color:#111827;font-family:Inter;font-size:14px;outline:none;box-sizing:border-box;"
-                        onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#111827'">
-                    <div id="speaker-autocomplete-dropdown" class="autocomplete-dropdown"></div>
+                    <input
+                      type="text"
+                      id="fb-speaker-name"
+                      placeholder="Type speaker name (suggestions from your data)..."
+                      autocomplete="off"
+                      style="
+                        width: 100%;
+                        padding: 10px 12px;
+                        border-radius: 8px;
+                        border: 1px solid #111827;
+                        background: #fff;
+                        color: #111827;
+                        font-family: Inter;
+                        font-size: 14px;
+                        outline: none;
+                        box-sizing: border-box;
+                      "
+                      onfocus="this.style.borderColor = '#6366f1'"
+                      onblur="this.style.borderColor = '#111827'"
+                    />
+                    <div
+                      id="speaker-autocomplete-dropdown"
+                      class="autocomplete-dropdown"
+                    ></div>
                   </div>
                 </div>
                 <div>
-                  <label style="display:block;font-size:12px;color:#8b8b9e;margin-bottom:6px;font-weight:500;">Venue Date</label>
-                  <input type="date" id="fb-venue-date"
-                    style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #111827;background:#fff;color:#111827;font-family:Inter;font-size:14px;outline:none;box-sizing:border-box;"
-                    onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#111827'">
+                  <label
+                    style="
+                      display: block;
+                      font-size: 12px;
+                      color: #8b8b9e;
+                      margin-bottom: 6px;
+                      font-weight: 500;
+                    "
+                    >Venue Date</label
+                  >
+                  <input
+                    type="date"
+                    id="fb-venue-date"
+                    style="
+                      width: 100%;
+                      padding: 10px 12px;
+                      border-radius: 8px;
+                      border: 1px solid #111827;
+                      background: #fff;
+                      color: #111827;
+                      font-family: Inter;
+                      font-size: 14px;
+                      outline: none;
+                      box-sizing: border-box;
+                    "
+                    onfocus="this.style.borderColor = '#6366f1'"
+                    onblur="this.style.borderColor = '#111827'"
+                  />
                 </div>
                 <div>
-                  <label style="display:block;font-size:12px;color:#8b8b9e;margin-bottom:6px;font-weight:500;">Google Slides Template ID (Optional)</label>
-                  <input type="text" id="fb-template-id" placeholder="Paste Google Slides file ID..." autocomplete="off"
-                    style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #111827;background:#fff;color:#111827;font-family:Inter;font-size:14px;outline:none;box-sizing:border-box;"
-                    onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#111827'">
+                  <label
+                    style="
+                      display: block;
+                      font-size: 12px;
+                      color: #8b8b9e;
+                      margin-bottom: 6px;
+                      font-weight: 500;
+                    "
+                    >Google Slides Template ID (Optional)</label
+                  >
+                  <input
+                    type="text"
+                    id="fb-template-id"
+                    placeholder="Paste Google Slides file ID..."
+                    autocomplete="off"
+                    style="
+                      width: 100%;
+                      padding: 10px 12px;
+                      border-radius: 8px;
+                      border: 1px solid #111827;
+                      background: #fff;
+                      color: #111827;
+                      font-family: Inter;
+                      font-size: 14px;
+                      outline: none;
+                      box-sizing: border-box;
+                    "
+                    onfocus="this.style.borderColor = '#6366f1'"
+                    onblur="this.style.borderColor = '#111827'"
+                  />
                 </div>
-                <div style="display:flex;align-items:center;gap:8px;margin-top:4px;margin-bottom:4px;">
-                  <input type="checkbox" id="fb-send-certs" style="width:16px;height:16px;cursor:pointer;">
-                  <label for="fb-send-certs" style="font-size:13px;color:#f0f0f5;cursor:pointer;font-weight:500;">Auto-generate Certificates for this event</label>
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    margin-top: 4px;
+                    margin-bottom: 4px;
+                  "
+                >
+                  <input
+                    type="checkbox"
+                    id="fb-send-certs"
+                    style="width: 16px; height: 16px; cursor: pointer"
+                  />
+                  <label
+                    for="fb-send-certs"
+                    style="
+                      font-size: 13px;
+                      color: #f0f0f5;
+                      cursor: pointer;
+                      font-weight: 500;
+                    "
+                    >Auto-generate Certificates for this event</label
+                  >
                 </div>
-                <button id="btn-generate-form"
-                  style="padding:11px;border-radius:8px;background:linear-gradient(135deg,#6366f1,#a855f7);color:white;border:none;font-weight:600;cursor:pointer;font-family:Inter;font-size:14px;transition:opacity .2s;">
+                <button
+                  id="btn-generate-form"
+                  style="
+                    padding: 11px;
+                    border-radius: 8px;
+                    background: linear-gradient(135deg, #6366f1, #a855f7);
+                    color: white;
+                    border: none;
+                    font-weight: 600;
+                    cursor: pointer;
+                    font-family: Inter;
+                    font-size: 14px;
+                    transition: opacity 0.2s;
+                  "
+                >
                   Generate Google Form
                 </button>
-                <div id="fb-status" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:500;"></div>
-                <div id="fb-result" style="display:none;background:rgba(34,211,102,0.08);border:1px solid rgba(34,211,102,0.2);border-radius:10px;padding:14px;">
-                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                    <p style="margin:0;font-size:12px;color:#34d399;font-weight:600;">Form Created!</p>
-                    <div id="fb-result-timer" style="display:none;font-size:11px;font-weight:700;color:#34d399;background:rgba(34,211,102,0.12);padding:2px 6px;border-radius:4px;border:1px solid rgba(34,211,102,0.3);">⏱ 24:00:00</div>
+                <div
+                  id="fb-status"
+                  style="
+                    display: none;
+                    padding: 10px 14px;
+                    border-radius: 8px;
+                    font-size: 13px;
+                    font-weight: 500;
+                  "
+                ></div>
+                <div
+                  id="fb-result"
+                  style="
+                    display: none;
+                    background: rgba(34, 211, 102, 0.08);
+                    border: 1px solid rgba(34, 211, 102, 0.2);
+                    border-radius: 10px;
+                    padding: 14px;
+                  "
+                >
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: center;
+                      margin-bottom: 6px;
+                    "
+                  >
+                    <p
+                      style="
+                        margin: 0;
+                        font-size: 12px;
+                        color: #34d399;
+                        font-weight: 600;
+                      "
+                    >
+                      Form Created!
+                    </p>
+                    <div
+                      id="fb-result-timer"
+                      style="
+                        display: none;
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: #34d399;
+                        background: rgba(34, 211, 102, 0.12);
+                        padding: 2px 6px;
+                        border-radius: 4px;
+                        border: 1px solid rgba(34, 211, 102, 0.3);
+                      "
+                    >
+                      ⏱ 24:00:00
+                    </div>
                   </div>
-                  <p id="fb-form-url-text" style="margin:0 0 10px;font-size:12px;color:#8b8b9e;word-break:break-all;"></p>
-                  <div style="display:flex;gap:8px;">
-                    <button id="btn-copy-form-url" style="flex:1;padding:8px;border-radius:6px;background:rgba(99,102,241,0.2);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);font-size:12px;cursor:pointer;font-family:Inter;font-weight:600;">Copy Link</button>
-                    <button id="btn-open-form-url" style="flex:1;padding:8px;border-radius:6px;background:rgba(99,102,241,0.2);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);font-size:12px;cursor:pointer;font-family:Inter;font-weight:600;">Open Form</button>
+                  <p
+                    id="fb-form-url-text"
+                    style="
+                      margin: 0 0 10px;
+                      font-size: 12px;
+                      color: #8b8b9e;
+                      word-break: break-all;
+                    "
+                  ></p>
+                  <div style="display: flex; gap: 8px">
+                    <button
+                      id="btn-copy-form-url"
+                      style="
+                        flex: 1;
+                        padding: 8px;
+                        border-radius: 6px;
+                        background: rgba(99, 102, 241, 0.2);
+                        color: #a5b4fc;
+                        border: 1px solid rgba(99, 102, 241, 0.3);
+                        font-size: 12px;
+                        cursor: pointer;
+                        font-family: Inter;
+                        font-weight: 600;
+                      "
+                    >
+                      Copy Link
+                    </button>
+                    <button
+                      id="btn-open-form-url"
+                      style="
+                        flex: 1;
+                        padding: 8px;
+                        border-radius: 6px;
+                        background: rgba(99, 102, 241, 0.2);
+                        color: #a5b4fc;
+                        border: 1px solid rgba(99, 102, 241, 0.3);
+                        font-size: 12px;
+                        cursor: pointer;
+                        font-family: Inter;
+                        font-weight: 600;
+                      "
+                    >
+                      Open Form
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
 
             <!-- Events list -->
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-              <h4 style="margin:0;font-size:14px;font-weight:600;color:#f0f0f5;">All Events</h4>
-              <button id="btn-refresh-events" style="padding:5px 10px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);color:#8b8b9e;font-size:11px;cursor:pointer;font-family:Inter;">Refresh</button>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 12px;
+              "
+            >
+              <h4
+                style="
+                  margin: 0;
+                  font-size: 14px;
+                  font-weight: 600;
+                  color: #f0f0f5;
+                "
+              >
+                All Events
+              </h4>
+              <button
+                id="btn-refresh-events"
+                style="
+                  padding: 5px 10px;
+                  border-radius: 6px;
+                  background: rgba(255, 255, 255, 0.05);
+                  border: 1px solid rgba(255, 255, 255, 0.08);
+                  color: #8b8b9e;
+                  font-size: 11px;
+                  cursor: pointer;
+                  font-family: Inter;
+                "
+              >
+                Refresh
+              </button>
             </div>
-            <div id="fb-events-list" style="display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto;margin-bottom:20px;">
-              <div style="color:#8b8b9e;font-size:13px;text-align:center;padding:20px;">Loading events...</div>
+            <div
+              id="fb-events-list"
+              style="
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                max-height: 200px;
+                overflow-y: auto;
+                margin-bottom: 20px;
+              "
+            >
+              <div
+                style="
+                  color: #8b8b9e;
+                  font-size: 13px;
+                  text-align: center;
+                  padding: 20px;
+                "
+              >
+                Loading events...
+              </div>
             </div>
 
             <!-- Certificate Status Logs -->
-            <div style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.07);padding-top:20px;">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-                <h4 style="margin:0;font-size:14px;font-weight:600;color:#f0f0f5;">Certificate Queue Logs</h4>
-                <button id="btn-refresh-cert-logs" style="padding:5px 10px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);color:#8b8b9e;font-size:11px;cursor:pointer;font-family:Inter;">Refresh Logs</button>
+            <div
+              style="
+                margin-top: 20px;
+                border-top: 1px solid rgba(255, 255, 255, 0.07);
+                padding-top: 20px;
+              "
+            >
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  justify-content: space-between;
+                  margin-bottom: 12px;
+                "
+              >
+                <h4
+                  style="
+                    margin: 0;
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #f0f0f5;
+                  "
+                >
+                  Certificate Queue Logs
+                </h4>
+                <button
+                  id="btn-refresh-cert-logs"
+                  style="
+                    padding: 5px 10px;
+                    border-radius: 6px;
+                    background: rgba(255, 255, 255, 0.05);
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    color: #8b8b9e;
+                    font-size: 11px;
+                    cursor: pointer;
+                    font-family: Inter;
+                  "
+                >
+                  Refresh Logs
+                </button>
               </div>
-              <div id="fb-cert-logs-list" style="display:flex;flex-direction:column;gap:8px;max-height:160px;overflow-y:auto;background:rgba(0,0,0,0.2);border-radius:8px;padding:10px;border:1px solid rgba(255,255,255,0.04);">
-                <div style="color:#8b8b9e;font-size:12px;text-align:center;padding:10px;">No certificate jobs in queue.</div>
+              <div
+                id="fb-cert-logs-list"
+                style="
+                  display: flex;
+                  flex-direction: column;
+                  gap: 8px;
+                  max-height: 160px;
+                  overflow-y: auto;
+                  background: rgba(0, 0, 0, 0.2);
+                  border-radius: 8px;
+                  padding: 10px;
+                  border: 1px solid rgba(255, 255, 255, 0.04);
+                "
+              >
+                <div
+                  style="
+                    color: #8b8b9e;
+                    font-size: 12px;
+                    text-align: center;
+                    padding: 10px;
+                  "
+                >
+                  No certificate jobs in queue.
+                </div>
               </div>
             </div>
-
           </div>
         </div>
       </div>
       <!-- /FEEDBACK FORM MODAL -->
-
-    </div><!-- /dashboard-screen -->
+    </div>
+    <!-- /dashboard-screen -->
 
     <script src="/static/app.js"></script>
     <script src="/static/js/wiki.js"></script>
   </body>
 </html>
-
