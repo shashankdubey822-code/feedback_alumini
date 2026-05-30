@@ -22,6 +22,8 @@
 }
 .modal-content {
     background: var(--bg-elevated);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     border: 1px solid var(--border);
     border-radius: var(--r-lg);
     width: 90%;

@@ -9,6 +9,8 @@
     width: var(--sidebar-w);
     height: 100vh;
     background: var(--bg-sidebar);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     border-right: 1px solid var(--border-subtle);
     display: flex;
     flex-direction: column;
@@ -33,7 +35,7 @@
     background: var(--grad-accent);
     display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
-    box-shadow: 0 4px 16px rgba(99,102,241,0.3);
+    box-shadow: 0 4px 16px rgba(14, 165, 233, 0.4);
 }
 
 .sidebar-brand-text {
@@ -44,9 +46,9 @@
 
 .sidebar-brand-badge {
     font-size: 9px; font-weight: 700;
-    color: var(--accent-light);
+    color: var(--accent);
     background: var(--accent-dim);
-    border: 1px solid rgba(99,102,241,0.25);
+    border: 1px solid rgba(14, 165, 233, 0.25);
     padding: 2px 6px;
     border-radius: 99px;
     letter-spacing: 0.5px;
@@ -92,11 +94,11 @@
 
 .nav-item.active {
     background: var(--accent-dim);
-    color: var(--accent-light);
-    border: 1px solid rgba(99,102,241,0.2);
+    color: var(--accent);
+    border: 1px solid rgba(14, 165, 233, 0.2);
 }
 
-.nav-item.active svg { color: var(--accent-light); }
+.nav-item.active svg { color: var(--accent); }
 
 .nav-item.active::before {
     content: '';
@@ -119,9 +121,9 @@
 /* ── Topbar ── */
 .topbar {
     height: var(--topbar-h);
-    background: rgba(255,255,255,0.85);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    background: var(--bg-surface);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     border-bottom: 1px solid var(--border-subtle);
     display: flex;
     align-items: center;
@@ -159,9 +161,9 @@
 
 .file-badge {
     font-size: 12px; font-weight: 500;
-    color: var(--text-muted);
-    background: rgba(0,0,0,0.04);
-    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    background: var(--bg-glass);
+    border: 1px solid var(--border-subtle);
     padding: 4px 10px;
     border-radius: 99px;
     max-width: 260px;
@@ -176,14 +178,15 @@
     align-items: center;
     gap: 8px;
     background: var(--bg-input);
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     border-radius: var(--r-sm);
     padding: 7px 12px;
     transition: var(--t-base);
 }
 .search-box-top:focus-within {
-    border-color: var(--border-accent);
-    box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
+    background: #ffffff;
 }
 .search-box-top svg { color: var(--text-muted); flex-shrink: 0; }
 .search-box-top input {
@@ -202,8 +205,8 @@
     gap: 6px;
     font-size: 11px; font-weight: 600;
     color: var(--amber);
-    background: rgba(251,191,36,0.1);
-    border: 1px solid rgba(251,191,36,0.2);
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.2);
     padding: 4px 10px;
     border-radius: 99px;
     animation: dlPulse 1.5s ease-in-out infinite;

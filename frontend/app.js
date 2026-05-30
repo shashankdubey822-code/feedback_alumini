@@ -826,10 +826,16 @@ function renderAIInsights(insights) {
         card.className = `insight-card insight-${insight.type}`;
         card.style.animationDelay = `${idx * 0.06}s`;
 
+        let iconStr = '💡';
+        if (insight.type === 'success') iconStr = '✅';
+        else if (insight.type === 'warning') iconStr = '⚠️';
+        else if (insight.type === 'trend') iconStr = '📈';
+
         card.innerHTML = `
-            <div class="insight-icon">${insight.icon}</div>
+            <div class="insight-icon">${iconStr}</div>
             <div class="insight-content">
-                <p class="insight-text">${esc(insight.text)}</p>
+                <strong>${esc(insight.title || '')}</strong>
+                <p class="insight-text">${esc(insight.message || insight.text || '')}</p>
             </div>
         `;
         container.appendChild(card);

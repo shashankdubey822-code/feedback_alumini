@@ -1,49 +1,57 @@
 /* ============================================================
-   DataLens — Premium Design System (GitHub Dark Mode Style)
-   Deep dark, glassmorphism, micro-animations
+   DataLens — Premium Design System (White Glassmorphism Style)
+   Frosted white glass, deep dark typography, modern shadows
    ============================================================ */
 
 :root {
-    /* ── Core Palette ── */
-    --bg-base:        #0d1117; /* GitHub dark background */
-    --bg-surface:     #161b22; /* Card background */
-    --bg-elevated:    #21262d;
-    --bg-card:        #161b22;
-    --bg-card-hover:  #1c2128;
-    --bg-glass:       rgba(22, 27, 34, 0.75);
-    --bg-sidebar:     #0d1117;
-    --bg-input:       #0d1117;
+    /* ── Core Palette (Light/Glass) ── */
+    --bg-base:        #f1f5f9; /* Soft off-white base */
+    --bg-surface:     rgba(255, 255, 255, 0.65); /* Frosted glass */
+    --bg-elevated:    rgba(255, 255, 255, 0.85); /* Slightly more opaque glass */
+    --bg-card:        rgba(255, 255, 255, 0.65);
+    --bg-card-hover:  rgba(255, 255, 255, 0.85);
+    --bg-glass:       rgba(255, 255, 255, 0.65);
+    --bg-sidebar:     rgba(255, 255, 255, 0.65);
+    --bg-input:       rgba(255, 255, 255, 0.8);
 
     /* ── Borders ── */
-    --border:         #30363d;
-    --border-strong:  #484f58;
-    --border-accent:  #58a6ff;
-    --border-subtle:  #21262d;
+    --border:         rgba(255, 255, 255, 0.4);
+    --border-strong:  rgba(255, 255, 255, 0.8);
+    --border-accent:  #0ea5e9;
+    --border-subtle:  rgba(255, 255, 255, 0.3);
 
     /* ── Text ── */
-    --text-primary:   #e6edf3;
-    --text-secondary: #8b949e;
-    --text-muted:     #8b949e;
-    --text-accent:    #58a6ff;
+    --text-primary:   #0f172a; /* Slate 900 for high contrast */
+    --text-secondary: #475569; /* Slate 600 */
+    --text-muted:     #64748b; /* Slate 500 */
+    --text-accent:    #0ea5e9;
 
-    /* ── Accent Colors (Vibrant) ── */
-    --accent:         #58a6ff; /* GitHub Blue */
-    --accent-light:   #79c0ff;
-    --accent-dim:     rgba(88, 166, 255, 0.15);
-    --accent-glow:    rgba(88, 166, 255, 0.3);
-    --purple:         #a371f7; /* GitHub Purple */
-    --purple-dim:     rgba(163, 113, 247, 0.15);
-    --cyan:           #39c5cf;
-    --emerald:        #3fb950; /* GitHub Green */
-    --amber:          #d29922; /* GitHub Yellow */
-    --rose:           #f85149; /* GitHub Red */
-    --orange:         #f0883e;
+    /* ── Ambient Blob Colors ── */
+    --blob-1: #38bdf8; /* Soft Cyan */
+    --blob-2: #c084fc; /* Soft Purple */
+    --blob-3: #fcd34d; /* Soft Yellow/Peach */
+    --blob-4: #fda4af; /* Soft Rose */
+
+    /* ── Accent Colors (Vibrant but accessible) ── */
+    --accent:         #0ea5e9; /* Sky 500 */
+    --accent-light:   #38bdf8;
+    --accent-dim:     rgba(14, 165, 233, 0.15);
+    --accent-glow:    rgba(14, 165, 233, 0.3);
+    
+    --purple:         #8b5cf6; /* Violet 500 */
+    --purple-dim:     rgba(139, 92, 246, 0.15);
+    
+    --cyan:           #06b6d4; /* Cyan 500 */
+    --emerald:        #10b981; /* Emerald 500 */
+    --amber:          #f59e0b; /* Amber 500 */
+    --rose:           #ef4444; /* Red 500 */
+    --orange:         #f97316; /* Orange 500 */
 
     /* ── Gradients ── */
-    --grad-accent:    linear-gradient(135deg, #1f6feb, #8957e5);
-    --grad-success:   linear-gradient(135deg, #2ea043, #3fb950);
-    --grad-warm:      linear-gradient(135deg, #d29922, #f0883e);
-    --grad-danger:    linear-gradient(135deg, #da3633, #f85149);
+    --grad-accent:    linear-gradient(135deg, #0ea5e9, #8b5cf6);
+    --grad-success:   linear-gradient(135deg, #10b981, #34d399);
+    --grad-warm:      linear-gradient(135deg, #f59e0b, #fcd34d);
+    --grad-danger:    linear-gradient(135deg, #ef4444, #f87171);
 
     /* ── Layout ── */
     --sidebar-w:      224px;
@@ -57,11 +65,11 @@
     --r-xl:  20px;
     --r-2xl: 28px;
 
-    /* ── Shadows (Vibrant but soft) ── */
-    --shadow-sm:   0 4px 12px rgba(0, 0, 0, 0.3);
-    --shadow-md:   0 8px 24px rgba(0, 0, 0, 0.4);
-    --shadow-lg:   0 24px 48px rgba(0, 0, 0, 0.5);
-    --shadow-glow: 0 0 40px rgba(88, 166, 255, 0.2);
+    /* ── Shadows (Soft, Diffused for Light Glassmorphism) ── */
+    --shadow-sm:   0 4px 12px rgba(31, 38, 135, 0.04);
+    --shadow-md:   0 8px 32px 0 rgba(31, 38, 135, 0.07);
+    --shadow-lg:   0 24px 48px rgba(31, 38, 135, 0.1);
+    --shadow-glow: 0 0 40px rgba(14, 165, 233, 0.2);
 
     /* ── Transitions ── */
     --t-fast:   0.12s ease;
@@ -90,8 +98,8 @@ body {
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
 
 /* ── Selection ── */
-::selection { background: rgba(88,166,255,0.3); color: #ffffff; }
+::selection { background: rgba(14,165,233,0.3); color: #0f172a; }
