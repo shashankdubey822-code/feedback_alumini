@@ -10,39 +10,59 @@ from backend.agents.base import BaseAgent, SupervisorAgent
 
 logger = get_section_logger('data_orchestrator')
 
-# ----------------- LLM HELPER ----------------- #
-def _call_openrouter(system_prompt: str, user_content: str, max_tokens: int = 150) -> str:
-    """Calls OpenRouter with strict system boundaries for true context isolation."""
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-    if not api_key:
-        logger.warning("OPENROUTER_API_KEY not found. Skipping LLM execution.")
-        return ""
-        
+# ----------------- LLM HELPER (LANGCHAIN FALLBACK) ----------------- #
+def _call_llm_with_fallback(system_prompt: str, user_content: str, max_tokens: int = 150) -> str:
+    """Calls LLM with instantaneous sub-millisecond fallback using LangChain."""
     try:
-        response = requests.post(
-            url="https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "meta-llama/llama-3.1-8b-instruct:free", # Fast fallback model
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_content}
-                ],
-                "max_tokens": max_tokens,
-                "temperature": 0.1
-            },
-            timeout=5
+        from langchain_core.prompts import ChatPromptTemplate
+        from langchain_openai import ChatOpenAI
+        from langchain_groq import ChatGroq
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        
+        # Initialize models with max_retries=0 to fail fast
+        openrouter = ChatOpenAI(
+            api_key=os.environ.get("OPENROUTER_API_KEY", "dummy"),
+            base_url="https://openrouter.ai/api/v1",
+            model="meta-llama/llama-3.3-70b-instruct:free",
+            max_retries=0,
+            request_timeout=5.0,
+            max_tokens=max_tokens,
+            temperature=0.1
         )
-        if response.status_code == 200:
-            return response.json()['choices'][0]['message']['content'].strip()
-        else:
-            logger.error(f"OpenRouter API Error: {response.text}")
+        
+        groq = ChatGroq(
+            api_key=os.environ.get("GROQ_API_KEY", "dummy"),
+            model="llama-3.3-70b-versatile",
+            max_retries=0,
+            request_timeout=5.0,
+            max_tokens=max_tokens,
+            temperature=0.1
+        )
+        
+        gemini = ChatGoogleGenerativeAI(
+            google_api_key=os.environ.get("GEMINI_API_KEY", "dummy"),
+            model="gemini-2.5-flash",
+            max_retries=0,
+            request_timeout=5.0,
+            max_output_tokens=max_tokens,
+            temperature=0.1
+        )
+        
+        # Create ultra-fast fallback chain
+        fallback_llm = openrouter.with_fallbacks([groq, gemini])
+        
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt),
+            ("user", "{user_content}")
+        ])
+        
+        chain = prompt | fallback_llm
+        result = chain.invoke({"user_content": user_content})
+        return str(result.content).strip()
+        
     except Exception as e:
-        logger.error(f"LLM Call Failed: {str(e)}")
-    return ""
+        logger.error(f"All LLMs Failed instantaneously: {str(e)}")
+        return ""
 
 # ----------------- SUBAGENTS (LLM CONTEXT ISOLATED) ----------------- #
 
@@ -82,8 +102,8 @@ class EventNormalizationAgent(BaseAgent):
 
         # LLM Context Isolation: Clean up speaker names (e.g. "Mr. John (CEO)" -> "John")
         clean_speaker = raw_speaker
-        if raw_speaker and os.environ.get("OPENROUTER_API_KEY"):
-            llm_result = _call_openrouter(
+        if raw_speaker and (os.environ.get("OPENROUTER_API_KEY") or os.environ.get("GROQ_API_KEY") or os.environ.get("GEMINI_API_KEY")):
+            llm_result = _call_llm_with_fallback(
                 system_prompt="You are an Event Normalization Agent. Extract ONLY the exact full name of the speaker from the text. Remove titles (Mr., Dr.) and job descriptions. Return NOTHING ELSE but the name.",
                 user_content=raw_speaker,
                 max_tokens=20
@@ -138,9 +158,9 @@ class DataQualityAgent(BaseAgent):
         
         score = 100
         
-        # If we have an API key, use it for qualitative scoring
-        if os.environ.get("OPENROUTER_API_KEY"):
-            llm_result = _call_openrouter(
+        # If we have any API key, use it for qualitative scoring
+        if os.environ.get("OPENROUTER_API_KEY") or os.environ.get("GROQ_API_KEY") or os.environ.get("GEMINI_API_KEY"):
+            llm_result = _call_llm_with_fallback(
                 system_prompt="You are a Data Quality Agent. Score the usefulness of the provided feedback from 0 to 100. Provide ONLY the integer score. Deduct heavily for 'NA', 'none', or one-word answers. Reward detailed, actionable feedback.",
                 user_content=combined_text,
                 max_tokens=5
