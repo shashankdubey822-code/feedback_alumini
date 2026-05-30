@@ -296,15 +296,22 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
     
     table_data = []
     for _, row in page_df.iterrows():
+        # Parse extracted_date
+        ext_date_raw = str(row.get('extracted_date', ''))
+        ext_date = ext_date_raw.split('T')[0] if 'T' in ext_date_raw else ext_date_raw
+
+        # Parse venue_date
+        venue_date_raw = str(row.get('venue_date', ''))
+        venue_date = venue_date_raw.split('T')[0] if 'T' in venue_date_raw else venue_date_raw
+
         table_data.append({
             'id': row['response_id'],
-            'timestamp_display': row['submitted_at'].strftime('%d-%m-%Y %H:%M:%S') if pd.notnull(row['submitted_at']) else '',
-            'extracted_date': row.get('extracted_date', ''),
+            'extracted_date': ext_date,
             'extracted_time': row.get('extracted_time', ''),
             'name_of_student': row.get('student_name', ''),
             'roll_no': row.get('roll_no', ''),
             'department': row.get('department', ''),
-            'date_of_lecture': row.get('venue_date', ''),
+            'date_of_lecture': venue_date,
             'alumni_speaker_name': row.get('speaker_name', ''),
             'session_rating': row.get('session_rating', ''),
             'aspect_most_valuable': row.get('aspect_most_valuable', ''),
@@ -336,7 +343,8 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
     columns = list(table_data[0].keys()) if table_data else []
     col_types = {c: 'text' for c in columns}
     col_types['session_rating'] = 'numeric'
-    col_types['timestamp_display'] = 'date'
+    col_types['extracted_date'] = 'date'
+    col_types['date_of_lecture'] = 'date'
     
     sentiment_counts = df['sentiment_label'].value_counts().to_dict() if not df.empty and 'sentiment_label' in df else {}
     actionable_stats = {'actionable': 0, 'non_actionable': 0}

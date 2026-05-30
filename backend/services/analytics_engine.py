@@ -42,8 +42,8 @@ class AnalyticsEngine:
                 a.sentiment_score,
                 a.key_topics as keywords_json
             FROM feedback_responses r
-            JOIN events e ON r.event_id = e.id
-            JOIN students s ON r.student_id = s.id
+            LEFT JOIN events e ON r.event_id = e.id
+            LEFT JOIN students s ON r.student_id = s.id
             LEFT JOIN feedback_analysis a ON r.id = a.response_id
             ORDER BY r.submitted_at DESC
             """
@@ -92,8 +92,8 @@ class AnalyticsEngine:
                 a.sentiment_score,
                 a.key_topics as keywords_json
             FROM feedback_responses r
-            JOIN events e ON r.event_id = e.id
-            JOIN students s ON r.student_id = s.id
+            LEFT JOIN events e ON r.event_id = e.id
+            LEFT JOIN students s ON r.student_id = s.id
             LEFT JOIN feedback_analysis a ON r.id = a.response_id
             WHERE r.id = %s
             """
