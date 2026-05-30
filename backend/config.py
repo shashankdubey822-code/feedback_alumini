@@ -61,8 +61,9 @@ class Config:
     # Data Quality
     DATA_QUALITY_THRESHOLD = 80  # Minimum acceptable quality score
 
-
+    # InsForge
     DATABASE_URL = os.getenv('DATABASE_URL', '')
+    INSFORGE_BUCKET = os.getenv('INSFORGE_BUCKET', 'wiki-content')
 
     # Gemini Settings
     GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
