@@ -89,7 +89,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupModal();
     setupAdminAuth();
     loadInitialData();
-    pollCertificationErrors(); // Start background polling for certification errors
+    // Delay background polling to avoid blocking the initial payload fetch
+    setTimeout(pollCertificationErrors, 15000); 
 });
 
 // ========== ERROR MONITORING ==========
@@ -268,12 +269,15 @@ async function validateBackendConfiguration() {
 // ========== DATA LOADING ==========
 async function loadInitialData() {
     try {
-        // Validate configuration first (non-blocking if it fails)
-        await validateBackendConfiguration();
+        // 1) Fast initial payload to render UI quickly. 
+        // We run config validation and initial fetch in parallel to avoid sequential blocking delays.
+        console.log("loadInitialData: Fetching /api/initial and validating configuration");
+        
+        const [_, initResp] = await Promise.all([
+            validateBackendConfiguration(),
+            fetch(`${API_BASE}/api/initial`)
+        ]);
 
-        // 1) Fast initial payload to render UI quickly
-        console.log("loadInitialData: Fetching /api/initial");
-        const initResp = await fetch(`${API_BASE}/api/initial`);
         if (!initResp.ok) {
             console.log("loadInitialData: No initial data (404), showing admin prompt");
             document.getElementById('loading-status').textContent = 'No data available. Admin upload required.';
@@ -290,12 +294,6 @@ async function loadInitialData() {
         state.columnTypes = init.meta.columnTypes || {};
         state.tableData = init.tableData || [];
         state.fileName = init.meta.filename || 'Preview';
-
-        // Render the dashboard immediately from the small payload
-        setTimeout(() => {
-            switchToDashboardFromLoading();
-            renderDashboard();
-        }, 200);
 
         // 2) Background: fetch full analytics without blocking the UI
         (async () => {
@@ -375,13 +373,10 @@ async function loadInitialData() {
             // sortTableData is missing here, but it will sort on next render if needed or handled inside renderTable
         }
 
-        console.log("loadInitialData: Scheduling switchToDashboardFromLoading");
-        setTimeout(() => {
-            console.log("Timeout triggered: Switching screens and rendering");
-            switchToDashboardFromLoading();
-            renderDashboard();
-            console.log("Timeout triggered: Render complete");
-        }, 300);
+        console.log("loadInitialData: Switching screens and rendering immediately");
+        switchToDashboardFromLoading();
+        renderDashboard();
+        console.log("loadInitialData: Render complete");
     } catch (err) {
         document.getElementById('loading-status').textContent = 'Failed to connect to server.';
         document.getElementById('loading-status').style.color = '#ef4444';
