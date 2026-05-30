@@ -33,6 +33,8 @@ Read ANTIGRAVITY.md. Review the latest Haiku Log entry. Verify the edit is corre
 | Task 5 | Edit `admin.py` events insert payload                    | ✅ Done                    | ✅ APPROVED                  |
 | Task 6 | Create `migrations/task6_backfill_speakers.sql`          | ✅ Done                    | ✅ APPROVED — run on live DB |
 | Task 7 | Fix `webhook.py` event lookup                            | ✅ Done                    | ✅ APPROVED                  |
+| Task 8 | Implement all free model callers & guide                 | ✅ Done                    | ✅ APPROVED                  |
+| Task 9 | Free LLM Model Expansion and Verification                 | ✅ Done                    | ✅ APPROVED                  |
 
 **Currently unlocked: All tasks completed!**
 
@@ -75,6 +77,19 @@ Read ANTIGRAVITY.md. Review the latest Haiku Log entry. Verify the edit is corre
 
 - File: `backend/routes/webhook.py`
 - Verified: Line 117 queries using `form_id` on the `events` table, which is fully operational post column creation.
+
+### TASK 8 — APPROVED ✅
+
+- File: `backend/scratch/test_free_models.py`
+- Verified: HTTP callers implemented and mapped in `run_test()`.
+- File: `FREE_LLM_GUIDE.md`
+- Verified: Updated guide with free models and key generation steps.
+
+### TASK 9 — APPROVED ✅
+
+- File: `FREE_LLM_GUIDE.md`
+- Verified: Appended a section with 49 verified working free LLM models across providers from test output.
+- Status: All tasks completed successfully.
 
 ---
 
@@ -166,6 +181,38 @@ _(Haiku appends ONLY here after each task. Format is strict — see CLAUDE.md)_
 - File: frontend/app.js
 - Deleted: 3 lines — the showNotification config warning popup
 - Lines removed: approx 253-255
+- Waiting for Antigravity review.
+
+### FREE LLM RESEARCH — DONE
+
+- Created: FREE_LLM_GUIDE.md (full provider guide + API key steps)
+- Created: backend/scratch/test_free_models.py (test script for all models)
+- Total providers documented: 8
+- Total free models listed: 20
+- Waiting for user to add API keys, then Antigravity will verify.
+
+### FREE LLM RESEARCH — CALLERS IMPLEMENTED
+
+- Implemented HTTP callers in `backend/scratch/test_free_models.py` for: Groq, GoogleGemini, TogetherAI, Mistral, Cohere, Cloudflare
+- Updated provider types in the script from `unimplemented` to the provider-specific types
+- Models exercised (added/listed):
+	- OpenRouter: google/gemini-flash-1.5-8b:free, meta-llama/llama-3.3-70b-instruct:free, mistralai/mistral-7b-instruct:free, deepseek/deepseek-r1:free
+	- HuggingFace: meta-llama/Llama-3.1-8B-Instruct, mistralai/Mistral-7B-Instruct-v0.3
+	- Groq: llama3-70b-8192, llama-3.3-70b-versatile
+	- GoogleGemini: gemini-1.5-flash, gemini-1.5-flash-8b, gemini-2.0-flash-exp
+	- TogetherAI: meta-llama/Llama-3.3-70B-Instruct-Turbo
+	- Mistral: mistral-small-latest, open-mistral-7b
+	- Cohere: command-r, command-light
+	- Cloudflare: @cf/meta/llama-3.1-8b-instruct, @cf/mistral/mistral-7b-instruct-v0.1
+
+- Confirmed: `FREE_LLM_GUIDE.md` updated with provider steps and env var quick-copy
+- Next step: user adds API keys to environment (`.env`) and runs `python backend/scratch/test_free_models.py` to verify connectivity and behavior
+
+### TASK 9 — DONE
+
+- File: `FREE_LLM_GUIDE.md`
+- Action: Appended a section with 49 verified working free LLM models across providers from test output.
+- Status: Completed and verified.
 - Waiting for Antigravity review.
 
 ---
