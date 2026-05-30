@@ -118,11 +118,19 @@ def _normalize_df(df, source='csv_upload') -> pd.DataFrame:
         
     # Attempt to parse submitted_at from timestamp_display
     if 'timestamp_display' in df.columns:
-        df['submitted_at'] = pd.to_datetime(df['timestamp_display'], errors='coerce')
-        # Fill NaT with current UTC time
+        # Use format='mixed' to intelligently detect mixed date/time strings like "11-11-2025 08:42" and "11/14/2025 16:08:58"
+        df['submitted_at'] = pd.to_datetime(df['timestamp_display'], format='mixed', errors='coerce', dayfirst=False)
+        
+        # Explicitly detect and separate the date and the time
+        df['extracted_date'] = df['submitted_at'].dt.date
+        df['extracted_time'] = df['submitted_at'].dt.time
+        
+        # Fill NaT with current UTC time to prevent database insertion errors
         df['submitted_at'] = df['submitted_at'].fillna(pd.Timestamp.utcnow())
     else:
         df['submitted_at'] = pd.Timestamp.utcnow()
+        df['extracted_date'] = df['submitted_at'].dt.date
+        df['extracted_time'] = df['submitted_at'].dt.time
 
     return df
 

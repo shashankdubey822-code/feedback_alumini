@@ -80,7 +80,9 @@ class FeedbackExtractionAgent(BaseAgent):
             except: return None
             
         payload['feedback_data'] = {
-            'submitted_at': row.get('timestamp_display'),
+            'submitted_at': row.get('submitted_at'), # Use the robustly parsed timestamp from admin.py
+            'extracted_date': row.get('extracted_date'),
+            'extracted_time': row.get('extracted_time'),
             'session_rating': safe_int(row.get('session_rating')),
             'session_help_understanding': row.get('session_help_understanding', ''),
             'aspect_most_valuable': row.get('aspect_most_valuable', ''),
@@ -162,6 +164,8 @@ class DatabaseSyncAgent(BaseAgent):
                 'event_id': event_id,
                 'student_id': student_id,
                 'submitted_at': sub_at,
+                'extracted_date': str(fb.get('extracted_date')) if fb.get('extracted_date') else None,
+                'extracted_time': str(fb.get('extracted_time')) if fb.get('extracted_time') else None,
                 'session_rating': fb['session_rating'],
                 'session_help_understanding': fb['session_help_understanding'],
                 'aspect_most_valuable': fb['aspect_most_valuable'],
