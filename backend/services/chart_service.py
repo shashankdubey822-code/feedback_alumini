@@ -14,10 +14,10 @@ class ChartService:
         if df.empty or 'extracted_date' not in df: return []
         
         # Convert extracted_date to datetime, handling empty/null strings
-        df['parsed_date'] = pd.to_datetime(df['extracted_date'], errors='coerce')
+        df['parsed_date'] = pd.to_datetime(df['extracted_date'], errors='coerce', utc=True)
         recent = df.dropna(subset=['parsed_date']).copy()
         
-        now = pd.Timestamp.utcnow().tz_localize(None)
+        now = pd.Timestamp.now(tz='UTC')
         mask = recent['parsed_date'] >= (now - pd.Timedelta(days=days))
         recent = recent[mask]
         
