@@ -379,7 +379,7 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
     # Calculate timeTrends using extracted_date
-    time_trends = {}
+    time_trends = []
     if not df.empty and 'extracted_date' in df:
         # Filter out empty or null dates
         valid_dates_df = df[df['extracted_date'].astype(str).str.strip() != ''].copy()
@@ -388,17 +388,39 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
             valid_dates_df = valid_dates_df.dropna(subset=['parsed_date'])
             if not valid_dates_df.empty:
                 volume = valid_dates_df.groupby('parsed_date').size()
-                time_trends = {
-                    'labels': [str(d) for d in volume.index],
-                    'volume': volume.tolist(),
-                    'sentiment': valid_dates_df.groupby('parsed_date')['sentiment_score'].mean().fillna(0).tolist() if 'sentiment_score' in valid_dates_df else []
-                }
+                
+                # Check rating trends if we want to add any columns (like session_rating)
+                rating_trends = []
+                if 'session_rating' in valid_dates_df:
+                    # Parse rating to numeric
+                    valid_dates_df['numeric_rating'] = pd.to_numeric(valid_dates_df['session_rating'], errors='coerce')
+                    rating_dates_df = valid_dates_df.dropna(subset=['numeric_rating'])
+                    if not rating_dates_df.empty:
+                        rating_avg = rating_dates_df.groupby('parsed_date')['numeric_rating'].mean()
+                        rating_trends.append({
+                            'column': 'session_rating',
+                            'labels': [str(d) for d in rating_avg.index],
+                            'data': rating_avg.tolist(),
+                            'xLabel': 'Date',
+                            'yLabel': 'Average Rating'
+                        })
+                
+                time_trends.append({
+                    'responseCount': {
+                        'labels': [str(d) for d in volume.index],
+                        'data': volume.tolist(),
+                        'xLabel': 'Date',
+                        'yLabel': 'Number of Responses'
+                    },
+                    'ratingTrends': rating_trends
+                })
 
     # Calculate sentiment array
     avg_score = df['sentiment_score'].mean() if not df.empty and 'sentiment_score' in df else 0
     sentiment_data = [{
         'column': 'Overall Feedback',
         'avgPolarity': float(avg_score) if pd.notnull(avg_score) else 0.0,
+        'avgSubjectivity': 0.0,
         'total': total_count,
         'positive': sentiment_counts.get('POSITIVE', 0),
         'neutral': sentiment_counts.get('NEUTRAL', 0),
@@ -457,7 +479,7 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
         'speakerStats': speaker_stats_payload,
         'deepAnalysis': {
             'actionableStats': actionable_stats,
-            'categories': [{'category': k, 'count': v} for k, v in category_counts.items()]
+            'categories': [{'name': k, 'value': v} for k, v in category_counts.items()]
         },
         'sentiment': sentiment_data,
         'keywords': keywords_data,
