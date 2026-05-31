@@ -21,18 +21,19 @@ def check_database_health(db_path: str = None) -> dict:
                 cursor.execute(
                     "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'feedback_responses')"
                 )
-                table_exists = cursor.fetchone()[0]
+                exists_row = cursor.fetchone() or {}
+                table_exists = bool(exists_row.get('exists'))
 
                 if table_exists:
                     # Get record count
                     cursor.execute('SELECT COUNT(*) as count FROM feedback_responses')
-                    record_count = cursor.fetchone()['count']
+                    record_count = int((cursor.fetchone() or {}).get('count', 0) or 0)
                     
                     # Assume good quality is > 0 for now (or a specific check)
                     cursor.execute(
                         'SELECT COUNT(*) as count FROM feedback_analysis WHERE sentiment_score >= 0'
                     )
-                    quality_count = cursor.fetchone()['count']
+                    quality_count = int((cursor.fetchone() or {}).get('count', 0) or 0)
 
                     health_percentage = (quality_count / record_count * 100) if record_count > 0 else 100
 

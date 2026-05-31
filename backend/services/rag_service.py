@@ -5,7 +5,7 @@ RAG Service - Computes embeddings locally and performs semantic vector search
 from typing import List, Dict, Any, Optional
 import numpy as np
 from backend.utils.logger import get_section_logger
-from backend.utils.insforge_helper import get_insforge_client, is_insforge_active
+from backend.utils.insforge_helper import is_insforge_active
 from backend.utils.insforge_db import execute_all
 import json
 
@@ -87,26 +87,23 @@ class RAGService:
             # Fallback to simple keyword search
             return self._fallback_keyword_search(query_text, limit)
 
-        # ─── 1. INSFORGE VECTOR SEARCH (RPC) ──────────────────────────────────
+        # 1. INSFORGE VECTOR SEARCH (SQL FUNCTION)
         if is_insforge_active():
-            client = get_insforge_client()
-            if client:
-                try:
-                    logger.info(f"Executing InsForge pgvector RPC search for query: '{query_text}'")
-                    response = client.rpc(
-                        'match_feedback',
-                        {
-                            'query_embedding': query_vector,
-                            'match_threshold': threshold,
-                            'match_count': limit
-                        }
-                    ).execute()
-                    return response.data or []
-                except Exception as e:
-                    logger.error(f"InsForge pgvector query failed: {str(e)}")
-                    # Fallback to local
+            try:
+                logger.info(f"Executing InsForge pgvector SQL function search for query: '{query_text}'")
+                rows = execute_all(
+                    """
+                    SELECT *
+                    FROM match_feedback(%s, %s, %s)
+                    """,
+                    (query_vector, threshold, limit),
+                )
+                return rows or []
+            except Exception as e:
+                logger.error(f"InsForge pgvector query failed: {str(e)}")
+                # Fallback to local
         
-        # ─── 2. LOCAL SQLITE FALLBACK ─────────────────────────────────────────
+        # 2. LOCAL SQLITE FALLBACK
         logger.info(f"Running local SQLite search fallback for query: '{query_text}'")
         try:
             return self._fallback_keyword_search(query_text, limit)
