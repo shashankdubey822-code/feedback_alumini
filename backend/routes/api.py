@@ -306,11 +306,8 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
         
     total_count = len(df)
     
-    offset = max((int(page) - 1), 0) * int(page_size)
-    page_df = df.iloc[offset:offset+int(page_size)] if not df.empty else df
-    
     table_data = []
-    for _, row in page_df.iterrows():
+    for _, row in df.iterrows():
         # Parse extracted_date
         ext_date_raw = str(row.get('extracted_date', ''))
         ext_date = ext_date_raw.split('T')[0] if 'T' in ext_date_raw else ext_date_raw
