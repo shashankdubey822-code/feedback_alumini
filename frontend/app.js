@@ -3183,11 +3183,13 @@ function renderDepartmentCharts(depts) {
                     formReadyColor = '#d97706';
                 }
 
+                const venueDateFormatted = ev.venue_date ? String(ev.venue_date).split('T')[0] : '';
+
                 card.innerHTML = `
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
                         <div>
                             <div style="font-size:13px;font-weight:800;color:#000000;">${esc(ev.speaker_name)}</div>
-                            <div style="font-size:11px;color:#333333;margin-top:2px;">${esc(ev.venue_date)} &nbsp;·&nbsp; ${ev.responses} response${ev.responses !== 1 ? 's' : ''}${ev.send_certificates ? ' &nbsp;·&nbsp; <span style="color:#7c3aed;font-weight:600;">🎓 Certs Active</span>' : ''}</div>
+                            <div style="font-size:11px;color:#333333;margin-top:2px;">${esc(venueDateFormatted)} &nbsp;·&nbsp; ${ev.responses} response${ev.responses !== 1 ? 's' : ''}${ev.send_certificates ? ' &nbsp;·&nbsp; <span style="color:#7c3aed;font-weight:600;">🎓 Certs Active</span>' : ''}</div>
                             ${formStatusHtml}
                         </div>
                         <span style="font-size:10px;padding:3px 8px;border-radius:12px;font-weight:600;background:${formReadyBg};color:${formReadyColor};border:1px solid ${formReadyColor}40;">
@@ -3206,9 +3208,7 @@ function renderDepartmentCharts(depts) {
                         `}
                         <button data-event-id="${ev.id}" class="btn-sync-responses"
                             style="flex:1;padding:6px;border-radius:6px;background:rgba(168,85,247,0.1);color:#7c3aed;border:1px solid rgba(168,85,247,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Sync</button>
-                    </div>` : `
-                    <button data-event-id="${ev.id}" class="btn-generate-existing"
-                        style="width:100%;margin-top:8px;padding:6px;border-radius:6px;background:rgba(217,119,6,0.1);color:#b45309;border:1px solid rgba(217,119,6,0.2);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Generate Form</button>`}
+                    </div>` : ``}
                 `;
                 list.appendChild(card);
             });

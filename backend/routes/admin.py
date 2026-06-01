@@ -408,7 +408,15 @@ def get_events():
             d = dict(r)
             for k, v in d.items():
                 if hasattr(v, 'isoformat'):
-                    d[k] = v.isoformat()
+                    val = v.isoformat()
+                else:
+                    val = v
+                
+                # Format venue_date to date-only string YYYY-MM-DD
+                if k == 'venue_date' and isinstance(val, str):
+                    val = val.split('T')[0]
+                
+                d[k] = val
             events.append(d)
         return jsonify({'success': True, 'events': events}), 200
     except Exception as e:
@@ -657,7 +665,7 @@ def generate_form():
             'secret': os.getenv('APPS_SCRIPT_SECRET', 'datalens2026'),
             'action': 'create_form',
             'speaker_name': event['speaker_name'],
-            'venue_date': str(event['venue_date']),
+            'venue_date': str(event['venue_date']).split('T')[0],
             'webhook_url': webhook_url,
             'event_id': event_id,
         })
