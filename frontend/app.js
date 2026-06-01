@@ -3415,7 +3415,7 @@ function renderDepartmentCharts(depts) {
 
                 item.innerHTML = `
                     <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <span style="font-weight:600;color:#f0f0f5;">${esc(job.student_name)}</span>
+                        <span style="font-weight:600;color:#000000;">${esc(job.student_name)}</span>
                         <span style="font-weight:700;color:${statusColor};">${statusText}${attemptsText}</span>
                     </div>
                     <div style="color:#8b8b9e;font-size:10px;margin-top:2px;">
