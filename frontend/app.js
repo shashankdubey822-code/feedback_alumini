@@ -1800,7 +1800,7 @@ function renderSpeakers(speakerStats) {
                 <div class="speaker-name">${esc(speaker.name)}</div>
                 <div class="speaker-meta">${speaker.count} response${speaker.count > 1 ? 's' : ''}</div>
                 <div class="speaker-stats-row">
-                    ${mainRating !== null ? `<div class="speaker-stat"><div class="speaker-stat-value" style="color: ${color}">${mainRating}</div><div class="speaker-stat-label">Avg Rating</div></div>` : ''}
+                    ${mainRating !== null ? `<div class="speaker-stat"><div class="speaker-stat-value" style="color: ${color}">${parseFloat(mainRating).toFixed(1)}</div><div class="speaker-stat-label">Avg Rating</div></div>` : ''}
                     <div class="speaker-stat"><div class="speaker-stat-value" style="color: ${color}">${speaker.count}</div><div class="speaker-stat-label">Responses</div></div>
                 </div>
                 <div class="speaker-sentiment-pill ${sentClass}">${sentLabel} (${speaker.sentiment.toFixed(2)})</div>
@@ -2475,8 +2475,11 @@ async function renderSpeakerProfile(speakerName, avatarColor) {
         btnCompileDossier.style.display = 'none'; // Hidden by default until we check status
     }
 
-    // Filter rows for this speaker
-    const speakerRows = state.tableData.filter(row => row.alumni_speaker_name === speakerName);
+    // Filter rows for this speaker (case-insensitive and trimmed)
+    const speakerRows = state.tableData.filter(row => 
+        row.alumni_speaker_name && 
+        row.alumni_speaker_name.trim().toLowerCase() === speakerName.trim().toLowerCase()
+    );
     
     // Total Responses
     const countEl = document.getElementById('speaker-profile-count');
@@ -2492,7 +2495,7 @@ async function renderSpeakerProfile(speakerName, avatarColor) {
             ratingCount++;
         }
     });
-    const avgRating = ratingCount > 0 ? (totalRating / ratingCount).toFixed(2) : 'N/A';
+    const avgRating = ratingCount > 0 ? (totalRating / ratingCount).toFixed(1) : 'N/A';
     const ratingBadgeEl = document.getElementById('speaker-profile-rating-badge');
     if (ratingBadgeEl) {
         ratingBadgeEl.textContent = `★ ${avgRating} Avg Rating`;
@@ -2776,7 +2779,7 @@ function renderDepartmentComparison() {
                     npsStatus = 'Needs Attention';
                 }
                 
-                const ratingStr = d.avgRating.toFixed(2);
+                const ratingStr = d.avgRating.toFixed(1);
                 const sentimentStr = d.avgSentiment.toFixed(2);
                 
                 tr.innerHTML = `
