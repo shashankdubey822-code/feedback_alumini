@@ -3142,21 +3142,21 @@ function renderDepartmentCharts(depts) {
     // ── Load events list ─────────────────────────────────────
     async function loadEvents() {
         const list = document.getElementById('fb-events-list');
-        list.innerHTML = '<div style="color:#8b8b9e;font-size:13px;text-align:center;padding:16px;">Loading...</div>';
+        list.innerHTML = '<div style="color:#000000;font-size:13px;text-align:center;padding:16px;">Loading...</div>';
         try {
             const res  = await fetch(`${API_BASE}/api/admin/events`, { headers: authHeaders() });
             const data = await res.json();
             if (!data.success) throw new Error(data.error);
 
             if (!data.events || data.events.length === 0) {
-                list.innerHTML = '<div style="color:#8b8b9e;font-size:13px;text-align:center;padding:20px;">No events yet. Create your first one above!</div>';
+                list.innerHTML = '<div style="color:#000000;font-size:13px;text-align:center;padding:20px;">No events yet. Create your first one above!</div>';
                 return;
             }
 
             list.innerHTML = '';
             data.events.forEach(ev => {
                 const card = document.createElement('div');
-                card.style.cssText = 'background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px;';
+                card.style.cssText = 'background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.1);border-radius:10px;padding:14px;';
                 const hasForm = !!ev.form_url;
                 const createdTime = ev.form_created_at ? new Date(ev.form_created_at).getTime() : 0;
                 const expiryTime = createdTime ? createdTime + (24 * 60 * 60 * 1000) : 0;
@@ -3165,29 +3165,29 @@ function renderDepartmentCharts(depts) {
                 // Determine form status
                 let formStatusHtml = '';
                 let formReadyText = 'Form Ready';
-                let formReadyBg = 'rgba(34,211,102,0.1)';
-                let formReadyColor = '#34d399';
+                let formReadyBg = 'rgba(22,163,74,0.1)';
+                let formReadyColor = '#16a34a';
                 
                 if (hasForm) {
                     if (ev.status === 'closed' || isExpired) {
                         formReadyText = 'Closed';
-                        formReadyBg = 'rgba(239,68,68,0.1)';
-                        formReadyColor = '#ef4444';
+                        formReadyBg = 'rgba(220,38,38,0.1)';
+                        formReadyColor = '#dc2626';
                     } else if (expiryTime) {
                         // active, show timer
-                        formStatusHtml = `<div class="form-timer" data-expiry="${expiryTime}" data-form-id="${ev.form_id}" style="font-size:11px;font-weight:700;color:#34d399;background:rgba(34,211,102,0.12);padding:2px 6px;border-radius:4px;border:1px solid rgba(34,211,102,0.3);margin-top:4px;display:inline-block;">⏱ Calc...</div>`;
+                        formStatusHtml = `<div class="form-timer" data-expiry="${expiryTime}" data-form-id="${ev.form_id}" style="font-size:11px;font-weight:700;color:#16a34a;background:rgba(22,163,74,0.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(22,163,74,0.3);margin-top:4px;display:inline-block;">⏱ Calc...</div>`;
                     }
                 } else {
                     formReadyText = 'No Form';
-                    formReadyBg = 'rgba(251,191,36,0.1)';
-                    formReadyColor = '#fbbf24';
+                    formReadyBg = 'rgba(217,119,6,0.1)';
+                    formReadyColor = '#d97706';
                 }
 
                 card.innerHTML = `
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
                         <div>
                             <div style="font-size:13px;font-weight:800;color:#000000;">${esc(ev.speaker_name)}</div>
-                            <div style="font-size:11px;color:#8b8b9e;margin-top:2px;">${esc(ev.venue_date)} &nbsp;·&nbsp; ${ev.responses} response${ev.responses !== 1 ? 's' : ''}${ev.send_certificates ? ' &nbsp;·&nbsp; <span style="color:#a855f7;font-weight:600;">🎓 Certs Active</span>' : ''}</div>
+                            <div style="font-size:11px;color:#333333;margin-top:2px;">${esc(ev.venue_date)} &nbsp;·&nbsp; ${ev.responses} response${ev.responses !== 1 ? 's' : ''}${ev.send_certificates ? ' &nbsp;·&nbsp; <span style="color:#7c3aed;font-weight:600;">🎓 Certs Active</span>' : ''}</div>
                             ${formStatusHtml}
                         </div>
                         <span style="font-size:10px;padding:3px 8px;border-radius:12px;font-weight:600;background:${formReadyBg};color:${formReadyColor};border:1px solid ${formReadyColor}40;">
@@ -3198,17 +3198,17 @@ function renderDepartmentCharts(depts) {
                     <div style="display:flex;gap:6px;margin-top:8px;">
                         ${(ev.status === 'closed' || isExpired) ? `` : `
                         <button data-copy-url="${ev.form_url}" class="btn-copy-event-url"
-                            style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Copy</button>
+                            style="flex:1;padding:6px;border-radius:6px;background:rgba(79,70,229,0.1);color:#4f46e5;border:1px solid rgba(79,70,229,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Copy</button>
                         <button data-open-url="${ev.form_url}" class="btn-open-event-url"
-                            style="flex:1;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Open</button>
+                            style="flex:1;padding:6px;border-radius:6px;background:rgba(79,70,229,0.1);color:#4f46e5;border:1px solid rgba(79,70,229,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Open</button>
                         <button data-form="${ev.form_id}" data-event-id="${ev.id}" data-speaker="${esc(ev.speaker_name)}" class="btn-close-form"
-                            style="flex:1;padding:6px;border-radius:6px;background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Close</button>
+                            style="flex:1;padding:6px;border-radius:6px;background:rgba(220,38,38,0.1);color:#dc2626;border:1px solid rgba(220,38,38,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Close</button>
                         `}
                         <button data-event-id="${ev.id}" class="btn-sync-responses"
-                            style="flex:1;padding:6px;border-radius:6px;background:rgba(168,85,247,0.15);color:#c084fc;border:1px solid rgba(168,85,247,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Sync</button>
+                            style="flex:1;padding:6px;border-radius:6px;background:rgba(168,85,247,0.1);color:#7c3aed;border:1px solid rgba(168,85,247,0.25);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Sync</button>
                     </div>` : `
                     <button data-event-id="${ev.id}" class="btn-generate-existing"
-                        style="width:100%;margin-top:8px;padding:6px;border-radius:6px;background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.2);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Generate Form</button>`}
+                        style="width:100%;margin-top:8px;padding:6px;border-radius:6px;background:rgba(217,119,6,0.1);color:#b45309;border:1px solid rgba(217,119,6,0.2);font-size:11px;cursor:pointer;font-family:Inter;font-weight:600;">Generate Form</button>`}
                 `;
                 list.appendChild(card);
             });

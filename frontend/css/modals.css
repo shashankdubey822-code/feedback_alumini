@@ -411,31 +411,31 @@
 #feedback-modal .modal-title,
 #feedback-modal h3,
 #feedback-modal h4 {
-    color: var(--text-primary);
+    color: #000000;
 }
 #feedback-modal p,
 #feedback-modal label,
 #feedback-modal span {
-    color: var(--text-secondary);
+    color: #000000;
 }
 #feedback-modal input[type="text"],
 #feedback-modal input[type="date"] {
     background: var(--bg-input);
-    color: var(--text-primary);
-    border: 1px solid var(--border);
+    color: #000000;
+    border: 1px solid #000000;
 }
 #feedback-modal input::placeholder {
-    color: var(--text-muted);
+    color: #333333;
 }
 #feedback-modal .modal-close {
-    color: var(--text-muted);
+    color: #000000;
 }
 #feedback-modal .modal-close:hover {
-    color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.1);
+    color: #000000;
+    background: rgba(0, 0, 0, 0.05);
 }
 #feedback-modal #btn-refresh-events {
-    background: var(--bg-surface);
-    border: 1px solid var(--border);
-    color: var(--text-primary);
+    background: rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    color: #000000;
 }
