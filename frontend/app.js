@@ -2880,7 +2880,7 @@ function renderDepartmentCharts(depts) {
                         const r = await safeFetch(`${API_BASE}/api/admin/sync-responses`, {
                             method: 'POST',
                             headers: authHeaders(),
-                            body: JSON.stringify({ event_id: parseInt(id) })
+                            body: JSON.stringify({ event_id: id })
                         });
                         const d = await r.json();
                         
@@ -3018,7 +3018,7 @@ function renderDepartmentCharts(depts) {
                     try {
                         const r = await fetch(`${API_BASE}/api/admin/generate-form`, {
                             method: 'POST', headers: authHeaders(),
-                            body: JSON.stringify({ event_id: parseInt(id) })
+                            body: JSON.stringify({ event_id: id })
                         });
                         const d = await r.json();
                         if (d.success) loadEvents();
