@@ -2835,11 +2835,11 @@ function renderDepartmentCharts(depts) {
                     y: {
                         min: -100,
                         max: 100,
-                        ticks: { color: 'rgba(255, 255, 255, 0.6)' },
-                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        ticks: { color: 'rgba(0, 0, 0, 0.7)' },
+                        grid: { color: 'rgba(0, 0, 0, 0.08)' }
                     },
                     x: {
-                        ticks: { color: 'rgba(255, 255, 255, 0.6)', font: { size: 10 } },
+                        ticks: { color: 'rgba(0, 0, 0, 0.7)', font: { size: 10 } },
                         grid: { display: false }
                     }
                 }
@@ -2872,11 +2872,11 @@ function renderDepartmentCharts(depts) {
                     y: {
                         min: -1,
                         max: 1,
-                        ticks: { color: 'rgba(255, 255, 255, 0.6)' },
-                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        ticks: { color: 'rgba(0, 0, 0, 0.7)' },
+                        grid: { color: 'rgba(0, 0, 0, 0.08)' }
                     },
                     x: {
-                        ticks: { color: 'rgba(255, 255, 255, 0.6)', font: { size: 10 } },
+                        ticks: { color: 'rgba(0, 0, 0, 0.7)', font: { size: 10 } },
                         grid: { display: false }
                     }
                 }
@@ -2907,11 +2907,11 @@ function renderDepartmentCharts(depts) {
                 plugins: { legend: { display: false } },
                 scales: {
                     y: {
-                        ticks: { color: 'rgba(255, 255, 255, 0.6)', precision: 0 },
-                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        ticks: { color: 'rgba(0, 0, 0, 0.7)', precision: 0 },
+                        grid: { color: 'rgba(0, 0, 0, 0.08)' }
                     },
                     x: {
-                        ticks: { color: 'rgba(255, 255, 255, 0.6)', font: { size: 10 } },
+                        ticks: { color: 'rgba(0, 0, 0, 0.7)', font: { size: 10 } },
                         grid: { display: false }
                     }
                 }
