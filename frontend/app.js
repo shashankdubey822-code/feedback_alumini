@@ -1237,6 +1237,8 @@ function renderKPIs(kpis) {
     const container = document.getElementById('kpi-grid');
     container.innerHTML = '';
 
+    if (!kpis || !Array.isArray(kpis)) return;
+
     kpis.forEach((kpi) => {
         const card = document.createElement('div');
         card.className = 'kpi-card';
@@ -1253,6 +1255,8 @@ function renderKPIs(kpis) {
 function renderFilters(filters) {
     const container = document.getElementById('filters-grid');
     container.innerHTML = '';
+
+    if (!filters || !Array.isArray(filters)) return;
 
     filters.forEach((f) => {
         const item = document.createElement('div');

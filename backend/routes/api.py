@@ -18,8 +18,28 @@ logger = get_section_logger('api')
 _DL_STATUS_CACHE = {'value': 0, 'timestamp': 0.0}
 _DL_STATUS_CACHE_TTL = float(os.getenv('DL_STATUS_CACHE_TTL', '5'))
 
+import math
+import pandas as pd
+
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 legacy_bp = Blueprint('legacy', __name__, url_prefix='/api')
+
+
+def sanitize_for_json(val):
+    """Recursively convert float('nan'), float('inf'), float('-inf') and pd.isnull to None
+    to ensure standard JSON compliance when serializing backend payloads.
+    """
+    if isinstance(val, dict):
+        return {k: sanitize_for_json(v) for k, v in val.items()}
+    elif isinstance(val, (list, tuple, set)):
+        return [sanitize_for_json(v) for v in val]
+    elif isinstance(val, float):
+        if math.isnan(val) or math.isinf(val):
+            return None
+        return val
+    elif pd.isnull(val):
+        return None
+    return val
 
 
 def get_services(app):
@@ -52,7 +72,7 @@ def get_initial():
     try:
         # Get data from the blazing fast in-memory pandas engine
         payload = analytics_engine.get_initial_payload()
-        return jsonify(payload), 200
+        return jsonify(sanitize_for_json(payload)), 200
     except Exception as e:
         logger.error(f"Error getting initial payload: {e}")
         return jsonify({'error': 'Failed to fetch initial payload'}), 500
@@ -74,7 +94,7 @@ def get_all_charts():
         from flask import current_app
         services = get_services(current_app)
         charts = services['charts'].get_all_chart_data()
-        return jsonify(charts), 200
+        return jsonify(sanitize_for_json(charts)), 200
     except Exception as e:
         logger.error(f"Error getting charts: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -89,10 +109,10 @@ def get_all_kpis():
         services = get_services(current_app)
         kpis = services['kpi'].get_all_kpis()
         health = services['kpi'].get_kpi_health_status()
-        return jsonify({
+        return jsonify(sanitize_for_json({
             'kpis': kpis,
             'health_status': health,
-        }), 200
+        })), 200
     except Exception as e:
         logger.error(f"Error getting KPIs: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -187,7 +207,7 @@ def get_legacy_data():
     """Unified analytics payload for the Premium frontend (app.js)"""
     try:
         from flask import current_app
-        return jsonify(get_consolidated_analytics(current_app)), 200
+        return jsonify(sanitize_for_json(get_consolidated_analytics(current_app))), 200
     except Exception as e:
         logger.exception(f"CRITICAL Error in /api/data: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -204,7 +224,7 @@ def get_legacy_filter():
         # Pagination support
         page = int(body.get('page', 1)) if body.get('page') else 1
         page_size = int(body.get('page_size', 25)) if body.get('page_size') else 25
-        return jsonify(get_consolidated_analytics(current_app, filters=filters, search=search, page=page, page_size=page_size)), 200
+        return jsonify(sanitize_for_json(get_consolidated_analytics(current_app, filters=filters, search=search, page=page, page_size=page_size))), 200
     except Exception as e:
         logger.error(f"Error in /api/filter: {str(e)}")
         return jsonify({'error': str(e)}), 500

@@ -172,6 +172,8 @@ class AnalyticsEngine:
             'meta': meta,
             'tableData': table_data,
             'totalResponses': total,
+            'kpis': [],
+            'filters': []
         }
 
     def get_filter_options(self):
