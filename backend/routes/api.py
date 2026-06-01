@@ -427,6 +427,43 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
         'negative': sentiment_counts.get('NEGATIVE', 0)
     }] if not df.empty else []
 
+    # Calculate Aspect-Based Sentiment Analysis (ABSA)
+    absa_mapping = {
+        'Speaker/Delivery': ['speaker', 'teacher', 'professor', 'delivery', 'faculty', 'voice', 'explain', 'teaching', 'lecturer', 'presentation', 'style'],
+        'Infrastructure': ['projector', 'lab', 'pc', 'computer', 'wifi', 'internet', 'ac', 'mic', 'hall', 'room', 'seating', 'system', 'sound', 'screen'],
+        'Content/Materials': ['ppt', 'slides', 'material', 'handout', 'notes', 'code', 'github', 'example', 'syllabus', 'concept', 'theory'],
+        'Pacing/Schedule': ['slow', 'fast', 'pacing', 'time', 'duration', 'hours', 'hurry', 'pace', 'schedule', 'break']
+    }
+    absa_counts = {
+        'Speaker/Delivery': {'positive': 0, 'neutral': 0, 'negative': 0},
+        'Infrastructure': {'positive': 0, 'neutral': 0, 'negative': 0},
+        'Content/Materials': {'positive': 0, 'neutral': 0, 'negative': 0},
+        'Pacing/Schedule': {'positive': 0, 'neutral': 0, 'negative': 0}
+    }
+    if not df.empty:
+        for _, row in df.iterrows():
+            text = ' '.join([
+                str(row.get('aspect_most_valuable', '') or ''),
+                str(row.get('improvements_suggestions', '') or ''),
+                str(row.get('future_topics', '') or '')
+            ]).lower()
+            label = str(row.get('sentiment_label', 'NEUTRAL')).upper()
+            label_map = {'POSITIVE': 'positive', 'NEUTRAL': 'neutral', 'NEGATIVE': 'negative'}
+            sentiment_key = label_map.get(label, 'neutral')
+            
+            for aspect, keywords in absa_mapping.items():
+                if any(kw in text for kw in keywords):
+                    absa_counts[aspect][sentiment_key] += 1
+    
+    absa_data = []
+    for aspect, counts in absa_counts.items():
+        absa_data.append({
+            'aspect': aspect,
+            'positive': counts['positive'],
+            'neutral': counts['neutral'],
+            'negative': counts['negative']
+        })
+
     # Calculate aiInsights
     ai_insights = [
         {'type': 'info', 'icon': 'ℹ', 'title': 'Data Loaded', 'message': f'Successfully analyzed {total_count} responses.'}
@@ -445,6 +482,80 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
             'title': 'High Negative Sentiment',
             'message': 'Over 20% of responses have negative sentiment.'
         })
+
+    # Add KPI health alerts, speaker performance highlights, and recommendations
+    try:
+        from ..services.kpi_service import KPIService
+        kpi_health = KPIService().get_kpi_health_status()
+    except Exception:
+        kpi_health = {}
+
+    if kpi_health.get('engagement_rate', {}).get('health') in ('RED', 'YELLOW'):
+        val = kpi_health['engagement_rate']['value']
+        ai_insights.append({
+            'type': 'warning' if kpi_health['engagement_rate']['health'] == 'YELLOW' else 'danger',
+            'icon': '⚠️',
+            'title': 'Low Student Engagement',
+            'message': f"Only {val}% of students left detailed written feedback. Consider encouraging more participation."
+        })
+    if kpi_health.get('satisfaction_score', {}).get('health') in ('RED', 'YELLOW'):
+        val = kpi_health['satisfaction_score']['value']
+        ai_insights.append({
+            'type': 'warning' if kpi_health['satisfaction_score']['health'] == 'YELLOW' else 'danger',
+            'icon': '⚠️',
+            'title': 'Satisfaction Drop-off',
+            'message': f"Satisfaction score is at {val}%. High ratings (4+ stars) have dropped below optimal levels."
+        })
+    elif kpi_health.get('satisfaction_score', {}).get('health') == 'GREEN':
+        val = kpi_health['satisfaction_score']['value']
+        ai_insights.append({
+            'type': 'success',
+            'icon': '✅',
+            'title': 'High Student Satisfaction',
+            'message': f"Overall satisfaction is at an excellent {val}%. Students are highly receptive to current lectures."
+        })
+    if kpi_health.get('department_coverage', {}).get('health') in ('RED', 'YELLOW'):
+        val = kpi_health['department_coverage']['value']
+        ai_insights.append({
+            'type': 'info',
+            'icon': '💡',
+            'title': 'Low Department Representation',
+            'message': f"Only {val}% of target departments have submitted feedback. Representation is highly skewed."
+        })
+
+    # Speaker Performance Highlights
+    if speaker_stats_payload and speaker_stats_payload[0].get('speakers'):
+        sorted_speakers = sorted(speaker_stats_payload[0]['speakers'], key=lambda x: x['ratings'].get('Overall Rating', 0.0), reverse=True)
+        top_sp = sorted_speakers[0]
+        if top_sp['ratings'].get('Overall Rating', 0.0) >= 4.5 and top_sp['count'] >= 3:
+            ai_insights.append({
+                'type': 'trend',
+                'icon': '📈',
+                'title': 'Top Rated Speaker Profile',
+                'message': f"Speaker {top_sp['name']} has maintained an exceptional rating of {top_sp['ratings']['Overall Rating']:.2f}/5 across {top_sp['count']} sessions."
+            })
+        low_sp = sorted_speakers[-1]
+        if low_sp['ratings'].get('Overall Rating', 0.0) < 3.5 and low_sp['count'] >= 2:
+            ai_insights.append({
+                'type': 'warning',
+                'icon': '⚠️',
+                'title': 'Pedagogical Review Recommended',
+                'message': f"Speaker {low_sp['name']} has an average rating of {low_sp['ratings']['Overall Rating']:.2f}/5. Reviewing lecture materials or pacing is recommended."
+            })
+
+    # Topic/Category Highlights
+    if category_counts:
+        meaningful_categories = {k: v for k, v in category_counts.items() if k != 'Other'}
+        if meaningful_categories:
+            top_cat = max(meaningful_categories, key=meaningful_categories.get)
+            top_count = meaningful_categories[top_cat]
+            if top_count >= (total_count * 0.15):
+                ai_insights.append({
+                    'type': 'trend',
+                    'icon': '💡',
+                    'title': f'Focus on {top_cat}',
+                    'message': f"Student suggestions: '{top_cat}' is the most discussed critique area, representing {top_count} responses. Address this in future lectures."
+                })
 
     # Calculate Keywords Data
     keywords_data = []
@@ -479,12 +590,14 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
         'speakerStats': speaker_stats_payload,
         'deepAnalysis': {
             'actionableStats': actionable_stats,
-            'categories': [{'name': k, 'value': v} for k, v in category_counts.items()]
+            'categories': [{'name': k, 'value': v} for k, v in category_counts.items()],
+            'absa': absa_data
         },
         'sentiment': sentiment_data,
         'keywords': keywords_data,
         'timeTrends': time_trends,
         'aiInsights': ai_insights,
-        'totalResponses': total_count
+        'totalResponses': total_count,
+        'absa': absa_data
     }
 

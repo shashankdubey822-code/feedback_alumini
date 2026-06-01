@@ -680,7 +680,282 @@ function setupDashboardHandlers() {
     } catch (e) {
         console.warn('[WEBSOCKET] Could not initialize socket.io:', e);
     }
+
+    // Keyword tag delegation filter
+    const keywordsGrid = document.getElementById('keywords-grid');
+    if (keywordsGrid) {
+        keywordsGrid.addEventListener('click', (e) => {
+            const tag = e.target.closest('.word-tag');
+            if (tag) {
+                const word = tag.getAttribute('data-word');
+                if (word) {
+                    const searchInput = document.getElementById('global-search');
+                    if (searchInput) {
+                        searchInput.value = word;
+                        applyFilters();
+                        showNotification(`Filtering feedback by "${word}"`, 'info');
+                        const overviewBtn = document.getElementById('nav-overview');
+                        if (overviewBtn) {
+                            overviewBtn.click();
+                            const mainContent = document.getElementById('main-content');
+                            if (mainContent) {
+                                mainContent.scrollTo({ top: 0, behavior: 'smooth' });
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Initialize RAG chat drawer
+    setupDashboardRAGChat();
 }
+
+function setupDashboardRAGChat() {
+    const inputEl = document.getElementById('rag-chat-input');
+    const submitBtn = document.getElementById('rag-chat-submit');
+    const logEl = document.getElementById('rag-chat-log');
+
+    if (!inputEl || !submitBtn || !logEl) return;
+
+    const chatHistory = [];
+
+    const sendMessage = async () => {
+        const text = inputEl.value.trim();
+        if (!text) return;
+
+        inputEl.value = '';
+
+        // Append user message
+        appendMessage('user', text);
+        chatHistory.push({ role: 'user', content: text });
+
+        // Append loading indicator
+        const loadingDiv = appendMessage('ai', 'Searching corpus and drafting answer...');
+
+        const waitTimeout = setTimeout(() => {
+            if (loadingDiv && loadingDiv.parentNode) {
+                loadingDiv.innerHTML = '<span style="color: #8b8b9e; font-style: italic;">Thinking... synthesizing feedback context...</span>';
+            }
+        }, 3000);
+
+        try {
+            const res = await fetch(`${API_BASE}/api/v1/wiki/query`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    question: text,
+                    history: chatHistory,
+                    session_id: 'dashboard_rag_' + (localStorage.getItem('wiki_session_id') || 'gen')
+                })
+            });
+
+            clearTimeout(waitTimeout);
+            loadingDiv.remove();
+
+            if (!res.ok) throw new Error('Query failed');
+            const data = await res.json();
+
+            appendMessage('ai', data.answer);
+            chatHistory.push({ role: 'assistant', content: data.answer });
+
+        } catch (e) {
+            clearTimeout(waitTimeout);
+            console.error(e);
+            loadingDiv.innerHTML = '<span style="color: #e74c3c;">Error: Failed to fetch Q&A answer. Check API status.</span>';
+        }
+    };
+
+    const appendMessage = (sender, text) => {
+        const div = document.createElement('div');
+        div.className = `chat-message ${sender}`;
+
+        div.style.cssText = sender === 'user' ? `
+            align-self: flex-end;
+            background: rgba(108, 92, 231, 0.15);
+            border: 1px solid rgba(108, 92, 231, 0.3);
+            padding: 10px 14px;
+            border-radius: 12px 12px 0 12px;
+            max-width: 80%;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #f0f0f5;
+        ` : `
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 10px 14px;
+            border-radius: 12px 12px 12px 0;
+            max-width: 80%;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #f0f0f5;
+        `;
+
+        // Parse markdown double brackets [[speakers/name.md]] -> Wiki link click
+        let parsedText = text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/- (.*?)$/gm, '<li>$1</li>')
+            .replace(/\[\[([^\]|]+)\]\]/g, (match, link) => {
+                const label = link.split('/').pop().replace('_', ' ').replace('.md', '');
+                return `<span class="wiki-link" style="color:#6c5ce7; cursor:pointer; text-decoration:underline; font-weight:600;" data-page="${link}">${label}</span>`;
+            });
+
+        div.innerHTML = parsedText;
+
+        // Add event listeners to wiki link clicks to redirect to wiki section
+        div.querySelectorAll('.wiki-link').forEach(link => {
+            link.addEventListener('click', () => {
+                const page = link.getAttribute('data-page');
+                const navWiki = document.getElementById('nav-wiki');
+                if (navWiki) {
+                    navWiki.click();
+                    const exploreTab = document.querySelector('.wiki-subtab[data-tab="wiki-tab-explore"]');
+                    if (exploreTab) {
+                        exploreTab.click();
+                    }
+                    setTimeout(() => {
+                        if (window.Wiki && typeof window.Wiki.loadPageContent === 'function') {
+                            window.Wiki.loadPageContent(page);
+                        }
+                    }, 150);
+                }
+            });
+        });
+
+        logEl.appendChild(div);
+        logEl.scrollTop = logEl.scrollHeight;
+        return div;
+    };
+
+    submitBtn.addEventListener('click', sendMessage);
+    inputEl.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+    });
+}
+
+function renderPrescriptiveChecklist() {
+    const listEl = document.getElementById('prescriptive-checklist');
+    const placeholderEl = document.getElementById('checklist-placeholder');
+    if (!listEl) return;
+
+    listEl.innerHTML = '';
+
+    const tableData = state.tableData || [];
+    const actionableItems = [];
+
+    tableData.forEach(row => {
+        let isActionable = false;
+        let category = 'Operational';
+        const suggestionsText = row.improvements_suggestions || '';
+
+        if (row.dl_keywords) {
+            try {
+                const kws = typeof row.dl_keywords === 'string'
+                    ? JSON.parse(row.dl_keywords)
+                    : row.dl_keywords;
+                if (kws.is_actionable) {
+                    isActionable = true;
+                    if (kws.category) category = kws.category;
+                }
+            } catch (e) {}
+        }
+
+        if (!isActionable && suggestionsText.length > 15) {
+            const lower = suggestionsText.toLowerCase();
+            const nonAnswers = ['no', 'nil', 'na', 'nothing', 'none', 'n/a', 'good', 'excellent', 'all good', 'no suggestions'];
+            if (!nonAnswers.includes(lower.trim())) {
+                isActionable = true;
+            }
+        }
+
+        if (isActionable && suggestionsText.trim()) {
+            actionableItems.push({
+                id: row.id,
+                speaker: row.alumni_speaker_name || 'General',
+                department: row.department || 'N/A',
+                text: suggestionsText.trim(),
+                category: category
+            });
+        }
+    });
+
+    if (actionableItems.length === 0) {
+        listEl.style.display = 'none';
+        if (placeholderEl) placeholderEl.style.display = 'block';
+        return;
+    }
+
+    if (placeholderEl) placeholderEl.style.display = 'none';
+    listEl.style.display = 'flex';
+
+    const savedStates = JSON.parse(localStorage.getItem('datalens_checklist_states') || '{}');
+    const uniqueItems = [];
+    const seenTexts = new Set();
+
+    actionableItems.forEach(item => {
+        const textKey = item.text.toLowerCase();
+        if (!seenTexts.has(textKey)) {
+            seenTexts.add(textKey);
+            uniqueItems.push(item);
+        }
+    });
+
+    uniqueItems.slice(0, 15).forEach((item, idx) => {
+        const li = document.createElement('li');
+        li.style.cssText = `
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.2s ease;
+        `;
+
+        const checkKey = `item_${item.id || idx}`;
+        const isChecked = !!savedStates[checkKey];
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = isChecked;
+        checkbox.id = `chk_${item.id || idx}`;
+        checkbox.style.cssText = `
+            margin-top: 3px;
+            cursor: pointer;
+            accent-color: #6c5ce7;
+        `;
+
+        const textSpan = document.createElement('span');
+        textSpan.style.cssText = `
+            font-size: 13px;
+            color: #f0f0f5;
+            line-height: 1.4;
+            flex-grow: 1;
+            text-decoration: ${isChecked ? 'line-through' : 'none'};
+            opacity: ${isChecked ? '0.6' : '1'};
+            transition: all 0.2s ease;
+        `;
+        textSpan.innerHTML = `<strong>[${esc(item.category)}]</strong> ${esc(item.text)} <span style="font-size: 11px; color: #8b8b9e; display: block; margin-top: 4px;">Dept: ${esc(item.department)} | Speaker: ${esc(item.speaker)}</span>`;
+
+        checkbox.addEventListener('change', () => {
+            savedStates[checkKey] = checkbox.checked;
+            localStorage.setItem('datalens_checklist_states', JSON.stringify(savedStates));
+            textSpan.style.textDecoration = checkbox.checked ? 'line-through' : 'none';
+            textSpan.style.opacity = checkbox.checked ? '0.6' : '1';
+        });
+
+        li.appendChild(checkbox);
+        li.appendChild(textSpan);
+        listEl.appendChild(li);
+    });
+}
+
 
 // ========== ADMIN AUTH & LOGIC ==========
 function setupAdminAuth() {
@@ -790,6 +1065,7 @@ function renderDashboard() {
     try { renderKPIs(a.kpis); } catch(e) { console.error("Error renderKPIs:", e); }
     try { renderFilters(a.filters); } catch(e) { console.error("Error renderFilters:", e); }
     try { renderAIInsights(a.aiInsights); } catch(e) { console.error("Error renderAIInsights:", e); }
+    try { renderPrescriptiveChecklist(); } catch(e) { console.error("Error renderPrescriptiveChecklist:", e); }
     try { renderCharts(a.charts); } catch(e) { console.error("Error renderCharts:", e); }
     try { renderTimeTrends(a.timeTrends); } catch(e) { console.error("Error renderTimeTrends:", e); }
     try { renderDeepAnalysis(a.deepAnalysis); } catch(e) { console.error("Error renderDeepAnalysis:", e); }
@@ -888,6 +1164,71 @@ function renderDeepAnalysis(da) {
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b8b9e' } }, x: { grid: { display: false }, ticks: { color: '#8b8b9e' } } } }
         });
         state.charts.push(catChart);
+    }
+
+    // Aspect-Based Sentiment Analysis (ABSA) Chart
+    const absaCanvas = document.getElementById('absa-chart');
+    const absaSubsection = document.getElementById('absa-sentiment-subsection');
+    if (absaCanvas && absaSubsection) {
+        if (da.absa && da.absa.length > 0) {
+            absaSubsection.style.display = 'block';
+            const existingAbsa = Chart.getChart(absaCanvas);
+            if (existingAbsa) {
+                existingAbsa.destroy();
+            }
+            const absaChart = new Chart(absaCanvas, {
+                type: 'bar',
+                data: {
+                    labels: da.absa.map(d => d.aspect),
+                    datasets: [
+                        {
+                            label: 'Positive 😊',
+                            data: da.absa.map(d => d.positive),
+                            backgroundColor: '#10b981',
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Neutral 😐',
+                            data: da.absa.map(d => d.neutral),
+                            backgroundColor: '#9ca3af',
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Negative 😟',
+                            data: da.absa.map(d => d.negative),
+                            backgroundColor: '#ef4444',
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#2c3e50', font: { family: 'Inter', weight: '600' } }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: false,
+                            grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                            ticks: { color: '#2c3e50', font: { family: 'Inter' } }
+                        },
+                        y: {
+                            stacked: false,
+                            grid: { display: false },
+                            ticks: { color: '#2c3e50', font: { family: 'Inter', weight: '600' } }
+                        }
+                    }
+                }
+            });
+            state.charts.push(absaChart);
+        } else {
+            absaSubsection.style.display = 'none';
+        }
     }
 }
 
@@ -1022,6 +1363,7 @@ async function applyFilters() {
         if (currentDataHash !== newDataHash) {
             renderKPIs(analytics.kpis);
             renderAIInsights(analytics.aiInsights);
+            renderPrescriptiveChecklist();
             renderCharts(analytics.charts);
             renderTimeTrends(analytics.timeTrends);
             renderDeepAnalysis(analytics.deepAnalysis);
@@ -1417,7 +1759,7 @@ function renderKeywords(keywordsData) {
             const bgColor = color + '18';
             const isBigram = word.type === 'bigram';
             const bigramClass = isBigram ? 'bigram-tag' : '';
-            cloudHTML += `<span class="word-tag ${bigramClass}" style="font-size: ${size}px; background: ${bgColor}; color: ${color}; opacity: ${opacity};" title="${word.count} occurrences${isBigram ? ' (phrase)' : ''}">${isBigram ? '⟨ ' : ''}${esc(word.text)}${isBigram ? ' ⟩' : ''}</span>`;
+            cloudHTML += `<span class="word-tag ${bigramClass}" data-word="${esc(word.text)}" style="font-size: ${size}px; background: ${bgColor}; color: ${color}; opacity: ${opacity}; cursor: pointer; transition: all 0.2s ease;" title="Click to filter table by '${esc(word.text)}' (${word.count} occurrences${isBigram ? ', phrase' : ''})">${isBigram ? '⟨ ' : ''}${esc(word.text)}${isBigram ? ' ⟩' : ''}</span>`;
         });
         cloudHTML += '</div>';
 
