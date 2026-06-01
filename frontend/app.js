@@ -780,17 +780,17 @@ function setupDashboardRAGChat() {
             max-width: 80%;
             font-size: 13px;
             line-height: 1.5;
-            color: #f0f0f5;
+            color: #000000;
         ` : `
             align-self: flex-start;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.3);
             padding: 10px 14px;
             border-radius: 12px 12px 12px 0;
             max-width: 80%;
             font-size: 13px;
             line-height: 1.5;
-            color: #f0f0f5;
+            color: #000000;
         `;
 
         // Parse markdown double brackets [[speakers/name.md]] -> Wiki link click
@@ -934,14 +934,14 @@ function renderPrescriptiveChecklist() {
         const textSpan = document.createElement('span');
         textSpan.style.cssText = `
             font-size: 13px;
-            color: #f0f0f5;
+            color: #000000;
             line-height: 1.4;
             flex-grow: 1;
             text-decoration: ${isChecked ? 'line-through' : 'none'};
             opacity: ${isChecked ? '0.6' : '1'};
             transition: all 0.2s ease;
         `;
-        textSpan.innerHTML = `<strong>[${esc(item.category)}]</strong> ${esc(item.text)} <span style="font-size: 11px; color: #8b8b9e; display: block; margin-top: 4px;">Dept: ${esc(item.department)} | Speaker: ${esc(item.speaker)}</span>`;
+        textSpan.innerHTML = `<strong>[${esc(item.category)}]</strong> ${esc(item.text)} <span style="font-size: 11px; color: #333333; display: block; margin-top: 4px;">Dept: ${esc(item.department)} | Speaker: ${esc(item.speaker)}</span>`;
 
         checkbox.addEventListener('change', () => {
             savedStates[checkKey] = checkbox.checked;
