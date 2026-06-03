@@ -42,3 +42,18 @@ new.html
 *.msi
 *.exe
 *.dmg
+
+# Exclude developer files, agent configs, and scratch scripts
+.agents/
+.claude/
+.git-rewrite/
+.insforge/
+AGENTS.md
+ANTIGRAVITY.md
+CLAUDE.md
+DEBUG_REPORT.md
+FREE_LLM_GUIDE.md
+GEMINI_HANDOFF.md
+backend/scratch/
+get_hf_logs.py
+implementation_plan.md.resolved
