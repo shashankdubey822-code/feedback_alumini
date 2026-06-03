@@ -476,6 +476,18 @@ def retry_certificate_job():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@admin_bp.route('/analytics/refresh', methods=['POST'])
+@log_endpoint_access
+def refresh_analytics_cache():
+    try:
+        from backend.services.analytics_engine import analytics_engine
+        analytics_engine.refresh_data()
+        logger.info("In-memory analytics cache successfully refreshed")
+        return jsonify({'success': True, 'message': 'Analytics cache refreshed successfully'}), 200
+    except Exception as e:
+        logger.error(f"Error refreshing analytics cache: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @admin_bp.route('/speaker-names', methods=['GET'])
 @log_endpoint_access
