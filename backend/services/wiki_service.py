@@ -322,7 +322,7 @@ Append-only history of Wiki operations.
             if not self.cohere_key:
                 return False
             try:
-                url = "https://api.cohere.ai/v1/chat"
+                url = "https://api.cohere.com/v1/chat"
                 req_data = json.dumps({
                     "message": "ping",
                     "model": "command-r",
@@ -723,7 +723,7 @@ Append-only history of Wiki operations.
         """Call Cohere API (Command-R-Plus)"""
         prompt = self._build_wiki_prompt(safe_event, safe_speaker, speaker, date_str, total, avg_rating, shu, val, crit, req)
         try:
-            url = "https://api.cohere.ai/v1/chat"
+            url = "https://api.cohere.com/v1/chat"
             req_data = json.dumps({
                 "message": prompt,
                 "model": "command-r",

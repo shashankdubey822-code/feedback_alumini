@@ -65,13 +65,14 @@ def _call_groq(prompt: str) -> Optional[str]:
         return resp.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
         logger.error(f"Groq API call error: {e}")
+        _disable_model("groq")
         return None
 
 def _call_cohere(prompt: str) -> Optional[str]:
     api_key = os.environ.get("COHERE_API_KEY", "").strip()
     if not api_key:
         return None
-    url = "https://api.cohere.ai/v1/chat"
+    url = "https://api.cohere.com/v1/chat"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
@@ -89,6 +90,7 @@ def _call_cohere(prompt: str) -> Optional[str]:
         return resp.json()["text"].strip()
     except Exception as e:
         logger.error(f"Cohere API call error: {e}")
+        _disable_model("cohere")
         return None
 
 def _call_mistral(prompt: str) -> Optional[str]:
@@ -115,6 +117,7 @@ def _call_mistral(prompt: str) -> Optional[str]:
         return resp.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
         logger.error(f"Mistral API call error: {e}")
+        _disable_model("mistral")
         return None
 
 def _call_hf_inference(prompt: str) -> Optional[str]:
@@ -145,6 +148,7 @@ def _call_hf_inference(prompt: str) -> Optional[str]:
         return None
     except Exception as e:
         logger.error(f"HF Inference API call error: {e}")
+        _disable_model("hf_inference")
         return None
 
 def _call_gemini(prompt: str) -> Optional[str]:
@@ -165,6 +169,7 @@ def _call_gemini(prompt: str) -> Optional[str]:
         return resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
     except Exception as e:
         logger.error(f"Gemini API call error: {e}")
+        _disable_model("gemini")
         return None
 
 def _call_openrouter(prompt: str) -> Optional[str]:
@@ -191,6 +196,7 @@ def _call_openrouter(prompt: str) -> Optional[str]:
         return resp.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
         logger.error(f"OpenRouter API call error: {e}")
+        _disable_model("openrouter")
         return None
 
 
