@@ -683,9 +683,8 @@ function setupDashboardHandlers() {
                 document.body.appendChild(popup);
             }
             
-            const speaker = data.speaker || 'Unknown Speaker';
-            const date = data.date || 'Unknown Date';
-            popup.textContent = `NLP analysis for ${speaker} on ${date} has completed successfully.`;
+            const student = data.student_name || 'Student';
+            popup.textContent = `NLP analysis of ${student} feedback.`;
             
             popup.classList.add('visible');
             
@@ -3760,7 +3759,7 @@ function renderDepartmentCharts(depts) {
             return;
         }
 
-        const soeDepts = ['CST', 'ME', 'R&AI', 'ECE'];
+        const soeDepts = ['CSD', 'ME', 'R and AI', 'EC'];
         const dataByDept = {};
         soeDepts.forEach(d => {
             dataByDept[d] = { ratings: [], sentimentScores: [] };
@@ -3845,7 +3844,7 @@ function renderDepartmentCharts(depts) {
             return;
         }
 
-        const soeDepts = ['CST', 'ME', 'R&AI', 'ECE'];
+        const soeDepts = ['CSD', 'ME', 'R and AI', 'EC'];
         const dataByDept = {};
         soeDepts.forEach(d => {
             dataByDept[d] = { sentimentScores: [], actionableCount: 0 };

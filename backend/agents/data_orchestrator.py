@@ -13,124 +13,185 @@ from backend.agents.base import BaseAgent, SupervisorAgent
 logger = get_section_logger('data_orchestrator')
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  SINGLETON LLM CHAIN  —  initialized ONCE, reused across all rows/agents
-#  This prevents hammering the provider auth endpoints on every single call.
+#  DIRECT HTTP FALLBACKS & CIRCUIT BREAKER STATE
+#  Using direct HTTP REST calls to bypass LangChain's internal retry loops.
 # ─────────────────────────────────────────────────────────────────────────────
-_llm_chain = None          # module-level singleton
-_llm_prompt = None         # shared prompt template
+_DISABLED_MODELS: Dict[str, float] = {}
 
-def _get_llm_chain():
-    """Return the cached fallback LLM chain, building it on first call."""
-    global _llm_chain, _llm_prompt
+def _is_model_enabled(model_name: str) -> bool:
+    disabled_time = _DISABLED_MODELS.get(model_name)
+    if not disabled_time:
+        return True
+    
+    now = time.time()
+    # Gemini disabled for 24h, HF Serverless for 1m, others for 10m
+    if model_name == "gemini":
+        duration = 86400
+    elif model_name == "hf_inference":
+        duration = 60
+    else:
+        duration = 600
+        
+    if now - disabled_time >= duration:
+        _DISABLED_MODELS.pop(model_name, None)
+        return True
+    return False
 
-    if _llm_chain is not None:
-        return _llm_chain, _llm_prompt
+def _disable_model(model_name: str):
+    _DISABLED_MODELS[model_name] = time.time()
+    logger.warning(f"Circuit Breaker: Disabling model '{model_name}' due to rate limits or API failure.")
 
+def _call_groq(prompt: str) -> Optional[str]:
+    api_key = os.environ.get("GROQ_API_KEY", "").strip()
+    if not api_key:
+        return None
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.1,
+        "max_tokens": 80
+    }
     try:
-        from langchain_core.prompts import ChatPromptTemplate
-        from langchain_openai import ChatOpenAI
-        from langchain_groq import ChatGroq
-        from langchain_google_genai import ChatGoogleGenerativeAI
-
-        # All models: max_retries=0 so LangChain fails-fast and hands off to next
-        openrouter = ChatOpenAI(
-            api_key=os.environ.get("OPENROUTER_API_KEY", "dummy"),
-            base_url="https://openrouter.ai/api/v1",
-            model="meta-llama/llama-3.3-70b-instruct:free",
-            max_retries=0,
-            request_timeout=8.0,
-            max_tokens=80,
-            temperature=0.1,
-        )
-
-        groq = ChatGroq(
-            api_key=os.environ.get("GROQ_API_KEY", "dummy"),
-            model="llama-3.3-70b-versatile",
-            max_retries=0,
-            request_timeout=8.0,
-            max_tokens=80,
-            temperature=0.1,
-        )
-
-        gemini = ChatGoogleGenerativeAI(
-            google_api_key=os.environ.get("GEMINI_API_KEY", "dummy"),
-            model="gemini-2.5-flash",
-            max_retries=0,
-            request_timeout=8.0,
-            max_output_tokens=80,
-            temperature=0.1,
-        )
-
-        # OpenRouter → Groq → Gemini fallback chain
-        _llm_chain = openrouter.with_fallbacks([groq, gemini])
-
-        _llm_prompt = ChatPromptTemplate.from_messages([
-            ("system", "{system_prompt}"),
-            ("user", "{user_content}"),
-        ])
-
-        logger.info("LLM singleton chain initialised (OpenRouter→Groq→Gemini).")
-
+        resp = requests.post(url, json=payload, headers=headers, timeout=3.0)
+        if resp.status_code == 429:
+            _disable_model("groq")
+            return None
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
-        logger.error(f"Failed to build LLM chain: {e}")
-        _llm_chain = None
-        _llm_prompt = None
+        logger.error(f"Groq API call error: {e}")
+        return None
 
-    return _llm_chain, _llm_prompt
+def _call_cohere(prompt: str) -> Optional[str]:
+    api_key = os.environ.get("COHERE_API_KEY", "").strip()
+    if not api_key:
+        return None
+    url = "https://api.cohere.ai/v1/chat"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "message": prompt,
+        "model": "command-r"
+    }
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=3.0)
+        if resp.status_code == 429:
+            _disable_model("cohere")
+            return None
+        resp.raise_for_status()
+        return resp.json()["text"].strip()
+    except Exception as e:
+        logger.error(f"Cohere API call error: {e}")
+        return None
 
+def _call_mistral(prompt: str) -> Optional[str]:
+    api_key = os.environ.get("MISTRAL_API_KEY", "").strip()
+    if not api_key:
+        return None
+    url = "https://api.mistral.ai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "open-mistral-7b",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.1,
+        "max_tokens": 80
+    }
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=3.0)
+        if resp.status_code == 429:
+            _disable_model("mistral")
+            return None
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        logger.error(f"Mistral API call error: {e}")
+        return None
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  RATE-LIMIT-AWARE LLM CALLER  —  exponential back-off with jitter
-#  Handles 429 / ResourceExhausted across all three providers gracefully.
-# ─────────────────────────────────────────────────────────────────────────────
-_RATE_LIMIT_KEYWORDS = ("429", "rate limit", "quota", "resourceexhausted", "too many requests")
-_MAX_BACKOFF_ATTEMPTS = 3
-_BASE_BACKOFF_SECONDS = 2.0
+def _call_hf_inference(prompt: str) -> Optional[str]:
+    api_key = os.environ.get("HF_API_KEY", "").strip()
+    if not api_key:
+        return None
+    url = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-72B-Instruct"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "inputs": prompt,
+        "parameters": {"max_new_tokens": 80, "temperature": 0.1}
+    }
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=3.0)
+        if resp.status_code == 429:
+            _disable_model("hf_inference")
+            return None
+        resp.raise_for_status()
+        res_json = resp.json()
+        if isinstance(res_json, list) and len(res_json) > 0:
+            text = res_json[0].get("generated_text", "").strip()
+            if text.startswith(prompt):
+                text = text[len(prompt):].strip()
+            return text
+        return None
+    except Exception as e:
+        logger.error(f"HF Inference API call error: {e}")
+        return None
 
+def _call_gemini(prompt: str) -> Optional[str]:
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        return None
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}]
+    }
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=3.0)
+        if resp.status_code == 429:
+            _disable_model("gemini")
+            return None
+        resp.raise_for_status()
+        return resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except Exception as e:
+        logger.error(f"Gemini API call error: {e}")
+        return None
 
-def _call_llm_with_fallback(
-    system_prompt: str,
-    user_content: str,
-    max_tokens: int = 80,
-) -> str:
-    """
-    Call the singleton LLM fallback chain with exponential back-off on 429 errors.
-    Returns an empty string on total failure (never raises).
-    """
-    chain_model, prompt_template = _get_llm_chain()
-
-    if chain_model is None or prompt_template is None:
-        logger.warning("LLM chain unavailable — skipping LLM call.")
-        return ""
-
-    chain = prompt_template | chain_model
-
-    for attempt in range(_MAX_BACKOFF_ATTEMPTS):
-        try:
-            result = chain.invoke({
-                "system_prompt": system_prompt,
-                "user_content": user_content,
-            })
-            return str(result.content).strip()
-
-        except Exception as e:
-            err_lower = str(e).lower()
-            is_rate_limit = any(kw in err_lower for kw in _RATE_LIMIT_KEYWORDS)
-
-            if is_rate_limit and attempt < _MAX_BACKOFF_ATTEMPTS - 1:
-                wait = (_BASE_BACKOFF_SECONDS ** (attempt + 1)) + random.uniform(0, 1.0)
-                logger.warning(
-                    f"Rate limit hit (attempt {attempt + 1}/{_MAX_BACKOFF_ATTEMPTS}). "
-                    f"Back-off {wait:.1f}s before retry."
-                )
-                time.sleep(wait)
-                continue
-
-            # Non-rate-limit error OR final attempt — log and bail
-            logger.error(f"LLM call failed after {attempt + 1} attempt(s): {e}")
-            return ""
-
-    return ""
+def _call_openrouter(prompt: str) -> Optional[str]:
+    api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    if not api_key:
+        return None
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "meta-llama/llama-3.3-70b-instruct:free",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.1,
+        "max_tokens": 80
+    }
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=3.0)
+        if resp.status_code == 429:
+            _disable_model("openrouter")
+            return None
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        logger.error(f"OpenRouter API call error: {e}")
+        return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -155,16 +216,28 @@ def _combined_llm_call(raw_speaker: str, feedback_text: str) -> Dict[str, Any]:
     """
     default = {"speaker": raw_speaker or "Unknown Speaker", "quality": 100}
 
-    has_key = any([
-        os.environ.get("OPENROUTER_API_KEY"),
-        os.environ.get("GROQ_API_KEY"),
-        os.environ.get("GEMINI_API_KEY"),
-    ])
-    if not has_key:
-        return default
+    prompt = (
+        f"{_COMBINED_SYSTEM_PROMPT}\n\n"
+        f"Input Speaker: \"{raw_speaker}\"\n"
+        f"Input Feedback: \"{feedback_text}\""
+    )
 
-    user_content = json.dumps({"speaker": raw_speaker, "feedback": feedback_text})
-    raw = _call_llm_with_fallback(_COMBINED_SYSTEM_PROMPT, user_content)
+    # Ordered fallback chain: Groq -> Cohere -> Mistral -> HF Inference -> Gemini -> OpenRouter
+    models = [
+        ("groq", _call_groq),
+        ("cohere", _call_cohere),
+        ("mistral", _call_mistral),
+        ("hf_inference", _call_hf_inference),
+        ("gemini", _call_gemini),
+        ("openrouter", _call_openrouter)
+    ]
+
+    raw = None
+    for name, call_fn in models:
+        if _is_model_enabled(name):
+            raw = call_fn(prompt)
+            if raw:
+                break
 
     if not raw:
         return default
@@ -180,6 +253,7 @@ def _combined_llm_call(raw_speaker: str, feedback_text: str) -> Dict[str, Any]:
     except (json.JSONDecodeError, ValueError, TypeError):
         logger.warning(f"LLM returned non-JSON: {raw!r}")
         return default
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -201,7 +275,7 @@ class IdentityResolutionAgent(BaseAgent):
         payload["student_data"] = {
             "email": safe_str(row.get("student_email")) or None,
             "roll_no": safe_str(row.get("roll_no")),
-            "name": safe_str(row.get("name_of_student")),
+            "name": safe_str(row.get("name_of_student")) or "Student",
             "department": safe_str(row.get("department")),
         }
         return payload
@@ -339,7 +413,7 @@ class DatabaseSyncAgent(BaseAgent):
                 {
                     "roll_no": stu["roll_no"],
                     "email": stu.get("email"),
-                    "name": stu["name"],
+                    "name": stu["name"] or "Student",
                     "department": stu["department"],
                 },
                 "roll_no",

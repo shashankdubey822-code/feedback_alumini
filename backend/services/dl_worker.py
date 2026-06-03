@@ -45,10 +45,12 @@ def start_dl_worker(logger_unused=None):
                                 fr.future_topics,
                                 fr.session_rating,
                                 e.speaker_name,
-                                e.venue_date
+                                e.venue_date,
+                                s.name as student_name
                             FROM feedback_responses fr
                             LEFT JOIN feedback_analysis fa ON fa.response_id = fr.id
                             LEFT JOIN events e ON fr.event_id = e.id
+                            LEFT JOIN students s ON fr.student_id = s.id
                             WHERE fa.response_id IS NULL
                             ORDER BY fr.submitted_at ASC
                             LIMIT 20
@@ -151,6 +153,7 @@ def start_dl_worker(logger_unused=None):
                             socketio.emit('nlp_completed', {
                                 'record_id': response_id,
                                 'speaker': str(row.get('speaker_name') or ''),
+                                'student_name': str(row.get('student_name') or ''),
                                 'date': date_str,
                                 'sentiment': str(sentiment_label or ''),
                                 'rating': rating_str

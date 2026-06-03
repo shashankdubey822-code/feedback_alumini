@@ -154,6 +154,13 @@ def _insert_df_rows(df: pd.DataFrame, source: str = 'csv_upload') -> int:
     # Update in-memory dataframe cache
     from backend.services.analytics_engine import analytics_engine
     analytics_engine.refresh_data()
+
+    # Wake up DL worker to process newly uploaded CSV responses immediately
+    try:
+        from backend.services.dl_worker import trigger_dl_processing
+        trigger_dl_processing()
+    except Exception as e_dl:
+        logger.error(f"Error waking up DL worker: {e_dl}")
     
     return inserted
 
@@ -606,9 +613,9 @@ def sync_responses():
         count = skipped = 0
         for resp in (responses or []):
             roll_no = str(resp.get('roll_no_original', '')).strip().upper()
-            student_name = resp.get('name_of_student', '')
-            student_email = resp.get('student_email', '').strip()
-            department = resp.get('department_original', '')
+            student_name = str(resp.get('name_of_student') or '').strip() or 'Student'
+            student_email = str(resp.get('student_email') or '').strip()
+            department = str(resp.get('department_original') or '').strip()
 
             if not roll_no: continue
 

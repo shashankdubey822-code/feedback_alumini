@@ -153,8 +153,8 @@ def store_webhook_submission(payload: dict) -> int:
             date_of_lec = str(event.get('venue_date'))
 
     # ── Upsert Student ────────────────────────────────────────────
-    student_name = responses.get('name_of_student', '').strip()
-    student_email = responses.get('student_email', '').strip()
+    student_name = str(responses.get('name_of_student') or '').strip() or 'Student'
+    student_email = str(responses.get('student_email') or '').strip()
     if not student_email:
         for v in responses.values():
             if isinstance(v, str) and '@' in v and '.' in v:
@@ -167,7 +167,7 @@ def store_webhook_submission(payload: dict) -> int:
         'name': student_name,
         'email': student_email,
         'roll_no': roll_no,
-        'department': responses.get('department_original', '').strip()
+        'department': str(responses.get('department_original') or '').strip()
     }, 'roll_no')
     
     student_id = stu_res[0]['id'] if stu_res else None
