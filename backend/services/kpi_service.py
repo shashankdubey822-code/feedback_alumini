@@ -52,7 +52,7 @@ class KPIService:
                     COUNT(*) AS total,
                     COUNT(*) FILTER (
                         WHERE s.name IS NOT NULL AND s.name <> ''
-                          AND e.department IS NOT NULL AND e.department <> ''
+                          AND COALESCE(s.department, e.department) IS NOT NULL AND COALESCE(s.department, e.department) <> ''
                           AND r.session_rating IS NOT NULL
                     ) AS complete
                 FROM feedback_responses r
@@ -69,10 +69,11 @@ class KPIService:
         """% of known departments that have submitted feedback."""
         try:
             row = execute_one("""
-                SELECT COUNT(DISTINCT e.department) AS unique_depts
+                SELECT COUNT(DISTINCT COALESCE(s.department, e.department)) AS unique_depts
                 FROM feedback_responses r
+                LEFT JOIN students s ON r.student_id = s.id
                 LEFT JOIN events e ON r.event_id = e.id
-                WHERE e.department IS NOT NULL AND e.department <> ''
+                WHERE COALESCE(s.department, e.department) IS NOT NULL AND COALESCE(s.department, e.department) <> ''
             """)
             unique_depts = row['unique_depts'] or 0
             total_depts = 40  # Expected number of departments

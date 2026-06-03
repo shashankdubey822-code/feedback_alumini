@@ -36,13 +36,18 @@ def get_wiki_status():
         suggestions = [p for p in pages if p.startswith('suggestions/')]
         
         is_initialized = len(pages) > 0
-        
+        from backend.utils.insforge_helper import is_insforge_active
+        insforge_configured = is_insforge_active()
+        insforge_url = os.environ.get('INSFORGE_API_BASE_URL', '').strip()
+
         return jsonify({
             'initialized': is_initialized,
             'gemini_configured': bool(service.gemini_key),
             'groq_configured': bool(service.groq_key),
             'ai_provider': 'groq' if service.groq_key else ('gemini' if service.gemini_key else 'offline'),
             'total_pages': len(pages),
+            'insforge_configured': insforge_configured,
+            'insforge_url': insforge_url,
             'counts': {
                 'speakers': len(speakers),
                 'events': len(events),
@@ -337,9 +342,10 @@ def save_wiki_config():
             current_app.config['INSFORGE_SERVICE_KEY'] = insforge_key
             os.environ['INSFORGE_URL'] = insforge_url
             os.environ['INSFORGE_SERVICE_KEY'] = insforge_key
-            # Reset cached insforge client to reinitialize
-            from backend.utils import insforge_helper
-            insforge_helper._insforge_client = None
+            
+            # Map parameters for helper and DB utilities
+            os.environ['INSFORGE_API_BASE_URL'] = insforge_url
+            os.environ['INSFORGE_API_KEY'] = insforge_key
             
         return jsonify({'message': 'Configuration updated successfully.'}), 200
     except Exception as e:

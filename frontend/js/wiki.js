@@ -280,6 +280,19 @@ const Wiki = {
                         .then(() => self.loadWikiPages());
                 }
                 
+                // Populate configuration details in settings tab if configured
+                if (data.gemini_configured && self.elements.cfgGeminiKey) {
+                    self.elements.cfgGeminiKey.placeholder = "Gemini Key configured (••••••••)";
+                }
+                if (data.insforge_configured) {
+                    if (self.elements.cfgInsForgeUrl && data.insforge_url) {
+                        self.elements.cfgInsForgeUrl.value = data.insforge_url;
+                    }
+                    if (self.elements.cfgInsForgeKey) {
+                        self.elements.cfgInsForgeKey.placeholder = "InsForge Key configured (••••••••)";
+                    }
+                }
+
                 // Show AI provider status popup
                 const provider = data.ai_provider || 'offline';
                 if (provider === 'groq') {
@@ -822,6 +835,7 @@ const Wiki = {
                 self.elements.cfgGeminiKey.value = '';
                 self.elements.cfgInsForgeUrl.value = '';
                 self.elements.cfgInsForgeKey.value = '';
+                self.loadWikiStatus();
                 self.loadWikiPages();
             }
         })

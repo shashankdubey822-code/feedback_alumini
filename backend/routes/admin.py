@@ -428,7 +428,7 @@ def get_events():
 def get_certificate_jobs():
     try:
         rows = execute_all("""
-            SELECT j.*, e.speaker_name, s.name as student_name, s.email as student_email, s.roll_no, e.department
+            SELECT j.*, e.speaker_name, s.name as student_name, s.email as student_email, s.roll_no, COALESCE(s.department, e.department) AS department
             FROM certificate_jobs j
             LEFT JOIN students s ON j.student_id = s.id
             LEFT JOIN events e ON j.event_id = e.id
@@ -445,6 +445,36 @@ def get_certificate_jobs():
         return jsonify({'success': True, 'jobs': jobs}), 200
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@admin_bp.route('/certificate-jobs/retry', methods=['POST'])
+@log_endpoint_access
+def retry_certificate_job():
+    try:
+        data = request.get_json() or {}
+        job_id = data.get('job_id')
+        if not job_id:
+            return jsonify({'success': False, 'error': 'job_id required'}), 400
+
+        from backend.utils.insforge_db import api_update, execute_one
+        
+        # Verify job exists
+        job = execute_one("SELECT * FROM certificate_jobs WHERE id=%s", (job_id,))
+        if not job:
+            return jsonify({'success': False, 'error': 'Job not found'}), 404
+            
+        # Reset status to pending so worker picks it up
+        api_update('certificate_jobs', 'id', job_id, {
+            'status': 'pending',
+            'error_log': None
+        })
+        
+        logger.info(f"Certificate job #{job_id} status reset to pending for retry")
+        return jsonify({'success': True, 'message': 'Job status reset to pending for retry'}), 200
+    except Exception as e:
+        logger.error(f"Error retrying job: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 
 @admin_bp.route('/speaker-names', methods=['GET'])
@@ -570,17 +600,23 @@ def sync_responses():
                 pass
 
             # Insert feedback response
-            submitted_at = resp.get('timestamp')
+            submitted_at_raw = resp.get('timestamp')
+            from backend.routes.webhook import _format_timestamp
             try:
-                submitted_at = pd.to_datetime(submitted_at).strftime('%Y-%m-%d %H:%M:%S%z') if pd.notna(submitted_at) else datetime.now().isoformat()
-            except:
-                submitted_at = datetime.now().isoformat()
+                _, normalized_ts = _format_timestamp(submitted_at_raw)
+            except Exception:
+                normalized_ts = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+
+            extracted_date = normalized_ts.split(' ')[0] if normalized_ts else None
+            extracted_time = normalized_ts.split(' ')[1] if normalized_ts else None
 
             try:
                 fb_res = api_insert('feedback_responses', {
                     'event_id': event_id,
                     'student_id': student_id,
-                    'submitted_at': submitted_at,
+                    'submitted_at': normalized_ts,
+                    'extracted_date': extracted_date,
+                    'extracted_time': extracted_time,
                     'session_help_understanding': resp.get('session_help_understanding', ''),
                     'session_rating': _safe_int(resp.get('session_rating')),
                     'session_technical_clarity': _safe_int(resp.get('session_technical_clarity')),

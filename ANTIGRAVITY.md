@@ -224,3 +224,21 @@ _(Haiku appends ONLY here after each task. Format is strict — see CLAUDE.md)_
 - **job_worker.py** crashes with NameError — `api_update` not imported
 - **webhook.py** crashes — queries `events.form_id` which doesn't exist
 - Live rows: students=231, events=41, feedback_responses=287, feedback_analysis=287, certificate_jobs=0
+
+---
+
+## 📊 KNOWLEDGE GRAPH & LLM WIKI BUILDER
+
+A unified code review parser and semantic wiki generator is implemented at [graph_builder.py](file:///c:/Users/hp/OneDrive%20-%20Manav%20Rachna%20Education%20Institutions/Desktop/OWN_2025/mamta_01/scripts/graph_builder.py).
+
+### How to Run:
+To update the structural AST database and regenerate the LLM-compiled Markdown Wiki pages:
+
+```bash
+python scripts/graph_builder.py
+```
+
+### Outputs:
+- **Structural Database**: Mapped at [.code-review-graph/custom_graph.db](file:///c:/Users/hp/OneDrive%20-%20Manav%20Rachna%20Education%20Institutions/Desktop/OWN_2025/mamta_01/.code-review-graph/custom_graph.db)
+- **Semantic LLM Wiki Index**: Compiled at [.code-review-graph/wiki/index.md](file:///c:/Users/hp/OneDrive%20-%20Manav%20Rachna%20Education%20Institutions/Desktop/OWN_2025/mamta_01/.code-review-graph/wiki/index.md)
+

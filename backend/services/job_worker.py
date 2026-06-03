@@ -79,7 +79,7 @@ def start_job_worker(logger_unused=None):
                                 s.name AS student_name, 
                                 s.email AS student_email,
                                 s.roll_no, 
-                                e.department, 
+                                COALESCE(s.department, e.department) AS department, 
                                 e.template_id, 
                                 e.speaker_name, 
                                 e.venue_date

@@ -3388,6 +3388,10 @@ function renderDepartmentCharts(depts) {
     async function loadCertLogs() {
         const list = document.getElementById('fb-cert-logs-list');
         if (!list) return;
+        
+        // Show loading state
+        list.innerHTML = '<div style="color:#8b8b9e;font-size:11px;text-align:center;padding:10px;">Loading...</div>';
+        
         try {
             const res = await safeFetch(`${API_BASE}/api/admin/certificate-jobs`, { headers: authHeaders() });
             const data = await res.json();
@@ -3411,7 +3415,17 @@ function renderDepartmentCharts(depts) {
                 else if (job.status === 'failed') { statusColor = '#ef4444'; }
 
                 const attemptsText = job.attempts > 0 ? ` (Attempts: ${job.attempts})` : '';
-                const errText = job.error_message ? `<div style="color:#ef4444;margin-top:4px;font-size:10px;word-break:break-all;">Error: ${esc(job.error_message)}</div>` : '';
+                const errorToShow = job.error_message || job.error_log;
+                const errText = errorToShow ? `<div style="color:#ef4444;margin-top:4px;font-size:10px;word-break:break-all;">Error: ${esc(errorToShow)}</div>` : '';
+
+                let actionHtml = '';
+                if (job.status === 'failed') {
+                    actionHtml = `
+                    <div style="margin-top:6px;display:flex;justify-content:flex-end;">
+                        <button class="btn-resend-cert" data-job-id="${job.id}" style="padding:4px 8px;border-radius:4px;background:rgba(79,70,229,0.1);color:#4f46e5;border:1px solid rgba(79,70,229,0.25);font-size:9px;cursor:pointer;font-family:Inter;font-weight:600;">Resend</button>
+                    </div>
+                    `;
+                }
 
                 item.innerHTML = `
                     <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -3422,9 +3436,44 @@ function renderDepartmentCharts(depts) {
                         Email: ${esc(job.student_email)} &nbsp;·&nbsp; Event: ${esc(job.speaker_name)}
                     </div>
                     ${errText}
+                    ${actionHtml}
                 `;
                 list.appendChild(item);
             });
+
+            // Resend certificate buttons
+            list.querySelectorAll('.btn-resend-cert').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const jobId = btn.dataset.jobId;
+                    if (btn.disabled) return;
+                    btn.textContent = 'Retrying...';
+                    btn.disabled = true;
+                    try {
+                        const r = await fetch(`${API_BASE}/api/admin/certificate-jobs/retry`, {
+                            method: 'POST',
+                            headers: {
+                                ...authHeaders(),
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ job_id: jobId })
+                        });
+                        const d = await r.json();
+                        if (d.success) {
+                            showNotification('Job rescheduled for retry successfully!', 'success');
+                            loadCertLogs();
+                        } else {
+                            btn.textContent = 'Resend';
+                            btn.disabled = false;
+                            showNotification(`Retry failed: ${d.error || 'Unknown error'}`, 'error');
+                        }
+                    } catch (e) {
+                        btn.textContent = 'Resend';
+                        btn.disabled = false;
+                        showNotification(`Retry error: ${e.message}`, 'error');
+                    }
+                });
+            });
+
         } catch (err) {
             if (err.message === 'Request was cancelled') return;
             console.error('[CERT LOGS] Error:', err);

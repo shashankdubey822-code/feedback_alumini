@@ -166,7 +166,8 @@ def store_webhook_submission(payload: dict) -> int:
     stu_res = api_upsert('students', {
         'name': student_name,
         'email': student_email,
-        'roll_no': roll_no
+        'roll_no': roll_no,
+        'department': responses.get('department_original', '').strip()
     }, 'roll_no')
     
     student_id = stu_res[0]['id'] if stu_res else None
@@ -175,11 +176,16 @@ def store_webhook_submission(payload: dict) -> int:
 
     from backend.utils.insforge_db import execute_one
     
+    extracted_date = normalized_ts.split(' ')[0] if normalized_ts else None
+    extracted_time = normalized_ts.split(' ')[1] if normalized_ts else None
+
     # ── Insert or update feedback_responses ────────────────────────────
     payload_data = {
         'event_id': event_id,
         'student_id': student_id,
         'submitted_at': normalized_ts,
+        'extracted_date': extracted_date,
+        'extracted_time': extracted_time,
         'session_rating': responses.get('session_rating'),
         'session_help_understanding': responses.get('session_help_understanding', ''),
         'session_technical_clarity': responses.get('session_technical_clarity'),
