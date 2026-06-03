@@ -32,7 +32,9 @@ env.example
 agent_runtimes/
 .github/
 .cursor/
-code-review.graph/
+.code-review-graph/
+.kiro/
+.pytest_cache/
 scratch/
 temp/
 new.html
@@ -57,3 +59,7 @@ GEMINI_HANDOFF.md
 backend/scratch/
 get_hf_logs.py
 implementation_plan.md.resolved
+pytest.ini
+skills-lock.json
+frontend/pages/data-schema.md
+
