@@ -3158,7 +3158,7 @@ function renderDepartmentCharts(depts) {
                 const card = document.createElement('div');
                 card.style.cssText = 'background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.1);border-radius:10px;padding:14px;';
                 const hasForm = !!ev.form_url;
-                const createdTime = ev.form_created_at ? new Date(ev.form_created_at).getTime() : 0;
+                const createdTime = ev.created_at ? new Date(ev.created_at).getTime() : 0;
                 const expiryTime = createdTime ? createdTime + (24 * 60 * 60 * 1000) : 0;
                 const isExpired = expiryTime > 0 && Date.now() > expiryTime;
                 
