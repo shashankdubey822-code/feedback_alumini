@@ -305,28 +305,53 @@ def create_event_and_form():
         if not ok:
             return jsonify({'success': False, 'error': err}), 400
 
-        # Step 1: Insert event
-        event_data = {
-            'speaker_name': speaker_name,
-            'venue_date': venue_date,
-            'status': 'creating_form',
-            'template_id': template_id,
-            'send_certificates': send_certificates,
-            'form_url': form_url,
-            'form_id': form_id,
-            'form_edit_url': form_edit_url
-        }
-        try:
-            from backend.utils.insforge_db import api_insert, api_update
-            inserted = api_insert('events', event_data)
-            if inserted and len(inserted) > 0:
-                event_id = inserted[0]['id']
-            else:
-                return jsonify({'success': False, 'error': 'Database insert failed'}), 500
-            logger.info(f"Event #{event_id} inserted")
-        except Exception as e:
-            logger.error(f"Event insert failed: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
+        # Step 1: Insert or get existing event (prevent unique constraint violations)
+        from backend.utils.insforge_db import execute_one, api_insert, api_update
+        existing = execute_one(
+            "SELECT * FROM events WHERE speaker_name = %s AND venue_date = %s",
+            (speaker_name, venue_date)
+        )
+        
+        if existing:
+            if existing.get('form_url') and existing.get('status') == 'active':
+                return jsonify({
+                    'success': True,
+                    'event_id': existing['id'],
+                    'form_url': existing['form_url'],
+                    'form_id': existing['form_id'],
+                    'form_edit_url': existing['form_edit_url'],
+                    'message': 'Event and form already exist.'
+                }), 200
+            
+            event_id = existing['id']
+            # Re-initialize status for existing event record to retry form creation
+            api_update('events', 'id', event_id, {
+                'status': 'creating_form',
+                'template_id': template_id,
+                'send_certificates': send_certificates
+            })
+            logger.info(f"Retrying form creation for existing event #{event_id}")
+        else:
+            event_data = {
+                'speaker_name': speaker_name,
+                'venue_date': venue_date,
+                'status': 'creating_form',
+                'template_id': template_id,
+                'send_certificates': send_certificates,
+                'form_url': form_url,
+                'form_id': form_id,
+                'form_edit_url': form_edit_url
+            }
+            try:
+                inserted = api_insert('events', event_data)
+                if inserted and len(inserted) > 0:
+                    event_id = inserted[0]['id']
+                else:
+                    return jsonify({'success': False, 'error': 'Database insert failed'}), 500
+                logger.info(f"Event #{event_id} inserted")
+            except Exception as e:
+                logger.error(f"Event insert failed: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
 
         # Step 2: Call Google Apps Script
         secret      = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
