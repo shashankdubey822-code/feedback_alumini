@@ -733,6 +733,26 @@
             id="trends-grid"
             style="margin-top: 24px"
           ></div>
+
+          <!-- ███ SCHOOL OF ENGINEERING SPECIFIC CHARTS ███ -->
+          <div class="section-header" style="margin-top: 36px;">
+            <h2 class="section-title">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+              </svg>
+              School of Engineering (SoE) Department Breakdown
+            </h2>
+          </div>
+          <div class="charts-grid" id="soe-charts-grid"></div>
         </section>
 
         <!-- ███ NLP ANALYSIS SECTION ███ -->
@@ -792,6 +812,15 @@
                 <canvas id="absa-chart"></canvas>
               </div>
             </div>
+          </div>
+
+          <!-- ███ SoE DEPARTMENT SENTIMENT & SUGGESTIONS ███ -->
+          <div class="subsection" id="soe-sentiment-subsection">
+            <h3 class="subsection-title">SoE Department Sentiment & Suggestions</h3>
+            <p class="subsection-note">
+              Sentiment and actionability breakdown specifically comparing the 4 Engineering departments (CST, ME, R&AI, ECE).
+            </p>
+            <div class="charts-grid" id="soe-nlp-grid"></div>
           </div>
 
           <!-- Sentiment Analysis -->
