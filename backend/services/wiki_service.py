@@ -160,7 +160,8 @@ class WikiService:
                     name = f.get('name')
                     if name and name.endswith('.md'):
                         path = f"{sub}/{name}".strip('/')
-                        all_pages.append(path)
+                        if path != 'schema.md':
+                            all_pages.append(path)
             if all_pages:
                 return sorted(list(set(all_pages)))
 
@@ -170,7 +171,8 @@ class WikiService:
                 if file.endswith('.md'):
                     full_p = os.path.join(root, file)
                     rel_p = os.path.relpath(full_p, self.pages_dir).replace('\\', '/')
-                    all_pages.append(rel_p)
+                    if rel_p != 'schema.md':
+                        all_pages.append(rel_p)
         return sorted(all_pages)
 
     # ─── INITIALIZATION ───────────────────────────────────────────────────────
@@ -211,7 +213,6 @@ Welcome to the central knowledge index. This index is automatically updated by t
 ## Index of Pages
 
 ### Master Logs
-- [[schema.md]] - Schema & guidelines.
 - [[log.md]] - Chronological log of actions.
 
 ### 🎤 Speaker Profiles

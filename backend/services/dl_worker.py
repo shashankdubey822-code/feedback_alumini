@@ -13,6 +13,12 @@ from backend.utils.logger import get_section_logger
 from backend.utils.insforge_db import get_db
 
 _dl_thread = None
+_dl_wakeup_event = threading.Event()
+
+
+def trigger_dl_processing():
+    """Wake up the DL worker thread to process new responses immediately."""
+    _dl_wakeup_event.set()
 
 
 def start_dl_worker(logger_unused=None):
@@ -36,9 +42,13 @@ def start_dl_worker(logger_unused=None):
                                 fr.improvements_suggestions,
                                 fr.aspect_most_valuable,
                                 fr.session_help_understanding,
-                                fr.future_topics
+                                fr.future_topics,
+                                fr.session_rating,
+                                e.speaker_name,
+                                e.venue_date
                             FROM feedback_responses fr
                             LEFT JOIN feedback_analysis fa ON fa.response_id = fr.id
+                            LEFT JOIN events e ON fr.event_id = e.id
                             WHERE fa.response_id IS NULL
                             ORDER BY fr.submitted_at ASC
                             LIMIT 20
@@ -46,7 +56,8 @@ def start_dl_worker(logger_unused=None):
                         rows = cur.fetchall()
 
                 if not rows:
-                    time.sleep(5)
+                    _dl_wakeup_event.wait(5)
+                    _dl_wakeup_event.clear()
                     continue
 
                 dl_logger.info(f"DL Worker processing {len(rows)} new response(s)...")
@@ -123,6 +134,29 @@ def start_dl_worker(logger_unused=None):
                             'key_topics': json.dumps(keywords_payload),
                             'analyzed_at': datetime.now().isoformat()
                         }, 'response_id')
+                        
+                        # Sync analytics cache immediately and emit socket event
+                        try:
+                            from backend.services.analytics_engine import analytics_engine
+                            from backend.extensions import socketio
+                            
+                            analytics_engine.refresh_single_record(response_id)
+                            
+                            raw_date = row.get('venue_date')
+                            date_str = str(raw_date).split('T')[0] if raw_date else ''
+                            
+                            rating_val = row.get('session_rating')
+                            rating_str = rating_val if rating_val is not None else ''
+                            
+                            socketio.emit('nlp_completed', {
+                                'record_id': response_id,
+                                'speaker': str(row.get('speaker_name') or ''),
+                                'date': date_str,
+                                'sentiment': str(sentiment_label or ''),
+                                'rating': rating_str
+                            })
+                        except Exception as e_sync:
+                            dl_logger.error(f"Failed to sync analytics/emit socket: {e_sync}")
                     except Exception as e_row:
                         dl_logger.error(f"DL Worker failed processing response {response_id}: {e_row}")
                         try:
@@ -142,11 +176,13 @@ def start_dl_worker(logger_unused=None):
 
                 dl_logger.info(f"DL Worker finished processing {len(rows)} record(s).")
 
-                time.sleep(5)
+                _dl_wakeup_event.wait(5)
+                _dl_wakeup_event.clear()
 
             except Exception as e:
                 dl_logger.error(f"DL Worker Error: {e}")
-                time.sleep(10)
+                _dl_wakeup_event.wait(10)
+                _dl_wakeup_event.clear()
 
     worker_thread = threading.Thread(target=worker_loop, daemon=True)
     worker_thread.start()

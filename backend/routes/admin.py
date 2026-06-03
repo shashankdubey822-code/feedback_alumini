@@ -654,6 +654,16 @@ def sync_responses():
             except Exception as e:
                 logger.error(f"Feedback insert failed: {e}")
 
+        try:
+            from backend.services.analytics_engine import analytics_engine
+            analytics_engine.refresh_data()
+            
+            # Wake up DL worker to process newly synced responses immediately
+            from backend.services.dl_worker import trigger_dl_processing
+            trigger_dl_processing()
+        except Exception as ae_err:
+            logger.error(f"Error rebuilding analytics cache after sync: {ae_err}")
+
         return jsonify({'success': True, 'synced': count, 'skipped': skipped, 'total': len(responses or [])}), 200
     except Exception as e:
         logger.error(f"Sync error: {e}", exc_info=True)

@@ -347,6 +347,46 @@ def save_wiki_config():
             os.environ['INSFORGE_API_BASE_URL'] = insforge_url
             os.environ['INSFORGE_API_KEY'] = insforge_key
             
+        # Persist updated settings to .env in project root
+        updates = {}
+        for key in ['GEMINI_API_KEY', 'INSFORGE_URL', 'INSFORGE_SERVICE_KEY', 'INSFORGE_API_BASE_URL', 'INSFORGE_API_KEY']:
+            val = os.environ.get(key)
+            if val is not None:
+                updates[key] = val
+        
+        if updates:
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+            env_path = os.path.join(project_root, '.env')
+            try:
+                lines = []
+                if os.path.exists(env_path):
+                    with open(env_path, 'r', encoding='utf-8') as f:
+                        lines = f.readlines()
+                
+                updated_keys = set()
+                new_lines = []
+                for line in lines:
+                    stripped = line.strip()
+                    if stripped and not stripped.startswith('#') and '=' in stripped:
+                        k, v = stripped.split('=', 1)
+                        k = k.strip()
+                        if k in updates:
+                            new_lines.append(f"{k}={updates[k]}\n")
+                            updated_keys.add(k)
+                            continue
+                    new_lines.append(line)
+                
+                for k, v in updates.items():
+                    if k not in updated_keys:
+                        if new_lines and not new_lines[-1].endswith('\n'):
+                            new_lines[-1] = new_lines[-1] + '\n'
+                        new_lines.append(f"{k}={v}\n")
+                
+                with open(env_path, 'w', encoding='utf-8') as f:
+                    f.writelines(new_lines)
+            except Exception as env_err:
+                logger.error(f"Error persisting configuration to .env file: {env_err}")
+            
         return jsonify({'message': 'Configuration updated successfully.'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500

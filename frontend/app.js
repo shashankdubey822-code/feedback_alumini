@@ -673,6 +673,30 @@ function setupDashboardHandlers() {
             // Fetch updated data using the existing flow
             await applyFilters(true); // silent flag
         });
+
+        socket.on('nlp_completed', (data) => {
+            console.log('[WEBSOCKET] NLP completed event received:', data);
+            let popup = document.getElementById('dl-processing-popup');
+            if (!popup) {
+                popup = document.createElement('div');
+                popup.id = 'dl-processing-popup';
+                document.body.appendChild(popup);
+            }
+            
+            const speaker = data.speaker || 'Unknown Speaker';
+            const date = data.date || 'Unknown Date';
+            popup.textContent = `NLP analysis for ${speaker} on ${date} has completed successfully.`;
+            
+            popup.classList.add('visible');
+            
+            if (popup.hideTimeout) {
+                clearTimeout(popup.hideTimeout);
+            }
+            
+            popup.hideTimeout = setTimeout(() => {
+                popup.classList.remove('visible');
+            }, 5000);
+        });
         
         socket.on('connect', () => {
             console.log('[WEBSOCKET] Connected to server for real-time updates.');

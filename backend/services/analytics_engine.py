@@ -119,7 +119,9 @@ class AnalyticsEngine:
             
     def get_dataframe(self) -> pd.DataFrame:
         """Returns a copy of the current DataFrame"""
-        if self._df.empty and self._last_refresh is None:
+        if (self._df.empty or 
+            self._last_refresh is None or 
+            (datetime.now() - self._last_refresh).total_seconds() > 300):
             self.refresh_data()
         return self._df.copy()
 

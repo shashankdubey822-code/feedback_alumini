@@ -270,11 +270,15 @@ def receive_form_submission():
                 try:
                     analytics_engine.refresh_single_record(record_id)
                     logger.info(f"Background analytics refresh completed for #{record_id}")
+                    # Wake up DL worker to process new submission immediately
+                    from backend.services.dl_worker import trigger_dl_processing
+                    trigger_dl_processing()
                 except Exception as e:
                     logger.error(f"Background analytics refresh failed: {e}")
 
             # Refresh pandas dataframe in background to not block webhook response
-            socketio.start_background_task(background_refresh)
+            import threading
+            threading.Thread(target=background_refresh, daemon=True).start()
             
             # Broadcast the update to all connected clients
             socketio.emit('new_feedback', {
