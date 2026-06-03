@@ -68,8 +68,8 @@ def start_dl_worker(logger_unused=None):
                     val_text = str(row['aspect_most_valuable'] or '').strip()
                     fut_text = str(row['future_topics'] or '').strip()
 
-                    # Combined text for overall sentiment (future_topics primary)
-                    text_parts = [t for t in [fut_text] if t and t.lower() != 'nan']
+                    # Combined text for overall sentiment (valuable aspects, suggestions, and future topics)
+                    text_parts = [t for t in [val_text, imp_text, fut_text] if t and t.lower() != 'nan' and t.strip()]
                     full_text = ". ".join(text_parts)
 
                     # Core NLP
