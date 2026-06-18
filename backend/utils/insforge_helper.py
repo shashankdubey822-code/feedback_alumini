@@ -40,7 +40,7 @@ def insforge_upload_file(bucket: str, path: str, file_bytes: bytes, mime_type: s
         headers = _get_headers()
         # For multipart/form-data, requests sets Content-Type automatically.
         files = {"file": (path, file_bytes, mime_type)}
-        resp = requests.post(url, headers=headers, files=files)
+        resp = requests.put(url, headers=headers, files=files)
         resp.raise_for_status()
         return True
     except Exception as e:
