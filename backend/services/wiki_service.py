@@ -1368,6 +1368,34 @@ FORMATTING AND LENGTH RULES (CRITICAL):
                 )))
             except ImportError:
                 pass
+
+        if self.hf_key:
+            try:
+                from langchain_community.llms import HuggingFaceEndpoint
+                from langchain_community.chat_models.huggingface import ChatHuggingFace
+                
+                hf_llm = HuggingFaceEndpoint(
+                    huggingfacehub_api_token=self.hf_key,
+                    repo_id="mistralai/Mistral-7B-Instruct-v0.2",
+                    temperature=0.1,
+                    max_new_tokens=512,
+                    timeout=10
+                )
+                hf_chat = ChatHuggingFace(llm=hf_llm)
+                models_to_try.append(("HuggingFace (Mistral-7B)", hf_chat))
+            except ImportError:
+                # Fallback if ChatHuggingFace is not supported
+                try:
+                    from langchain_community.llms import HuggingFaceEndpoint
+                    models_to_try.append(("HuggingFace (Mistral-7B)", HuggingFaceEndpoint(
+                        huggingfacehub_api_token=self.hf_key,
+                        repo_id="mistralai/Mistral-7B-Instruct-v0.2",
+                        temperature=0.1,
+                        max_new_tokens=512,
+                        timeout=10
+                    )))
+                except ImportError:
+                    pass
                 
         if self.gemini_key:
             models_to_try.append(("Gemini 2.5 Flash", ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.1, max_retries=0, request_timeout=7)))

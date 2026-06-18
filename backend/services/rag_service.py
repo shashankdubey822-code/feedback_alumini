@@ -25,7 +25,7 @@ def _get_embedding_model():
         if gemini_key:
             try:
                 logger.info("Loading Gemini Embedding model (faster, no local download)...")
-                _embedding_model = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=gemini_key)
+                _embedding_model = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-2-preview", google_api_key=gemini_key)
                 logger.info("Gemini Embedding model loaded successfully.")
                 return _embedding_model
             except Exception as e:
