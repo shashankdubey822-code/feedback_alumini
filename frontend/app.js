@@ -888,13 +888,7 @@ function renderPrescriptiveChecklist() {
             } catch (e) {}
         }
 
-        if (!isActionable && suggestionsText.length > 15) {
-            const lower = suggestionsText.toLowerCase();
-            const nonAnswers = ['no', 'nil', 'na', 'nothing', 'none', 'n/a', 'good', 'excellent', 'all good', 'no suggestions'];
-            if (!nonAnswers.includes(lower.trim())) {
-                isActionable = true;
-            }
-        }
+
 
         if (isActionable && suggestionsText.trim()) {
             actionableItems.push({
@@ -1562,7 +1556,8 @@ function renderTimeTrends(timeTrends) {
                             title: rt.column,
                             column: rt.column,
                             labels: rt.labels,
-                            data: rt.data
+                            data: rt.data,
+                            isTimeline: true
                         }
                     ),
                 });
@@ -1582,7 +1577,7 @@ function getChartOptions(type, xLabel, yLabel, chartData) {
             const clickedLabel = chartData.labels[index];
             const clickedValue = chartData.data[index];
             const binBoundary = chartData.binBoundaries ? chartData.binBoundaries[index] : null;
-            openDataModal(chartData.title, clickedLabel, clickedValue, chartData.column, chartData.columnType, binBoundary);
+            openDataModal(chartData.title, clickedLabel, clickedValue, chartData.column, chartData.columnType, binBoundary, chartData.isTimeline);
         },
         plugins: {
             legend: {
@@ -2191,7 +2186,7 @@ function setupModal() {
     });
 }
 
-function openDataModal(chartTitle, clickedLabel, clickedValue, column, columnType, binBoundary) {
+function openDataModal(chartTitle, clickedLabel, clickedValue, column, columnType, binBoundary, isTimeline) {
     if (!state.tableData || state.tableData.length === 0) return;
 
     const modal = document.getElementById('data-modal');
@@ -2217,7 +2212,7 @@ function openDataModal(chartTitle, clickedLabel, clickedValue, column, columnTyp
             }
             return numVal >= binBoundary.min && numVal < binBoundary.max;
         });
-    } else if (column) {
+    } else if (column && !isTimeline) {
         // Categorical: exact match on the specific column only
         const searchLabel = String(clickedLabel).toLowerCase().trim();
         filteredRows = state.tableData.filter(row => {
@@ -3536,52 +3531,46 @@ function renderDepartmentCharts(depts) {
             return;
         }
 
-        if (autocompleteTimeout) clearTimeout(autocompleteTimeout);
+        const fuse = new Fuse(state.allSpeakers || [], {
+            threshold: 0.3,
+        });
 
-        autocompleteTimeout = setTimeout(async () => {
-            try {
-                const res = await fetch(`${API_BASE}/api/admin/speaker-names?q=${encodeURIComponent(query)}`, {
-                    headers: authHeaders()
-                });
-                const data = await res.json();
-                if (!data.success || !Array.isArray(data.names) || data.names.length === 0) {
-                    dropdown.innerHTML = '';
-                    dropdown.classList.remove('active');
-                    return;
-                }
+        const results = fuse.search(query).slice(0, 10).map(r => r.item);
 
-                selectedSuggestionIdx = -1;
-                dropdown.innerHTML = '';
-                data.names.forEach((name, idx) => {
-                    const item = document.createElement('div');
-                    item.className = 'autocomplete-item';
-                    item.dataset.index = String(idx);
+        if (results.length === 0) {
+            dropdown.innerHTML = '';
+            dropdown.classList.remove('active');
+            return;
+        }
 
-                    const qLower = query.trim().toLowerCase();
-                    const nLower = name.toLowerCase();
-                    let html = esc(name);
-                    const qIdx = nLower.indexOf(qLower);
-                    if (qIdx !== -1) {
-                        html = esc(name.slice(0, qIdx)) +
-                            `<span class="match-highlight">${esc(name.slice(qIdx, qIdx + query.trim().length))}</span>` +
-                            esc(name.slice(qIdx + query.trim().length));
-                    }
+        selectedSuggestionIdx = -1;
+        dropdown.innerHTML = '';
+        results.forEach((name, idx) => {
+            const item = document.createElement('div');
+            item.className = 'autocomplete-item';
+            item.dataset.index = String(idx);
 
-                    item.innerHTML = `
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                        <span>${html}</span>
-                    `;
-
-                    item.addEventListener('click', () => {
-                        selectSpeaker(name);
-                    });
-                    dropdown.appendChild(item);
-                });
-                dropdown.classList.add('active');
-            } catch (err) {
-                console.warn('[SPEAKER AUTOCOMPLETE] Failed to fetch transformer suggestions:', err);
+            const qLower = query.trim().toLowerCase();
+            const nLower = name.toLowerCase();
+            let html = esc(name);
+            const qIdx = nLower.indexOf(qLower);
+            if (qIdx !== -1) {
+                html = esc(name.slice(0, qIdx)) +
+                    `<span class="match-highlight">${esc(name.slice(qIdx, qIdx + query.trim().length))}</span>` +
+                    esc(name.slice(qIdx + query.trim().length));
             }
-        }, 200);
+
+            item.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <span>${html}</span>
+            `;
+
+            item.addEventListener('click', () => {
+                selectSpeaker(name);
+            });
+            dropdown.appendChild(item);
+        });
+        dropdown.classList.add('active');
     }
 
     function initSpeakerAutocomplete() {
@@ -3594,6 +3583,21 @@ function renderDepartmentCharts(depts) {
         });
 
         input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (dropdown.classList.contains('active')) {
+                    const items = dropdown.querySelectorAll('.autocomplete-item');
+                    if (selectedSuggestionIdx !== -1 && items[selectedSuggestionIdx]) {
+                        items[selectedSuggestionIdx].click();
+                    } else if (items.length > 0) {
+                        items[0].click();
+                    } else {
+                        dropdown.classList.remove('active');
+                    }
+                }
+                return;
+            }
+
             const items = dropdown.querySelectorAll('.autocomplete-item');
             if (!dropdown.classList.contains('active') || items.length === 0) return;
 
@@ -3605,9 +3609,6 @@ function renderDepartmentCharts(depts) {
                 e.preventDefault();
                 selectedSuggestionIdx = (selectedSuggestionIdx - 1 + items.length) % items.length;
                 updateSelection(items);
-            } else if (e.key === 'Enter' && selectedSuggestionIdx !== -1) {
-                e.preventDefault();
-                items[selectedSuggestionIdx].click();
             } else if (e.key === 'Escape') {
                 dropdown.classList.remove('active');
             }

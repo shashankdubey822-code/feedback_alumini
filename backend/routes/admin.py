@@ -525,7 +525,6 @@ def refresh_analytics_cache():
 @log_endpoint_access
 def get_speaker_names():
     try:
-        q = request.args.get('q', '').strip()
         rows = execute_all("""
             SELECT DISTINCT TRIM(speaker_name) AS n
             FROM events
@@ -533,13 +532,6 @@ def get_speaker_names():
             ORDER BY n
         """)
         names = [r['n'] for r in rows if r['n']]
-        if q and names:
-            model = get_transformer_model()
-            from sentence_transformers import util
-            q_emb = model.encode(q, convert_to_tensor=True)
-            n_emb = model.encode(names, convert_to_tensor=True)
-            scores = util.cos_sim(q_emb, n_emb)[0]
-            names = [n for n, _ in sorted(zip(names, scores), key=lambda x: x[1], reverse=True)[:10]]
         return jsonify({'success': True, 'names': names}), 200
     except Exception as e:
         return jsonify({'success': False, 'error': str(e), 'names': []}), 500

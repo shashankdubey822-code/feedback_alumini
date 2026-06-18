@@ -15,6 +15,9 @@ from typing import List, Dict, Tuple, Optional
 from collections import Counter
 import nltk
 from textblob import TextBlob
+from transformers import pipeline
+
+actionability_classifier = pipeline("zero-shot-classification", model="cross-encoder/nli-deberta-v3-small")
 
 # ── NLTK data bootstrap ──────────────────────────────────────────────────────
 for _resource, _path in [
@@ -34,15 +37,7 @@ from nltk.corpus import stopwords
 class NLPService:
     """Handle NLP operations: sentiment analysis, keyword extraction, text cleaning."""
 
-    # ── Non-answer patterns ──────────────────────────────────────────────────
-    NON_ANSWER_PATTERNS = [
-        r'^n[/\\]?a\.?$', r'^na\.?$', r'^no\.?$', r'^nil\.?$', r'^none\.?$',
-        r'^nope\.?$', r'^ok\.?$', r'^okay\.?$', r'^-+$', r'^\.$',
-        r'^nothing\.?$', r'^nothing\s+(all\s+)?perfect\.?$', r'^all\s+perfect\.?$',
-        r'^no\s+suggestion[s]?\.?$', r'^no\s+comment[s]?\.?$', r'^not\s+any\.?$',
-        r'^good\.?$', r'^all\s+good\.?$', r'^fine\.?$', r'^no\s+improvement[s]?\.?$',
-    ]
-    NON_ANSWER_COMPILED = [re.compile(p, re.IGNORECASE) for p in NON_ANSWER_PATTERNS]
+    # ── Non-answer patterns (Removed in favor of Zero-Shot Classifier) ────────
 
     # ── Stop words ───────────────────────────────────────────────────────────
     STOP_WORDS = set(stopwords.words('english'))
@@ -84,7 +79,9 @@ class NLPService:
         if self._kw_model is None:
             try:
                 from keybert import KeyBERT
-                self._kw_model = KeyBERT(model="all-MiniLM-L6-v2")
+                from sentence_transformers import SentenceTransformer
+                sentence_model = SentenceTransformer("BAAI/bge-small-en-v1.5")
+                self._kw_model = KeyBERT(model=sentence_model)
             except Exception:
                 pass
         return self._kw_model
@@ -94,18 +91,19 @@ class NLPService:
         if not text or not isinstance(text, str):
             return True
         text = text.strip()
-        if not text:
+        if not text or len(text) <= 2 or bool(re.match(r'^[^\w\s]+$', text)):
             return True
-        for pattern in self.NON_ANSWER_COMPILED:
-            if pattern.match(text):
+            
+        try:
+            result = actionability_classifier(
+                text, 
+                candidate_labels=["actionable feedback", "non-actionable filler"]
+            )
+            if result['labels'][0] == "non-actionable filler" and result['scores'][0] > 0.6:
                 return True
-        if len(text) <= 5:
-            try:
-                polarity = TextBlob(text).sentiment.polarity
-                if -0.2 <= polarity <= 0.2:
-                    return True
-            except Exception:
-                pass
+        except Exception:
+            pass
+            
         return False
 
     # ── Sentiment analysis ───────────────────────────────────────────────────

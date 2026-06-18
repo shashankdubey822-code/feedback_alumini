@@ -71,7 +71,7 @@ class RAGService:
             logger.error(f"Error generating embedding: {str(e)}")
             return None
 
-    def search_similar_feedback(self, query_text: str, limit: int = 5, threshold: float = 0.4) -> List[Dict[str, Any]]:
+    def search_similar_feedback(self, query_text: str, limit: int = 50, threshold: float = 0.4) -> List[Dict[str, Any]]:
         """
         Execute semantic search for feedback matching the query text.
         Routes to InsForge RPC 'match_feedback' if active, otherwise runs local SQL search.

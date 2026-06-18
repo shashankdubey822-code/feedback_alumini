@@ -1241,8 +1241,25 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
                 search_query += " " + " ".join(user_msgs[-2:])
                 
         from backend.services.rag_service import RAGService
-        rag = RAGService()
-        similar_rows = rag.search_similar_feedback(search_query, limit=5)
+        from backend.utils.router import classify_intent
+        
+        intent = classify_intent(question)
+        logger.info(f"RAG Intent Classified as: {intent}")
+        
+        if intent == 'GLOBAL':
+            query = '''
+                SELECT r.id, s.name AS name_of_student, e.speaker_name AS alumni_speaker_name, 
+                       r.aspect_most_valuable, r.improvements_suggestions, r.future_topics, r.session_rating
+                FROM feedback_responses r
+                LEFT JOIN students s ON r.student_id = s.id
+                LEFT JOIN events e ON r.event_id = e.id
+                ORDER BY r.submitted_at DESC
+            '''
+            from backend.utils.insforge_db import execute_all
+            similar_rows = execute_all(query)
+        else:
+            rag = RAGService()
+            similar_rows = rag.search_similar_feedback(search_query, limit=50)
         
         # 2. Extract matching entities (find matching markdown pages)
         pages = self.list_wiki_pages()
