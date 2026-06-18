@@ -92,11 +92,8 @@ class RAGService:
             try:
                 logger.info(f"Executing InsForge pgvector SQL function search for query: '{query_text}'")
                 rows = execute_all(
-                    """
-                    SELECT *
-                    FROM match_feedback(%s, %s, %s)
-                    """,
-                    (query_vector, threshold, limit),
+                    "SELECT * FROM match_feedback(%s, %s, %s)",
+                    (str(query_vector), threshold, limit),
                 )
                 return rows or []
             except Exception as e:

@@ -38,9 +38,9 @@ def insforge_upload_file(bucket: str, path: str, file_bytes: bytes, mime_type: s
         encoded_path = quote(path)
         url = f"{_get_base_url()}/api/storage/buckets/{bucket}/objects/{encoded_path}"
         headers = _get_headers()
-        headers["Content-Type"] = mime_type
-        
-        resp = requests.put(url, headers=headers, data=file_bytes)
+        # For multipart/form-data, requests sets Content-Type automatically.
+        files = {"file": (path, file_bytes, mime_type)}
+        resp = requests.post(url, headers=headers, files=files)
         resp.raise_for_status()
         return True
     except Exception as e:
