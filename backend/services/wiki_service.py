@@ -1032,13 +1032,13 @@ Students rated this lecture with an average score of {avg_rating}/5.
 
 ## Student Feedback Highlights
 ### Valuable Aspects
-{chr(10).join([f'- {v}' for v in val[:5]]) if val else '*No valuable aspects recorded.*'}
+{chr(10).join([f'- {v}' for v in val]) if val else '*No valuable aspects recorded.*'}
 
 ### Actionable Critiques & Suggestions
-{chr(10).join([f'- {c}' for c in crit[:5]]) if crit else '*No critiques recorded.*'}
+{chr(10).join([f'- {c}' for c in crit]) if crit else '*No critiques recorded.*'}
 
 ### Requested Future Focus Areas
-{chr(10).join([f'- {r}' for r in req[:5]]) if req else '*No requests recorded.*'}
+{chr(10).join([f'- {r}' for r in req]) if req else '*No requests recorded.*'}
 """
         self.write_wiki_file(f"events/{safe_event}.md", event_md)
 
@@ -1544,7 +1544,6 @@ FORMATTING AND LENGTH RULES (CRITICAL):
                 WHERE e.speaker_name IS NOT NULL AND e.speaker_name <> ''
                 GROUP BY e.speaker_name
                 ORDER BY cnt DESC, e.speaker_name ASC
-                LIMIT 5
             ''')
             speakers = [r['alumni_speaker_name'] for r in speaker_rows if r.get('alumni_speaker_name')]
 
@@ -1554,7 +1553,6 @@ FORMATTING AND LENGTH RULES (CRITICAL):
                 WHERE future_topics IS NOT NULL AND future_topics <> ''
                 GROUP BY future_topics
                 ORDER BY cnt DESC
-                LIMIT 15
             ''')
             topics = [r['future_topics'].strip() for r in topic_rows if r.get('future_topics') and len(r['future_topics'].strip()) > 3]
         except Exception as e:
