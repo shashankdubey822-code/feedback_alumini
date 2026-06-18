@@ -1266,94 +1266,21 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
     def query_wiki(self, question: str, history: List[Dict[str, str]] = None, session_id: str = None) -> Dict[str, Any]:
         """
         Query the compiled Wiki.
-        Performs vector-RAG, loads relevant files, and feeds them into the LLM context.
+        Now implemented as an Agentic ReAct Loop calling tools.
         """
-        logger.info(f"RAG Wiki Query: '{question}' with history length {len(history) if history else 0}, session_id: {session_id}")
+        import re
+        from langchain_core.prompts import ChatPromptTemplate
+        from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+        from backend.services.agent_tools import execute_readonly_sql, semantic_vector_search, get_schema_info
         
-        # 1. Fetch relevant feedback hits via vector RAG
-        search_query = question
-        if history:
-            user_msgs = [h.get('content', '') for h in history if h.get('role') == 'user']
-            if user_msgs:
-                search_query += " " + " ".join(user_msgs[-2:])
-                
-        from backend.services.rag_service import RAGService
-        from backend.utils.router import classify_intent
+        logger.info(f"Agentic ReAct Wiki Query: '{question}' with history length {len(history) if history else 0}, session_id: {session_id}")
         
-        intent = classify_intent(question)
-        logger.info(f"RAG Intent Classified as: {intent}")
-        
-        if intent == 'GLOBAL':
-            query = '''
-                SELECT r.id, s.name AS name_of_student, e.speaker_name AS alumni_speaker_name, 
-                       r.aspect_most_valuable, r.improvements_suggestions, r.future_topics, r.session_rating
-                FROM feedback_responses r
-                LEFT JOIN students s ON r.student_id = s.id
-                LEFT JOIN events e ON r.event_id = e.id
-                ORDER BY r.submitted_at DESC
-            '''
-            from backend.utils.insforge_db import execute_all
-            similar_rows = execute_all(query)
-        else:
-            rag = RAGService()
-            similar_rows = rag.search_similar_feedback(search_query, limit=50)
-        
-        # 2. Extract matching entities (find matching markdown pages)
-        pages = self.list_wiki_pages()
-        matched_pages = []
-        tokens = [t.lower() for t in search_query.split() if len(t) > 3]
-        for p in pages:
-            p_lower = p.lower()
-            if any(t in p_lower for t in tokens):
-                content = self.read_wiki_file(p)
-                if content:
-                    matched_pages.append((p, content))
-        matched_pages = matched_pages[:3]
-        
-        # 3. SYNTHESIZE RESPONSE
-        context_str = ""
-        if matched_pages:
-            context_str += "=== RELEVANT WIKI PAGES ===\n"
-            for p_path, p_content in matched_pages:
-                context_str += f"File: [[{p_path}]]\n{p_content}\n\n"
-        
-        if similar_rows:
-            context_str += "=== STUDENT FEEDBACK DATA ===\n"
-            for r in similar_rows:
-                student_name = r.get('name_of_student') or 'Anonymous'
-                context_str += f"- Student: {student_name}, Speaker: {r.get('alumni_speaker_name')}, Valuable aspect: {r.get('aspect_most_valuable')}, Critique/Suggestions: {r.get('improvements_suggestions')}\n"
-
-        if not context_str.strip():
-            context_str = "No compiled wiki pages or feedback records matched this query in the database."
-
-        # Softened Prompt for Factual Integrity and Counter-Questioning
-        system_instruction = """You are a smart, highly empathetic, and human-like AI analyst for a college alumni feedback dashboard. 
-
-CRITICAL RULES:
-1. You have access to the data provided below in the "AVAILABLE DATA" section. Base your answers heavily on this context.
-2. If the user asks about a specific person, event, or topic that is not in the AVAILABLE DATA, politely explain that you don't have that specific data in your current context yet, but offer to answer based on what you do know or ask them to compile that session. Do NOT sound like a robotic data parser.
-3. If the user asks general-knowledge questions (e.g., how to code, general trivia, math), decline politely: "I am your alumni feedback assistant. I focus on guest lecture data. Please ask questions about the compiled sessions."
-4. If the data is empty, suggest they compile the lectures first.
-5. If the user asks to "name the students" or "name them", inspect the "Student:" prefix in the AVAILABLE DATA. If no names are present, explain that the feedback is anonymous.
-6. If the user's question is ambiguous, ask a clarifying counter-question.
-7. Be conversational, warm, and highly humanized. Use words like "I", "you", "we". Greet the user by their name if they told you it previously!
-
-FORMATTING AND LENGTH RULES (CRITICAL):
-1. NO PARAGRAPHS ALLOWED. You must respond ONLY in short, concise bullet points (pointers).
-2. Maximum length of the entire response is 50 words. Be ultra-brief.
-3. NEVER put multiple bullet points on the same line or inside a paragraph. You MUST separate each bullet point with a newline.
-4. Put the direct answer or main statistic FIRST.
-5. Only use double-bracket WikiLinks (e.g. [[speakers/Name]]) when referring to compiled files that actually exist in the AVAILABLE DATA.
-
-=== AVAILABLE DATA ===
-{context_str}
-"""
-
         # Build the models list from highest priority to lowest
         models_to_try = []
         
         if self.groq_key:
-            models_to_try.append(("Groq (Llama-3.3)", ChatGroq(api_key=self.groq_key, model="llama-3.3-70b-versatile", temperature=0.1, max_retries=0, timeout=7)))
+            from langchain_groq import ChatGroq
+            models_to_try.append(("Groq (Llama-3.3)", ChatGroq(api_key=self.groq_key, model="llama-3.3-70b-versatile", temperature=0.1, max_retries=0, timeout=15)))
             
         if self.openrouter_key:
             try:
@@ -1364,7 +1291,7 @@ FORMATTING AND LENGTH RULES (CRITICAL):
                     model="meta-llama/llama-3-70b-instruct", 
                     temperature=0.1, 
                     max_retries=0, 
-                    request_timeout=7
+                    request_timeout=15
                 )))
             except ImportError:
                 pass
@@ -1379,7 +1306,7 @@ FORMATTING AND LENGTH RULES (CRITICAL):
                     repo_id="mistralai/Mistral-7B-Instruct-v0.2",
                     temperature=0.1,
                     max_new_tokens=512,
-                    timeout=10
+                    timeout=15
                 )
                 hf_chat = ChatHuggingFace(llm=hf_llm)
                 models_to_try.append(("HuggingFace (Mistral-7B)", hf_chat))
@@ -1392,66 +1319,127 @@ FORMATTING AND LENGTH RULES (CRITICAL):
                         repo_id="mistralai/Mistral-7B-Instruct-v0.2",
                         temperature=0.1,
                         max_new_tokens=512,
-                        timeout=10
+                        timeout=15
                     )))
-                except Exception as e:
-                    logger.error(f"Failed to load HuggingFace fallback: {e}")
+                except Exception as ex:
+                    logger.error(f"Failed to load HuggingFace fallback: {ex}")
                     pass
                 
         if self.gemini_key:
-            models_to_try.append(("Gemini 2.5 Flash", ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.1, max_retries=0, request_timeout=7)))
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            models_to_try.append(("Gemini 2.5 Flash", ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.1, max_retries=0, request_timeout=15)))
             
         if self.mistral_key:
             from langchain_mistralai import ChatMistralAI
-            models_to_try.append(("Mistral Large", ChatMistralAI(api_key=self.mistral_key, model="mistral-large-latest", temperature=0.1, max_retries=0, timeout=7)))
+            models_to_try.append(("Mistral Large", ChatMistralAI(api_key=self.mistral_key, model="mistral-large-latest", temperature=0.1, max_retries=0, timeout=15)))
 
         if self.cohere_key:
             from langchain_cohere import ChatCohere
-            models_to_try.append(("Cohere Command-R", ChatCohere(cohere_api_key=self.cohere_key, model="command-r-plus", temperature=0.1, max_retries=0, timeout=7)))
+            models_to_try.append(("Cohere Command-R", ChatCohere(cohere_api_key=self.cohere_key, model="command-r-plus", temperature=0.1, max_retries=0, timeout=15)))
 
-        synthesis = None
-        used_model_name = None
-        primary_model_name = models_to_try[0][0] if models_to_try else "None"
+        if not models_to_try:
+            return {"answer": "No AI available (API keys missing). Cannot execute Agentic ReAct Loop.", "citations": []}
 
-        if models_to_try:
-            for name, llm_instance in models_to_try:
-                try:
-                    logger.info(f"Attempting query with model: {name}")
-                    prompt = ChatPromptTemplate.from_messages([
-                        ("system", system_instruction),
-                        MessagesPlaceholder(variable_name="history"),
-                        ("human", "{question}")
-                    ])
-                    chain = prompt | llm_instance
-                    
-                    with_message_history = RunnableWithMessageHistory(
-                        chain,
-                        lambda sid: InsForgeChatMessageHistory(sid, self.bucket, fallback_history=history),
-                        input_messages_key="question",
-                        history_messages_key="history",
-                    )
-                    
-                    response = with_message_history.invoke(
-                        {"question": question, "context_str": context_str},
-                        config={"configurable": {"session_id": session_id if session_id else "default_session"}}
-                    )
-                    synthesis = response.content
-                    used_model_name = name
-                    break
-                except Exception as e:
-                    logger.warning(f"Model {name} failed: {str(e)}")
-                    continue
-                    
-            if synthesis is None:
-                synthesis = "Error generating response: All configured AI models failed or timed out."
-            elif used_model_name != primary_model_name:
-                synthesis += f"\n\n*(Note: Primary model '{primary_model_name}' timed out or failed. This response was generated using fallback model: '{used_model_name}')*"
-        else:
-            synthesis = f"""No AI available (API keys missing). Here's what the database shows for your query:
-- **Matching Wiki Pages**: {', '.join([f'[[{p[0]}]]' for p in matched_pages]) if matched_pages else 'None'}
-- **Feedback rows matched**: {len(similar_rows)}"""
+        schema_info = get_schema_info()
 
-        return {"answer": synthesis, "citations": [p[0] for p in matched_pages]}
+        system_instruction = f"""You are a smart, highly empathetic, and human-like AI analyst for a college alumni feedback dashboard.
+You must solve the user's question by using a ReAct (Reasoning and Acting) loop.
+
+You have access to the following tools:
+- [TOOL: execute_readonly_sql] - Execute a readonly SQL query. Input should be the SQL query string.
+- [TOOL: semantic_vector_search] - Perform a semantic vector search on the feedback data. Input should be the search string.
+- [TOOL: get_schema_info] - Get the database schema. Input should be empty string.
+
+Current Database Schema:
+{schema_info}
+
+To use a tool, you MUST use the following exact format:
+Action: [TOOL_NAME]
+Action Input: [QUERY]
+
+For example:
+Action: execute_readonly_sql
+Action Input: SELECT * FROM feedback_responses LIMIT 5;
+
+Once you have gathered enough information to answer the user's question, you MUST output:
+Final Answer: [ANSWER]
+
+Your final answer should be highly humanized, conversational, and formatted as short, concise bullet points (max 50 words). NO PARAGRAPHS. Separated by newlines. Direct answer FIRST.
+"""
+
+        # Prepare messages
+        history_context = ""
+        if history:
+            history_context = "Conversation History:\n"
+            for h in history:
+                role = h.get('role', 'user')
+                content = h.get('content', '')
+                history_context += f"{role.capitalize()}: {content}\n"
+        
+        current_question = f"{history_context}\nUser Question: {question}"
+        
+        # We'll just try models sequentially until one succeeds the whole loop
+        for model_name, llm in models_to_try:
+            try:
+                messages = [
+                    SystemMessage(content=system_instruction),
+                    HumanMessage(content=current_question)
+                ]
+                
+                max_iterations = 5
+                iterations = 0
+                final_answer = None
+                
+                while iterations < max_iterations:
+                    iterations += 1
+                    logger.info(f"ReAct Loop Iteration {iterations} with model {model_name}")
+                    
+                    response = llm.invoke(messages)
+                    
+                    response_text = response.content if hasattr(response, 'content') else str(response)
+                    logger.info(f"LLM Response:\n{response_text}")
+                    
+                    messages.append(AIMessage(content=response_text))
+                    
+                    if "Final Answer:" in response_text:
+                        final_answer = response_text.split("Final Answer:", 1)[1].strip()
+                        break
+                        
+                    action_match = re.search(r"Action:\s*(.+)", response_text)
+                    action_input_match = re.search(r"Action Input:\s*(.*)", response_text)
+                    
+                    if action_match:
+                        tool_name = action_match.group(1).strip()
+                        tool_input = action_input_match.group(1).strip() if action_input_match else ""
+                        
+                        observation = ""
+                        try:
+                            if "execute_readonly_sql" in tool_name:
+                                observation = execute_readonly_sql(tool_input)
+                            elif "semantic_vector_search" in tool_name:
+                                observation = semantic_vector_search(tool_input)
+                            elif "get_schema_info" in tool_name:
+                                observation = get_schema_info()
+                            else:
+                                observation = f"Unknown tool: {tool_name}"
+                        except Exception as e:
+                            observation = f"Tool execution error: {str(e)}"
+                        
+                        logger.info(f"Observation: {observation}")
+                        messages.append(HumanMessage(content=f"Observation: {observation}"))
+                    else:
+                        messages.append(HumanMessage(content="You didn't specify an action in the correct format or provide a Final Answer. Please format as 'Action: [TOOL_NAME]' and 'Action Input: [QUERY]' or 'Final Answer: [ANSWER]'."))
+                
+                if final_answer:
+                    return {"answer": final_answer, "citations": []}
+                else:
+                    return {"answer": "I apologize, but I wasn't able to reach a final answer within the allowed number of steps.", "citations": []}
+                    
+            except Exception as e:
+                logger.warning(f"Model {model_name} failed during ReAct loop: {str(e)}")
+                continue
+                
+        return {"answer": "Error generating response: All configured AI models failed or timed out during the ReAct loop.", "citations": []}
 
     def clear_memory(self, session_id: str) -> bool:
         """Delete chat history for the given session ID from InsForge bucket"""
