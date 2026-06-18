@@ -1383,7 +1383,7 @@ FORMATTING AND LENGTH RULES (CRITICAL):
                 )
                 hf_chat = ChatHuggingFace(llm=hf_llm)
                 models_to_try.append(("HuggingFace (Mistral-7B)", hf_chat))
-            except ImportError:
+            except Exception as e:
                 # Fallback if ChatHuggingFace is not supported
                 try:
                     from langchain_community.llms import HuggingFaceEndpoint
@@ -1394,7 +1394,8 @@ FORMATTING AND LENGTH RULES (CRITICAL):
                         max_new_tokens=512,
                         timeout=10
                     )))
-                except ImportError:
+                except Exception as e:
+                    logger.error(f"Failed to load HuggingFace fallback: {e}")
                     pass
                 
         if self.gemini_key:
