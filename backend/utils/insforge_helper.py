@@ -30,18 +30,17 @@ def _get_base_url():
         raise RuntimeError("INSFORGE_API_BASE_URL environment variable is not set")
     return base_url.rstrip('/')
 
+from urllib.parse import quote
+
 def insforge_upload_file(bucket: str, path: str, file_bytes: bytes, mime_type: str = "application/octet-stream") -> bool:
     """Upload a file to InsForge storage."""
     try:
-        url = f"{_get_base_url()}/api/storage/buckets/{bucket}/objects/{path}"
+        encoded_path = quote(path)
+        url = f"{_get_base_url()}/api/storage/buckets/{bucket}/objects/{encoded_path}"
         headers = _get_headers()
+        headers["Content-Type"] = mime_type
         
-        # We use the deprecated direct PUT for simplicity
-        files = {
-            'file': (os.path.basename(path), file_bytes, mime_type)
-        }
-        
-        resp = requests.put(url, headers=headers, files=files)
+        resp = requests.put(url, headers=headers, data=file_bytes)
         resp.raise_for_status()
         return True
     except Exception as e:

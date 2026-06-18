@@ -394,7 +394,7 @@ Append-only history of Wiki operations.
 
     # ─── COMPILER ENGINE (INGEST OPERATION) ───────────────────────────────────
 
-    def compile_session(self, speaker: str, date_str: str, feedback_rows: List[Dict[str, Any]]) -> str:
+    def compile_session(self, speaker: str, date_str: str, feedback_rows: List[Dict[str, Any]], healthy_providers: dict = None) -> str:
         """
         Compile feedback rows into events, speaker, and concept pages.
         Runs batch prompts using Gemini, falling back to a rule-based offline generator.
@@ -429,25 +429,26 @@ Append-only history of Wiki operations.
             self.log_compilation("🛑 Abort requested. Skipping health checks.")
             return ""
 
-        # Probe all configured providers in parallel using ThreadPoolExecutor
-        providers = ["gemini", "groq", "hf", "cohere", "openrouter", "mistral"]
-        healthy_providers = {}
-        
-        self.log_compilation("Starting parallel health checks for AI providers...")
-        with ThreadPoolExecutor(max_workers=len(providers)) as executor:
-            futures = {executor.submit(self._probe_provider_health, p): p for p in providers}
-            for future in as_completed(futures):
-                p = futures[future]
-                try:
-                    is_healthy = future.result()
-                    healthy_providers[p] = is_healthy
-                    if is_healthy:
-                        self.log_compilation(f"🩺 Provider health check: {p} is ONLINE")
-                    else:
-                        self.log_compilation(f"🩺 Provider health check: {p} is OFFLINE / UNHEALTHY")
-                except Exception as e:
-                    healthy_providers[p] = False
-                    self.log_compilation(f"🩺 Provider health check: {p} failed with error: {str(e)}")
+        # Only run health checks if not provided by queue
+        if healthy_providers is None:
+            providers = ["gemini", "groq", "hf", "cohere", "openrouter", "mistral"]
+            healthy_providers = {}
+            
+            self.log_compilation("Starting parallel health checks for AI providers...")
+            with ThreadPoolExecutor(max_workers=len(providers)) as executor:
+                futures = {executor.submit(self._probe_provider_health, p): p for p in providers}
+                for future in as_completed(futures):
+                    p = futures[future]
+                    try:
+                        is_healthy = future.result()
+                        healthy_providers[p] = is_healthy
+                        if is_healthy:
+                            self.log_compilation(f"🩺 Provider health check: {p} is ONLINE")
+                        else:
+                            self.log_compilation(f"🩺 Provider health check: {p} is OFFLINE / UNHEALTHY")
+                    except Exception as e:
+                        healthy_providers[p] = False
+                        self.log_compilation(f"🩺 Provider health check: {p} failed with error: {str(e)}")
 
         # ─── TRIGGER COMPILER EXECUTION: MULTI-LAYER FALLBACK ────────────────────
         # Layer 1: Gemini Flash — 15 RPM, 1 million tokens/min free tier
@@ -547,44 +548,53 @@ Append-only history of Wiki operations.
                          val: List[str], crit: List[str], req: List[str]) -> Tuple[bool, str]:
         """Call Groq API (Llama 3.3 70B) - Primary AI: 14,400 free calls/day"""
         prompt = self._build_wiki_prompt(safe_event, safe_speaker, speaker, date_str, total, avg_rating, shu, val, crit, req)
-        try:
-            url = "https://api.groq.com/openai/v1/chat/completions"
-            req_data = json.dumps({
-                "model": "llama-3.3-70b-versatile",
-                "messages": [{"role": "user", "content": prompt}],
-                "response_format": {"type": "json_object"},
-                "temperature": 0.7
-            }).encode('utf-8')
-
-            request = urllib.request.Request(
-                url, data=req_data,
-                headers={
-                    'Authorization': f'Bearer {self.groq_key}',
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'DataLens/1.0'
-                }
-            )
-
-            with urllib.request.urlopen(request, timeout=30) as response:
-                res_body = json.loads(response.read().decode('utf-8'))
-                data = self._safe_parse_json(res_body['choices'][0]['message']['content'])
-                return self._write_wiki_pages(safe_event, safe_speaker, speaker, date_str, avg_rating, data)
-
-        except urllib.error.HTTPError as e:
+        import time
+        for attempt in range(2):
             try:
-                err_body = e.read().decode('utf-8')
-                err_json = json.loads(err_body)
-                exact_msg = err_json.get('error', {}).get('message', err_body)
-            except:
-                exact_msg = str(e)
-            error_msg = f"HTTP {e.code}: {exact_msg}"
-            from backend.utils.logger import log_gemini_error
-            log_gemini_error("Groq-Compile", speaker, error_msg)
-            return False, error_msg
-        except Exception as e:
-            from backend.utils.logger import log_gemini_error
-            log_gemini_error("Groq-Compile", speaker, str(e))
-            return False, str(e)
+                url = "https://api.groq.com/openai/v1/chat/completions"
+                req_data = json.dumps({
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "response_format": {"type": "json_object"},
+                    "temperature": 0.7
+                }).encode('utf-8')
+    
+                request = urllib.request.Request(
+                    url, data=req_data,
+                    headers={
+                        'Authorization': f'Bearer {self.groq_key}',
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'DataLens/1.0'
+                    }
+                )
+    
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    res_body = json.loads(response.read().decode('utf-8'))
+                    data = self._safe_parse_json(res_body['choices'][0]['message']['content'])
+                    return self._write_wiki_pages(safe_event, safe_speaker, speaker, date_str, avg_rating, data)
+    
+            except urllib.error.HTTPError as e:
+                try:
+                    err_body = e.read().decode('utf-8')
+                    err_json = json.loads(err_body)
+                    exact_msg = err_json.get('error', {}).get('message', err_body)
+                except:
+                    exact_msg = str(e)
+                
+                if e.code == 429 and attempt == 0:
+                    self.log_compilation("⚠️ Rate limit (429) hit. Sleeping 5 seconds before retrying...")
+                    time.sleep(5)
+                    continue
+                    
+                error_msg = f"HTTP {e.code}: {exact_msg}"
+                from backend.utils.logger import log_gemini_error
+                log_gemini_error("Groq-Compile", speaker, error_msg)
+                return False, error_msg
+            except Exception as e:
+                from backend.utils.logger import log_gemini_error
+                log_gemini_error("Groq-Compile", speaker, str(e))
+                return False, str(e)
+        return False, "Failed after retries"
 
     def _safe_parse_json(self, text: str) -> dict:
         """Robust JSON parser that handles code blocks, balanced brackets, and regex fallbacks"""
@@ -956,47 +966,55 @@ Strict JSON object only. No markdown fences outside the JSON values.
   "speaker_update_summary": "1 sentence executive tl;dr for the speaker's log"
 }}
 """
-        try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.gemini_key}"
-            req_data = json.dumps({
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"responseMimeType": "application/json"}
-            }).encode('utf-8')
-            
-            request = urllib.request.Request(
-                url, 
-                data=req_data, 
-                headers={'Content-Type': 'application/json'}
-            )
-            
-            with urllib.request.urlopen(request, timeout=30) as response:
-                res_body = json.loads(response.read().decode('utf-8'))
-                text_out = res_body['candidates'][0]['content']['parts'][0]['text']
-                data = self._safe_parse_json(text_out)
-                return self._write_wiki_pages(safe_event, safe_speaker, speaker, date_str, avg_rating, data)
-        except urllib.error.HTTPError as e:
+        import time
+        for attempt in range(2):
             try:
-                err_body = e.read().decode('utf-8')
-                err_json = json.loads(err_body)
-                exact_msg = err_json.get('error', {}).get('message', err_body)
-            except:
-                exact_msg = str(e)
-            
-            error_msg = f"HTTP {e.code}: {exact_msg}"
-            logger.error(f"Generative ingest HTTPError: {error_msg}")
-            
-            # Log specifically to gemini errors
-            from backend.utils.logger import log_gemini_error
-            log_gemini_error("Compile", speaker, error_msg, err_body if 'err_body' in locals() else str(e))
-            return False, error_msg
-            
-        except Exception as e:
-            error_msg = str(e)
-            logger.error(f"Generative ingest failed: {error_msg}")
-            
-            from backend.utils.logger import log_gemini_error
-            log_gemini_error("Compile", speaker, error_msg, str(e))
-            return False, error_msg
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.gemini_key}"
+                req_data = json.dumps({
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"responseMimeType": "application/json"}
+                }).encode('utf-8')
+                
+                request = urllib.request.Request(
+                    url, 
+                    data=req_data, 
+                    headers={'Content-Type': 'application/json'}
+                )
+                
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    res_body = json.loads(response.read().decode('utf-8'))
+                    text_out = res_body['candidates'][0]['content']['parts'][0]['text']
+                    data = self._safe_parse_json(text_out)
+                    return self._write_wiki_pages(safe_event, safe_speaker, speaker, date_str, avg_rating, data)
+            except urllib.error.HTTPError as e:
+                try:
+                    err_body = e.read().decode('utf-8')
+                    err_json = json.loads(err_body)
+                    exact_msg = err_json.get('error', {}).get('message', err_body)
+                except:
+                    exact_msg = str(e)
+                
+                if e.code == 429 and attempt == 0:
+                    self.log_compilation("⚠️ Rate limit (429) hit. Sleeping 5 seconds before retrying...")
+                    time.sleep(5)
+                    continue
+                
+                error_msg = f"HTTP {e.code}: {exact_msg}"
+                logger.error(f"Generative ingest HTTPError: {error_msg}")
+                
+                # Log specifically to gemini errors
+                from backend.utils.logger import log_gemini_error
+                log_gemini_error("Compile", speaker, error_msg, err_body if 'err_body' in locals() else str(e))
+                return False, error_msg
+                
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(f"Generative ingest failed: {error_msg}")
+                
+                from backend.utils.logger import log_gemini_error
+                log_gemini_error("Compile", speaker, error_msg, str(e))
+                return False, error_msg
+        return False, "Failed after retries"
 
     def _run_offline_ingest(self, safe_event: str, safe_speaker: str, speaker: str, date_str: str, 
                              total: int, avg_rating: float, shu: Dict[str, int], 
@@ -1152,6 +1170,25 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
             global _ingest_progress, _abort_requested
             logger.info(f"Starting Ingest queue for {len(sessions)} sessions...")
             
+            providers = ["gemini", "groq", "hf", "cohere", "openrouter", "mistral"]
+            healthy_providers = {}
+            
+            self.log_compilation("Starting parallel health checks for AI providers...")
+            with ThreadPoolExecutor(max_workers=len(providers)) as executor:
+                futures = {executor.submit(self._probe_provider_health, p): p for p in providers}
+                for future in as_completed(futures):
+                    p = futures[future]
+                    try:
+                        is_healthy = future.result()
+                        healthy_providers[p] = is_healthy
+                        if is_healthy:
+                            self.log_compilation(f"🩺 Provider health check: {p} is ONLINE")
+                        else:
+                            self.log_compilation(f"🩺 Provider health check: {p} is OFFLINE / UNHEALTHY")
+                    except Exception as e:
+                        healthy_providers[p] = False
+                        self.log_compilation(f"🩺 Provider health check: {p} failed with error: {str(e)}")
+            
             aborted = False
             for idx, (speaker, date_str) in enumerate(sessions):
                 with _queue_lock:
@@ -1175,7 +1212,7 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
                     )
 
                     if rows:
-                        self.compile_session(speaker, date_str, rows)
+                        self.compile_session(speaker, date_str, rows, healthy_providers=healthy_providers)
                     else:
                         self.log_compilation(f"Skipping: No feedback records found for '{speaker}' on '{date_str}'.")
                 except Exception as e:
