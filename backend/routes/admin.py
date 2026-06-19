@@ -404,7 +404,8 @@ def create_event_and_form():
             'form_url': form_url,
             'form_id': form_id,
             'form_edit_url': form_edit_url,
-            'status': 'active'
+            'status': 'active',
+            'created_at': datetime.utcnow().isoformat() + 'Z'
         })
 
         logger.info(f"Event #{event_id} committed with form {form_id}")
