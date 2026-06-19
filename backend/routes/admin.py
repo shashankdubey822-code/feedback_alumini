@@ -173,6 +173,16 @@ def _safe_int(val):
         return None
 
 
+def _get_webhook_base_url(host_url):
+    public_url = os.getenv('PUBLIC_URL')
+    if public_url:
+        return public_url
+    space_host = os.getenv('SPACE_HOST')
+    if space_host:
+        return space_host if space_host.startswith('http') else f"https://{space_host}"
+    return host_url
+
+
 # ---------------------------------------------------------------------------
 # Google Apps Script helpers
 # ---------------------------------------------------------------------------
@@ -362,7 +372,7 @@ def create_event_and_form():
 
         # Step 2: Call Google Apps Script
         secret      = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
-        base_url    = os.environ.get('PUBLIC_URL') or request.host_url
+        base_url = _get_webhook_base_url(request.host_url)
         webhook_url = base_url.rstrip('/') + '/api/v1/webhook/forms/submit'
 
         success, result, error = _call_gas(apps_script_url, {
@@ -741,7 +751,7 @@ def generate_form():
         if not ok:
             return jsonify({'success': False, 'error': err}), 400
 
-        base_url    = os.environ.get('PUBLIC_URL') or request.host_url
+        base_url = _get_webhook_base_url(request.host_url)
         webhook_url = base_url.rstrip('/') + '/api/v1/webhook/forms/submit'
         success, result, error = _call_gas(gas_url, {
             'secret': os.getenv('APPS_SCRIPT_SECRET', 'datalens2026'),
