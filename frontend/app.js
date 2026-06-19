@@ -3052,15 +3052,105 @@ function renderDepartmentCharts(depts) {
         const el = document.getElementById('fb-status');
         el.style.display = 'block';
         el.textContent = msg;
-        el.style.background = type === 'error'
-            ? 'rgba(239,68,68,0.1)' : 'rgba(99,102,241,0.1)';
-        el.style.color = type === 'error' ? '#ef4444' : '#a5b4fc';
-        el.style.border = type === 'error'
-            ? '1px solid rgba(239,68,68,0.2)' : '1px solid rgba(99,102,241,0.2)';
+        if (type === 'error') {
+            el.style.background = 'rgba(239,68,68,0.1)';
+            el.style.color = '#ef4444';
+            el.style.border = '1px solid rgba(239,68,68,0.2)';
+        } else if (type === 'success') {
+            el.style.background = 'rgba(16,185,129,0.1)';
+            el.style.color = '#10b981';
+            el.style.border = '1px solid rgba(16,185,129,0.2)';
+        } else {
+            el.style.background = 'rgba(99,102,241,0.1)';
+            el.style.color = '#a5b4fc';
+            el.style.border = '1px solid rgba(99,102,241,0.2)';
+        }
     }
 
     function hideStatus() {
         document.getElementById('fb-status').style.display = 'none';
+    }
+
+    let verifyDebounceTimer = null;
+
+    async function checkTemplateVerification() {
+        const sendCertsCheckbox = document.getElementById('fb-send-certs');
+        if (!sendCertsCheckbox || !sendCertsCheckbox.checked) return;
+
+        const templateInput = document.getElementById('fb-template-id');
+        const templateId = templateInput ? templateInput.value.trim() : '';
+        const btn = document.getElementById('btn-generate-form');
+
+        if (!templateId) {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            showStatus("Please paste a Google Slides Template ID to verify.", "warning");
+            return;
+        }
+
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        showStatus("Verifying template ID...", "info");
+
+        try {
+            const token = localStorage.getItem('adminToken') || '';
+            const response = await fetch(`${API_BASE}/api/admin/verify-template`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ template_id: templateId })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                showStatus("Template verified successfully!", "success");
+            } else {
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+                showStatus(data.error || "Verification failed", "error");
+            }
+        } catch (err) {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            showStatus("Network error during verification", "error");
+        }
+    }
+
+    function handleTemplateIdInput() {
+        const sendCertsCheckbox = document.getElementById('fb-send-certs');
+        if (!sendCertsCheckbox || !sendCertsCheckbox.checked) return;
+
+        const btn = document.getElementById('btn-generate-form');
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        showStatus("Verifying template ID...", "info");
+
+        clearTimeout(verifyDebounceTimer);
+        verifyDebounceTimer = setTimeout(checkTemplateVerification, 500);
+    }
+
+    function handleSendCertsChange() {
+        const sendCertsCheckbox = document.getElementById('fb-send-certs');
+        const btn = document.getElementById('btn-generate-form');
+        if (sendCertsCheckbox && sendCertsCheckbox.checked) {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            const templateInput = document.getElementById('fb-template-id');
+            const templateId = templateInput ? templateInput.value.trim() : '';
+            if (templateId) {
+                checkTemplateVerification();
+            } else {
+                showStatus("Please paste a Google Slides Template ID to verify.", "warning");
+            }
+        } else {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            hideStatus();
+        }
     }
 
     // ── Generate form ────────────────────────────────────────
@@ -3659,6 +3749,12 @@ function renderDepartmentCharts(depts) {
         // Generate form button
         document.getElementById('btn-generate-form')
             ?.addEventListener('click', generateForm);
+
+        // Template verification listeners
+        document.getElementById('fb-send-certs')
+            ?.addEventListener('change', handleSendCertsChange);
+        document.getElementById('fb-template-id')
+            ?.addEventListener('input', handleTemplateIdInput);
 
         // Refresh events list
         document.getElementById('btn-refresh-events')

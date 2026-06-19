@@ -418,6 +418,39 @@ def create_event_and_form():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@admin_bp.route('/verify-template', methods=['POST'])
+@log_endpoint_access
+def verify_template():
+    try:
+        data = request.get_json() or {}
+        template_id_raw = data.get('template_id', '').strip()
+        if not template_id_raw:
+            return jsonify({'success': False, 'error': 'template_id is required'}), 400
+
+        match = re.search(r'/d/([a-zA-Z0-9-_]+)', template_id_raw)
+        template_id = match.group(1) if match else template_id_raw
+
+        apps_script_url = current_app.config.get('APPS_SCRIPT_URL') or os.getenv('APPS_SCRIPT_URL')
+        ok, err = _validate_gas_url(apps_script_url)
+        if not ok:
+            return jsonify({'success': False, 'error': err}), 400
+
+        secret = os.getenv('APPS_SCRIPT_SECRET', 'datalens2026')
+        success, result, error = _call_gas(apps_script_url, {
+            'secret': secret,
+            'action': 'verify_template',
+            'template_id': template_id
+        })
+
+        if not success:
+            return jsonify({'success': False, 'error': error or 'Verification failed'}), 400
+
+        return jsonify({'success': True, 'message': 'Template verified successfully'}), 200
+    except Exception as e:
+        logger.error(f"Template verification error: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @admin_bp.route('/create-event', methods=['POST'])
 @log_endpoint_access
 def create_event():
