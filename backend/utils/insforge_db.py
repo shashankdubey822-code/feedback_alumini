@@ -71,7 +71,12 @@ def api_update(table: str, match_col: str, match_val: str, data: dict) -> list:
     if not resp.ok:
         logger.error(f"api_update failed: {resp.text}")
     resp.raise_for_status()
-    return resp.json()
+    
+    result = resp.json()
+    if len(result) == 0:
+        logger.error(f"api_update updated 0 rows in table {table} for {match_col}={match_val}. Check RLS or ID match.")
+        raise RuntimeError(f"api_update updated 0 rows in table {table}")
+    return result
 
 def api_select(table: str, match_col: str, match_val: str) -> list:
     """Select records matching the criteria using PostgREST API."""

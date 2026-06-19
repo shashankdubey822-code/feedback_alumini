@@ -89,7 +89,46 @@ document.addEventListener('DOMContentLoaded', () => {
     setupModal();
     setupAdminAuth();
     loadInitialData();
+    setupRealtime();
 });
+
+// ========== REALTIME WEBSOCKETS ==========
+function setupRealtime() {
+    if (typeof io === 'undefined') {
+        console.warn('Socket.io not loaded. Realtime disabled.');
+        return;
+    }
+    
+    // Connect to the API_BASE or same origin
+    const socketUrl = API_BASE || window.location.origin;
+    const socket = io(socketUrl, {
+        path: '/socket.io',
+        transports: ['websocket', 'polling']
+    });
+
+    socket.on('connect', () => {
+        console.log('[Realtime] Connected to InsForge Realtime WebSocket');
+        socket.emit('subscribe', 'events:all');
+        socket.emit('subscribe', 'certificate_jobs:all');
+    });
+
+    // Listen for incoming events
+    const refreshEvents = () => {
+        console.log('[Realtime] Received update, refreshing events...');
+        if (typeof loadEvents === 'function') loadEvents();
+        if (typeof loadCertLogs === 'function') loadCertLogs();
+    };
+
+    socket.on('status_changed', refreshEvents);
+    socket.on('insert', refreshEvents);
+    socket.on('update', refreshEvents);
+    socket.on('event_inserted', refreshEvents);
+    socket.on('event_updated', refreshEvents);
+
+    socket.on('disconnect', () => {
+        console.log('[Realtime] Disconnected from WebSocket');
+    });
+}
 
 // ========== TOAST NOTIFICATIONS ==========
 function showNotification(message, type = 'info') {
