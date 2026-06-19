@@ -115,12 +115,21 @@ def start_job_worker(logger_unused=None):
 
                     # Mark as processing to prevent concurrent pickup
                     api_update('certificate_jobs', 'id', job_id, {'status': 'processing'})
+                    try:
+                        from backend.extensions import socketio
+                        socketio.emit('status_changed', {'type': 'certificate_job', 'id': job_id, 'status': 'processing'})
+                    except Exception as ws_err:
+                        job_logger.error(f"Failed to emit status_changed: {ws_err}")
 
                     if not template_id:
                         api_update('certificate_jobs', 'id', job_id, {
                             'status': 'failed',
                             'error_log': 'No template configured for event'
                         })
+                        try:
+                            socketio.emit('status_changed', {'type': 'certificate_job', 'id': job_id, 'status': 'failed'})
+                        except Exception:
+                            pass
                         continue
 
                     payload = {
@@ -146,6 +155,11 @@ def start_job_worker(logger_unused=None):
                         job_logger.info(
                             f"Certificate sent: {student_name} ({student_email})"
                         )
+                        try:
+                            from backend.extensions import socketio
+                            socketio.emit('status_changed', {'type': 'certificate_job', 'id': job_id, 'status': 'completed'})
+                        except Exception as ws_err:
+                            job_logger.error(f"Failed to emit status_changed: {ws_err}")
                     else:
                         api_update('certificate_jobs', 'id', job_id, {
                             'status': 'failed',
@@ -154,6 +168,11 @@ def start_job_worker(logger_unused=None):
                         job_logger.error(
                             f"Certificate generation failed for {student_name}: {error}"
                         )
+                        try:
+                            from backend.extensions import socketio
+                            socketio.emit('status_changed', {'type': 'certificate_job', 'id': job_id, 'status': 'failed'})
+                        except Exception as ws_err:
+                            job_logger.error(f"Failed to emit status_changed: {ws_err}")
 
                 time.sleep(5)
 

@@ -545,6 +545,12 @@ def retry_certificate_job():
             'error_log': None
         })
         
+        try:
+            from backend.extensions import socketio
+            socketio.emit('status_changed', {'type': 'certificate_job', 'id': job_id, 'status': 'pending'})
+        except Exception as ws_err:
+            logger.error(f"Failed to emit status_changed: {ws_err}")
+            
         logger.info(f"Certificate job #{job_id} status reset to pending for retry")
         return jsonify({'success': True, 'message': 'Job status reset to pending for retry'}), 200
     except Exception as e:
