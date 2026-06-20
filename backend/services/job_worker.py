@@ -107,7 +107,21 @@ def start_job_worker(logger_unused=None):
                     department = job['department'] or ''
                     template_id = job['template_id']
                     speaker_name = job['speaker_name'] or ''
-                    venue_date = str(job['venue_date']) if job['venue_date'] else ''
+                    venue_date_raw = job['venue_date']
+                    venue_date = ''
+                    if venue_date_raw:
+                        if isinstance(venue_date_raw, str):
+                            clean_date = venue_date_raw.split('T')[0]
+                        else:
+                            clean_date = venue_date_raw.strftime('%Y-%m-%d')
+                        try:
+                            from datetime import datetime
+                            dt = datetime.strptime(clean_date, "%Y-%m-%d")
+                            months = ["January", "February", "March", "April", "May", "June", 
+                                      "July", "August", "September", "October", "November", "December"]
+                            venue_date = f"{dt.day} {months[dt.month - 1]} {dt.year}"
+                        except Exception:
+                            venue_date = clean_date
 
                     if template_id:
                         match = re.search(r'/d/([a-zA-Z0-9-_]+)', template_id)
