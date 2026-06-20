@@ -1288,7 +1288,7 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
                 models_to_try.append(("OpenRouter (Llama-3-70b)", ChatOpenAI(
                     api_key=self.openrouter_key, 
                     base_url="https://openrouter.ai/api/v1", 
-                    model="meta-llama/llama-3-70b-instruct", 
+                    model="meta-llama/llama-3.3-70b-instruct", 
                     temperature=0.1, 
                     max_retries=0, 
                     request_timeout=15
@@ -1297,34 +1297,67 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
                 pass
 
         if self.hf_key:
-            try:
-                from langchain_community.llms import HuggingFaceEndpoint
-                from langchain_community.chat_models.huggingface import ChatHuggingFace
-                
-                hf_llm = HuggingFaceEndpoint(
-                    huggingfacehub_api_token=self.hf_key,
-                    repo_id="mistralai/Mistral-7B-Instruct-v0.2",
-                    temperature=0.1,
-                    max_new_tokens=512,
-                    timeout=15
-                )
-                hf_chat = ChatHuggingFace(llm=hf_llm)
-                models_to_try.append(("HuggingFace (Mistral-7B)", hf_chat))
-            except Exception as e:
-                # Fallback if ChatHuggingFace is not supported
-                try:
-                    from langchain_community.llms import HuggingFaceEndpoint
-                    models_to_try.append(("HuggingFace (Mistral-7B)", HuggingFaceEndpoint(
-                        huggingfacehub_api_token=self.hf_key,
-                        repo_id="mistralai/Mistral-7B-Instruct-v0.2",
-                        temperature=0.1,
-                        max_new_tokens=512,
-                        timeout=15
-                    )))
-                except Exception as ex:
-                    logger.error(f"Failed to load HuggingFace fallback: {ex}")
-                    pass
-                
+            class CustomHFEndpoint:
+                def __init__(self, api_token, repo_id, temperature=0.1, max_new_tokens=512, timeout=15):
+                    self.api_token = api_token
+                    self.repo_id = repo_id
+                    self.temperature = temperature
+                    self.max_new_tokens = max_new_tokens
+                    self.timeout = timeout
+                    
+                def invoke(self, messages):
+                    prompt = ""
+                    for msg in messages:
+                        if msg.__class__.__name__ == 'SystemMessage':
+                            prompt += f"System: {msg.content}\n"
+                        elif msg.__class__.__name__ == 'HumanMessage':
+                            prompt += f"User: {msg.content}\n"
+                        elif msg.__class__.__name__ == 'AIMessage':
+                            prompt += f"Assistant: {msg.content}\n"
+                        else:
+                            prompt += f"{msg.content}\n"
+                    
+                    import requests
+                    headers = {
+                        "Authorization": f"Bearer {self.api_token}",
+                        "Content-Type": "application/json"
+                    }
+                    payload = {
+                        "inputs": prompt,
+                        "parameters": {
+                            "temperature": self.temperature,
+                            "max_new_tokens": self.max_new_tokens,
+                            "return_full_text": False
+                        }
+                    }
+                    url = f"https://api-inference.huggingface.co/models/{self.repo_id}"
+                    resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
+                    resp.raise_for_status()
+                    res_data = resp.json()
+                    
+                    if isinstance(res_data, list) and len(res_data) > 0:
+                        content = res_data[0].get("generated_text", "")
+                    elif isinstance(res_data, dict):
+                        content = res_data.get("generated_text", "")
+                    else:
+                        content = str(res_data)
+                        
+                    if content.startswith(prompt):
+                        content = content[len(prompt):].strip()
+                        
+                    class HFResponse:
+                        def __init__(self, content):
+                            self.content = content
+                    return HFResponse(content)
+
+            models_to_try.append(("HuggingFace (Mistral-7B)", CustomHFEndpoint(
+                api_token=self.hf_key,
+                repo_id="mistralai/Mistral-7B-Instruct-v0.2",
+                temperature=0.1,
+                max_new_tokens=512,
+                timeout=15
+            )))
+
         if self.gemini_key:
             from langchain_google_genai import ChatGoogleGenerativeAI
             models_to_try.append(("Gemini 2.5 Flash", ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.1, max_retries=0, request_timeout=15)))
@@ -1575,7 +1608,7 @@ Return ONLY the 4 questions, one per line. Do not use bullet points, numbering, 
         elif self.openrouter_key:
             try:
                 from langchain_openai import ChatOpenAI
-                llm = ChatOpenAI(api_key=self.openrouter_key, base_url="https://openrouter.ai/api/v1", model="meta-llama/llama-3-70b-instruct", temperature=0.3, max_retries=0, request_timeout=5)
+                llm = ChatOpenAI(api_key=self.openrouter_key, base_url="https://openrouter.ai/api/v1", model="meta-llama/llama-3.3-70b-instruct", temperature=0.3, max_retries=0, request_timeout=5)
             except:
                 pass
                 
