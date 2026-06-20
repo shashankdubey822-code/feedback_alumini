@@ -27,7 +27,7 @@ RUN mkdir -p logs data database
 EXPOSE 7860
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=5 \
     CMD python -c "import requests; requests.get('http://localhost:7860/api/v1/health')" || exit 1
 
 # Run application

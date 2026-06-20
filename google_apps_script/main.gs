@@ -470,7 +470,7 @@ function ONE_TIME_SET_SECRETS() {
   const p = PropertiesService.getScriptProperties();
   p.setProperty("WEBHOOK_SECRET", "DL_wh_9fK2mPq7vNx4Rt8sLw3");
   p.setProperty("SECRET_KEY", "datalens2026");
-  p.setProperty("SENDER_EMAIL", "your-workspace-email@mru.ac.in"); // Restored back to MRU email due to slide permissions
+  p.setProperty("SENDER_EMAIL", "shashankdubey822@gmail.com"); // Restored back to MRU email due to slide permissions
   Logger.log("Saved WEBHOOK_SECRET, SECRET_KEY, and SENDER_EMAIL.");
 }
 
@@ -638,14 +638,14 @@ function _handleVerifyTemplate(payload) {
 
 function SETUP_PREDEFINED_TEMPLATES() {
   const p = PropertiesService.getScriptProperties();
-  p.setProperty("TEMPLATE_EDU", "YOUR_SCHOOL_OF_EDUCATION_SLIDE_ID");
-  p.setProperty("TEMPLATE_CSD", "YOUR_CSD_SLIDE_ID");
-  p.setProperty("TEMPLATE_ME",  "YOUR_ME_SLIDE_ID");
-  p.setProperty("TEMPLATE_RAI", "YOUR_R_AND_AI_SLIDE_ID");
-  p.setProperty("TEMPLATE_EC",  "YOUR_EC_SLIDE_ID");
-  p.setProperty("TEMPLATE_LAW", "YOUR_SCHOOL_OF_LAW_SLIDE_ID");
-  p.setProperty("TEMPLATE_BUS", "YOUR_SCHOOL_OF_BUSINESS_SLIDE_ID");
-  p.setProperty("TEMPLATE_SCI", "YOUR_SCHOOL_OF_SCIENCE_SLIDE_ID");
+  p.setProperty("TEMPLATE_EDU", "1UQE5K_PdrZo7ZaDhTPFcyRao2PKgCP7F9nR0byWI5nI");
+  p.setProperty("TEMPLATE_CSD", "1oda7oUQSFm0wk6fDXbN5GdaM1faLbGul1wbBevWb-9Y");
+  p.setProperty("TEMPLATE_ME",  "1l4T1JiMhn2PY6hYC4Xy4DSUslzyz834XCxZ02WgB1qQ");
+  p.setProperty("TEMPLATE_RAI", "1vpT9yBsycuE9Jk3ieE8025zXW6P9E6cXDM3eG19q0pQ");
+  p.setProperty("TEMPLATE_EC",  "1iwZYerDqWeh6F7NaKALLV9jeMCc4qVr3DFFiDM0H03U");
+  p.setProperty("TEMPLATE_LAW", "1i4NPQpQEuzlJ2x7R5aa_Ce_wepNKIB7HKdUtbJlDhnw");
+  p.setProperty("TEMPLATE_BUS", "1XrVO-Om4CukE8Jlp2Vpz9dGKRZnvJvqR4NutHDCATHw");
+  p.setProperty("TEMPLATE_SCI", "1xlTishh5Mj5jJhwY-Lq4fWxCKrGKcvZ55Ug1oqYzL0k");
   Logger.log("Predefined template settings updated.");
 }
 
