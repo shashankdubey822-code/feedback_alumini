@@ -537,6 +537,12 @@ function _handleGenerateCertificate(payload) {
       slide.getShapes().forEach(shape => {
         const textRange = shape.getText();
         if (textRange) {
+          // Snapshots paragraph alignment
+          const alignments = [];
+          textRange.getParagraphs().forEach(p => {
+            alignments.push(p.getParagraphStyle().getParagraphAlignment());
+          });
+          
           // Case-insensitive/flexible placeholder replacement
           textRange.replaceAllText("«StudentName»", studentName);
           textRange.replaceAllText("{{StudentName}}", studentName);
@@ -547,13 +553,11 @@ function _handleGenerateCertificate(payload) {
           textRange.replaceAllText("{{roll_no}}", rollNo);
           textRange.replaceAllText("{{RollNo}}", rollNo);
           
-          // Lecture title — if empty, also remove surrounding quote placeholders
           const titleValue = lectureTitle || "";
           textRange.replaceAllText("«LectureTitle»", titleValue);
           textRange.replaceAllText("{{lecture}}", titleValue);
           textRange.replaceAllText("{{LectureTitle}}", titleValue);
           textRange.replaceAllText("{{lecture_title}}", titleValue);
-          // If title is blank, remove patterns that have surrounding quotes so cert shows clean
           if (!titleValue) {
             textRange.replaceAllText("\u201c{{LectureTitle}}\u201d,", "");
             textRange.replaceAllText("\u201c{{lecture_title}}\u201d,", "");
@@ -585,10 +589,22 @@ function _handleGenerateCertificate(payload) {
           textRange.replaceAllText("«Semester»", "");
           textRange.replaceAllText("{{Semester}}", "");
           textRange.replaceAllText("{{semester}}", "");
+
+          // ── Restore Alignment ─────────────────────────────────────────────────
+          // replaceAllText() can reset paragraph alignment to LEFT.
+          // Re-apply the snapshotted alignment to each paragraph.
+          try {
+            const parasAfter = textRange.getParagraphs();
+            parasAfter.forEach((para, i) => {
+              try {
+                const savedAlign = alignments[i] || SlidesApp.ParagraphAlignment.CENTER;
+                para.getRange().getParagraphStyle().setParagraphAlignment(savedAlign);
+              } catch(e) {}
+            });
+          } catch(e) {}
         }
 
-        // ── Auto-Shrink: reduce font if text overflows the shape ──────────────
-        // Prevents text from going outside the certificate boundary.
+        // ── Auto-Shrink: reduce font size if text is too long for the shape ────
         try {
           const shapeW = shape.getWidth();
           const shapeH = shape.getHeight();
@@ -596,28 +612,33 @@ function _handleGenerateCertificate(payload) {
             const tr2 = shape.getText();
             const fullText2 = tr2 ? tr2.asString().trim() : '';
             if (fullText2) {
-              // Read current font size
               let curFs = 12;
               try {
                 const r0 = tr2.getParagraphs()[0].getRichText().getRuns();
-                if (r0 && r0.length > 0) { const fs0 = r0[0].getTextStyle().getFontSize(); if (fs0 > 0) curFs = fs0; }
+                if (r0 && r0.length > 0) {
+                  const fs0 = r0[0].getTextStyle().getFontSize();
+                  if (fs0 && fs0 > 0) curFs = fs0;
+                }
               } catch(e) {}
 
-              const MIN_FS = 7; // never go below 7pt
+              const MIN_FS = 7;
               let fs = curFs;
               let fits = false;
               while (!fits && fs > MIN_FS) {
-                const cpl  = Math.max(1, Math.floor(shapeW / (fs * 0.55))); // chars per line
-                const lfIt = Math.max(1, Math.floor(shapeH / (fs * 1.35))); // lines that fit
+                const cpl  = Math.max(1, Math.floor(shapeW / (fs * 0.55)));
+                const lfIt = Math.max(1, Math.floor(shapeH / (fs * 1.35)));
                 let need = 0;
-                fullText2.split('\n').forEach(ln => { need += Math.max(1, Math.ceil(ln.length / cpl)); });
+                fullText2.split('\n').forEach(ln => {
+                  need += Math.max(1, Math.ceil(ln.length / cpl));
+                });
                 if (need <= lfIt) { fits = true; } else { fs -= 1; }
               }
-              // Apply shrunk font size if it changed
               if (fs < curFs) {
                 try {
                   tr2.getParagraphs().forEach(p => {
-                    p.getRichText().getRuns().forEach(r => { r.getTextStyle().setFontSize(fs); });
+                    p.getRichText().getRuns().forEach(r => {
+                      r.getTextStyle().setFontSize(fs);
+                    });
                   });
                 } catch(e) {}
               }
