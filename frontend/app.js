@@ -119,7 +119,16 @@ function setupRealtime() {
         if (typeof loadCertLogs === 'function') loadCertLogs();
     };
 
-    socket.on('status_changed', refreshEvents);
+    socket.on('status_changed', (data) => {
+        // Show layout overflow warning if GAS detected potential text overflow
+        if (data && data.type === 'certificate_job' && data.status === 'completed' && data.has_layout_warning) {
+            showNotification(
+                `⚠️ Certificate sent but layout warning detected — text may overflow the slide. Check the certificate manually.`,
+                'warning'
+            );
+        }
+        refreshEvents();
+    });
     socket.on('insert', refreshEvents);
     socket.on('update', refreshEvents);
     socket.on('event_inserted', refreshEvents);
@@ -3607,7 +3616,34 @@ function renderDepartmentCharts(depts) {
 
                 const attemptsText = job.attempts > 0 ? ` (Attempts: ${job.attempts})` : '';
                 const errorToShow = job.error_message || job.error_log;
-                const errText = errorToShow ? `<div style="color:#ef4444;margin-top:4px;font-size:10px;word-break:break-all;">Error: ${esc(errorToShow)}</div>` : '';
+                
+                // Detect layout overflow warning vs real error
+                let errText = '';
+                let hasLayoutWarning = false;
+                if (errorToShow) {
+                    try {
+                        const parsedLog = JSON.parse(errorToShow);
+                        if (parsedLog && parsedLog.type === 'layout_warning') {
+                            hasLayoutWarning = true;
+                            const details = (parsedLog.details || []).map(w =>
+                                `Slide ${w.slide}: "${w.field}" — ~${w.lines_estimated} lines needed, ${w.lines_fit} fit`
+                            ).join(' | ');
+                            errText = `<div style="color:#f59e0b;margin-top:4px;font-size:10px;word-break:break-all;background:rgba(245,158,11,0.08);padding:4px 6px;border-radius:4px;border-left:2px solid #f59e0b;">
+                                ⚠️ Layout Warning: ${esc(parsedLog.message)}${details ? '<br><span style="opacity:0.75;">' + esc(details) + '</span>' : ''}
+                            </div>`;
+                        } else {
+                            errText = `<div style="color:#ef4444;margin-top:4px;font-size:10px;word-break:break-all;">Error: ${esc(errorToShow)}</div>`;
+                        }
+                    } catch (e) {
+                        errText = `<div style="color:#ef4444;margin-top:4px;font-size:10px;word-break:break-all;">Error: ${esc(errorToShow)}</div>`;
+                    }
+                }
+
+                // Adjust status badge — completed with warning = amber instead of green
+                if (job.status === 'completed' && hasLayoutWarning) {
+                    statusColor = '#f59e0b';
+                    statusText = 'SENT ⚠️';
+                }
 
                 let actionHtml = '';
                 if (job.status === 'failed') {

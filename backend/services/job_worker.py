@@ -29,7 +29,7 @@ def start_job_worker(logger_unused=None):
 
     def call_apps_script(url, payload):
         if not url:
-            return False, "APPS_SCRIPT_URL not configured in .env"
+            return False, "APPS_SCRIPT_URL not configured in .env", []
         retry_delays = [2, 5, 10]
         for attempt, delay in enumerate(retry_delays):
             try:
@@ -41,29 +41,34 @@ def start_job_worker(logger_unused=None):
                 )
                 with urllib.request.urlopen(req, timeout=90) as resp:
                     resp_data = json.loads(resp.read().decode('utf-8'))
+                    warnings = resp_data.get('data', {})
+                    if isinstance(warnings, dict):
+                        overflow_warnings = warnings.get('overflow_warnings', [])
+                    else:
+                        overflow_warnings = []
                     if resp_data.get('success'):
-                        return True, None
+                        return True, None, overflow_warnings
                     msg = resp_data.get('message', 'Unknown error')
                     details = resp_data.get('data', '')
-                    return False, f"{msg}: {details}" if details else msg
+                    return False, f"{msg}: {details}" if details else msg, []
             except urllib.error.HTTPError as e:
                 body = e.read().decode('utf-8') if e.fp else ''
                 err = f"HTTP {e.code}: {body}"
                 if attempt < len(retry_delays) - 1:
                     time.sleep(delay)
                     continue
-                return False, err
+                return False, err, []
             except urllib.error.URLError as e:
                 err = f"Connection failed: {e.reason}"
                 if attempt < len(retry_delays) - 1:
                     time.sleep(delay)
                     continue
-                return False, err
+                return False, err, []
             except json.JSONDecodeError:
-                return False, "Invalid JSON response from Apps Script"
+                return False, "Invalid JSON response from Apps Script", []
             except Exception as e:
-                return False, f"Unexpected error: {e}"
-        return False, "Max retries exceeded"
+                return False, f"Unexpected error: {e}", []
+        return False, "Max retries exceeded", []
 
     def worker_loop():
         job_logger.info("Certificate Job Worker Thread Started.")
@@ -158,12 +163,26 @@ def start_job_worker(logger_unused=None):
                         'lecture_title': job['lecture_title'] or '',
                     }
 
-                    success, error = call_apps_script(apps_script_url, payload)
+                    success, error, overflow_warnings = call_apps_script(apps_script_url, payload)
 
                     if success:
+                        # Build error_log: store overflow warnings as a notice even on success
+                        warning_log = None
+                        if overflow_warnings:
+                            import json as _json
+                            warning_log = _json.dumps({
+                                'type': 'layout_warning',
+                                'message': f'{len(overflow_warnings)} shape(s) may have text overflow',
+                                'details': overflow_warnings
+                            })
+                            job_logger.warning(
+                                f"Certificate layout warning for {student_name}: "
+                                f"{len(overflow_warnings)} shape(s) may overflow. "
+                                f"Details: {overflow_warnings}"
+                            )
                         api_update('certificate_jobs', 'id', job_id, {
                             'status': 'completed',
-                            'error_log': None,
+                            'error_log': warning_log,  # None = clean, JSON = has warnings
                             'generated_at': datetime.now().isoformat()
                         })
                         job_logger.info(
@@ -171,7 +190,12 @@ def start_job_worker(logger_unused=None):
                         )
                         try:
                             from backend.extensions import socketio
-                            socketio.emit('status_changed', {'type': 'certificate_job', 'id': job_id, 'status': 'completed'})
+                            socketio.emit('status_changed', {
+                                'type': 'certificate_job',
+                                'id': job_id,
+                                'status': 'completed',
+                                'has_layout_warning': bool(overflow_warnings)
+                            })
                         except Exception as ws_err:
                             job_logger.error(f"Failed to emit status_changed: {ws_err}")
                     else:
