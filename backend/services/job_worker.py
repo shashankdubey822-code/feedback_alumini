@@ -117,9 +117,7 @@ def start_job_worker(logger_unused=None):
                         try:
                             from datetime import datetime
                             dt = datetime.strptime(clean_date, "%Y-%m-%d")
-                            months = ["January", "February", "March", "April", "May", "June", 
-                                      "July", "August", "September", "October", "November", "December"]
-                            venue_date = f"{dt.day} {months[dt.month - 1]} {dt.year}"
+                            venue_date = dt.strftime("%d-%m-%Y")
                         except Exception:
                             venue_date = clean_date
 
