@@ -17,7 +17,22 @@ import nltk
 from textblob import TextBlob
 from transformers import pipeline
 
-actionability_classifier = pipeline("zero-shot-classification", model="cross-encoder/nli-deberta-v3-small")
+# Lazy-loaded singleton — do NOT create at module level to avoid startup crash
+_actionability_classifier = None
+
+
+def _get_actionability_classifier():
+    """Lazy-load the zero-shot classifier on first use."""
+    global _actionability_classifier
+    if _actionability_classifier is None:
+        try:
+            _actionability_classifier = pipeline(
+                "zero-shot-classification",
+                model="cross-encoder/nli-deberta-v3-small"
+            )
+        except Exception:
+            pass
+    return _actionability_classifier
 
 # ── NLTK data bootstrap ──────────────────────────────────────────────────────
 for _resource, _path in [
@@ -95,12 +110,14 @@ class NLPService:
             return True
             
         try:
-            result = actionability_classifier(
-                text, 
-                candidate_labels=["actionable feedback", "non-actionable filler"]
-            )
-            if result['labels'][0] == "non-actionable filler" and result['scores'][0] > 0.6:
-                return True
+            classifier = _get_actionability_classifier()
+            if classifier is not None:
+                result = classifier(
+                    text,
+                    candidate_labels=["actionable feedback", "non-actionable filler"]
+                )
+                if result['labels'][0] == "non-actionable filler" and result['scores'][0] > 0.6:
+                    return True
         except Exception:
             pass
             
