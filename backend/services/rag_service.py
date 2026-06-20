@@ -3,7 +3,6 @@ RAG Service - Computes embeddings locally and performs semantic vector search
 """
 
 from typing import List, Dict, Any, Optional
-import numpy as np
 from backend.utils.logger import get_section_logger
 from backend.utils.insforge_helper import is_insforge_active
 from backend.utils.insforge_db import execute_all
@@ -12,7 +11,6 @@ import json
 logger = get_section_logger('rag')
 
 import os
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 # Lazy-loaded sentence transformer model
 _embedding_model = None
@@ -25,6 +23,7 @@ def _get_embedding_model():
         if gemini_key:
             try:
                 logger.info("Loading Gemini Embedding model (faster, no local download)...")
+                from langchain_google_genai import GoogleGenerativeAIEmbeddings
                 _embedding_model = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-2-preview", google_api_key=gemini_key)
                 logger.info("Gemini Embedding model loaded successfully.")
                 return _embedding_model

@@ -19,13 +19,6 @@ from backend.utils.insforge_helper import (
     insforge_delete_file,
     is_insforge_active
 )
-from langchain_core.chat_history import BaseChatMessageHistory
-from langchain_core.messages import BaseMessage, messages_from_dict, messages_to_dict
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables.history import RunnableWithMessageHistory
-from langchain_groq import ChatGroq
-from langchain_google_genai import ChatGoogleGenerativeAI
-
 logger = get_section_logger('wiki')
 
 # Class-level compilation logger and queue state
@@ -33,53 +26,6 @@ _ingest_logs: List[str] = []
 _ingest_progress: Dict[str, Any] = {"status": "IDLE", "current": 0, "total": 0, "active_session": ""}
 _abort_requested: bool = False
 _queue_lock = threading.Lock()
-
-class InsForgeChatMessageHistory(BaseChatMessageHistory):
-    """Custom LangChain memory class for InsForge Storage"""
-    def __init__(self, session_id: str, bucket: str, fallback_history: List[Dict[str, str]] = None):
-        self.session_id = session_id
-        self.bucket = bucket
-        self.path = f"memory/{session_id}.json"
-        self.fallback_history = fallback_history or []
-        
-    @property
-    def messages(self) -> List[BaseMessage]:
-        if is_insforge_active():
-            try:
-                file_bytes = insforge_download_file(self.bucket, self.path)
-                if file_bytes:
-                    items = json.loads(file_bytes.decode('utf-8'))
-                    return messages_from_dict(items)
-            except Exception:
-                pass
-                
-        # Fallback to frontend history
-        from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-        msgs = []
-        for h in self.fallback_history:
-            role = h.get('role', 'user')
-            content = h.get('content', '')
-            if role == 'user':
-                msgs.append(HumanMessage(content=content))
-            elif role in ('ai', 'assistant', 'model'):
-                msgs.append(AIMessage(content=content))
-        return msgs
-
-    def add_messages(self, messages: List[BaseMessage]) -> None:
-        if not is_insforge_active():
-            return
-        try:
-            current_messages = self.messages
-            current_messages.extend(messages)
-            items = messages_to_dict(current_messages)
-            history_bytes = json.dumps(items, indent=2).encode('utf-8')
-            insforge_upload_file(self.bucket, self.path, history_bytes, "application/json")
-        except Exception as e:
-            logger.error(f"Error saving chat history to InsForge: {str(e)}")
-
-    def clear(self) -> None:
-        if is_insforge_active():
-            insforge_delete_file(self.bucket, self.path)
 
 
 class WikiService:
@@ -1279,8 +1225,11 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
         models_to_try = []
         
         if self.groq_key:
-            from langchain_groq import ChatGroq
-            models_to_try.append(("Groq (Llama-3.3)", ChatGroq(api_key=self.groq_key, model="llama-3.3-70b-versatile", temperature=0.1, max_retries=0, timeout=15)))
+            try:
+                from langchain_groq import ChatGroq
+                models_to_try.append(("Groq (Llama-3.3)", ChatGroq(api_key=self.groq_key, model="llama-3.3-70b-versatile", temperature=0.1, max_retries=0, timeout=15)))
+            except ImportError:
+                pass
             
         if self.openrouter_key:
             try:
@@ -1359,16 +1308,25 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
             )))
 
         if self.gemini_key:
-            from langchain_google_genai import ChatGoogleGenerativeAI
-            models_to_try.append(("Gemini 2.5 Flash", ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.1, max_retries=0, request_timeout=15)))
+            try:
+                from langchain_google_genai import ChatGoogleGenerativeAI
+                models_to_try.append(("Gemini 2.5 Flash", ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.1, max_retries=0, request_timeout=15)))
+            except ImportError:
+                pass
             
         if self.mistral_key:
-            from langchain_mistralai import ChatMistralAI
-            models_to_try.append(("Mistral Large", ChatMistralAI(api_key=self.mistral_key, model="mistral-large-latest", temperature=0.1, max_retries=0, timeout=15)))
+            try:
+                from langchain_mistralai import ChatMistralAI
+                models_to_try.append(("Mistral Large", ChatMistralAI(api_key=self.mistral_key, model="mistral-large-latest", temperature=0.1, max_retries=0, timeout=15)))
+            except ImportError:
+                pass
 
         if self.cohere_key:
-            from langchain_cohere import ChatCohere
-            models_to_try.append(("Cohere Command-R", ChatCohere(cohere_api_key=self.cohere_key, model="command-r", temperature=0.1, max_retries=0, timeout=15)))
+            try:
+                from langchain_cohere import ChatCohere
+                models_to_try.append(("Cohere Command-R", ChatCohere(cohere_api_key=self.cohere_key, model="command-r", temperature=0.1, max_retries=0, timeout=15)))
+            except ImportError:
+                pass
 
         if not models_to_try:
             return {"answer": "No AI available (API keys missing). Cannot execute Agentic ReAct Loop.", "citations": []}
@@ -1555,6 +1513,21 @@ Your final answer should be highly humanized, conversational, and formatted as s
 
     def suggest_questions(self) -> List[str]:
         """Dynamically generate analytical query suggestions from InsForge-backed feedback."""
+        ChatGroq = None
+        ChatGoogleGenerativeAI = None
+        ChatOpenAI = None
+        HumanMessage = None
+        try:
+            if self.groq_key:
+                from langchain_groq import ChatGroq
+            if self.gemini_key:
+                from langchain_google_genai import ChatGoogleGenerativeAI
+            if self.openrouter_key:
+                from langchain_openai import ChatOpenAI
+            from langchain_core.messages import HumanMessage
+        except ImportError:
+            pass
+
         speakers = []
         topics = []
         try:
@@ -1607,14 +1580,12 @@ Return ONLY the 4 questions, one per line. Do not use bullet points, numbering, 
             llm = ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.3, max_retries=0, request_timeout=5)
         elif self.openrouter_key:
             try:
-                from langchain_openai import ChatOpenAI
                 llm = ChatOpenAI(api_key=self.openrouter_key, base_url="https://openrouter.ai/api/v1", model="meta-llama/llama-3.3-70b-instruct", temperature=0.3, max_retries=0, request_timeout=5)
             except:
                 pass
                 
         if llm:
             try:
-                from langchain_core.messages import HumanMessage
                 res = llm.invoke([HumanMessage(content=prompt_text)])
                 questions = [q.strip().strip('-*0123456789. ') for q in res.content.split('\n') if q.strip()]
                 if len(questions) >= 4:

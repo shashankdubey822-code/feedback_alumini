@@ -13,12 +13,10 @@ Models used:
 import re
 from typing import List, Dict, Tuple, Optional
 from collections import Counter
-import nltk
-from textblob import TextBlob
-from transformers import pipeline
 
 # Lazy-loaded singleton — do NOT create at module level to avoid startup crash
 _actionability_classifier = None
+_nltk_bootstrapped = False
 
 
 def _get_actionability_classifier():
@@ -26,6 +24,7 @@ def _get_actionability_classifier():
     global _actionability_classifier
     if _actionability_classifier is None:
         try:
+            from transformers import pipeline
             _actionability_classifier = pipeline(
                 "zero-shot-classification",
                 model="cross-encoder/nli-deberta-v3-small"
@@ -34,37 +33,43 @@ def _get_actionability_classifier():
             pass
     return _actionability_classifier
 
-# ── NLTK data bootstrap ──────────────────────────────────────────────────────
-for _resource, _path in [
-    ('punkt_tab',  'tokenizers/punkt_tab'),
-    ('stopwords',  'corpora/stopwords'),
-    ('brown',      'corpora/brown'),
-    ('wordnet',    'corpora/wordnet'),
-]:
-    try:
-        nltk.data.find(_path)
-    except LookupError:
-        nltk.download(_resource, quiet=True)
-
-from nltk.corpus import stopwords
-
 
 class NLPService:
     """Handle NLP operations: sentiment analysis, keyword extraction, text cleaning."""
 
     # ── Non-answer patterns (Removed in favor of Zero-Shot Classifier) ────────
 
-    # ── Stop words ───────────────────────────────────────────────────────────
-    STOP_WORDS = set(stopwords.words('english'))
-    STOP_WORDS.update([
-        'na', 'n/a', 'pls', 'please', 'ok', 'okay', 'good', 'great', 'nice',
-        'thanks', 'thank', 'no', 'yes', 'feedback', 'session', 'v', 'b', 'c', 'n',
-        'related', 'domain', 'area', 'topics', 'field', 'like', 'aspect',
-        'subjects', 'about', 'more', 'would', 'also', 'make', 'really',
-        'everything', 'every', 'lot', 'much', 'get', 'got', 'well', 'can', 'one',
-    ])
-
     def __init__(self, min_word_length: int = 3, max_keywords: int = 10):
+        global _nltk_bootstrapped
+        if not _nltk_bootstrapped:
+            try:
+                import nltk
+                for _resource, _path in [
+                    ('punkt_tab',  'tokenizers/punkt_tab'),
+                    ('stopwords',  'corpora/stopwords'),
+                    ('brown',      'corpora/brown'),
+                    ('wordnet',    'corpora/wordnet'),
+                ]:
+                    try:
+                        nltk.data.find(_path)
+                    except LookupError:
+                        nltk.download(_resource, quiet=True)
+                _nltk_bootstrapped = True
+            except Exception:
+                pass
+
+        try:
+            from nltk.corpus import stopwords
+            self.STOP_WORDS = set(stopwords.words('english'))
+        except Exception:
+            self.STOP_WORDS = set()
+        self.STOP_WORDS.update([
+            'na', 'n/a', 'pls', 'please', 'ok', 'okay', 'good', 'great', 'nice',
+            'thanks', 'thank', 'no', 'yes', 'feedback', 'session', 'v', 'b', 'c', 'n',
+            'related', 'domain', 'area', 'topics', 'field', 'like', 'aspect',
+            'subjects', 'about', 'more', 'would', 'also', 'make', 'really',
+            'everything', 'every', 'lot', 'much', 'get', 'got', 'well', 'can', 'one',
+        ])
         self.min_word_length = min_word_length
         self.max_keywords = max_keywords
 
@@ -129,6 +134,7 @@ class NLPService:
         Returns {'polarity': float, 'subjectivity': float, 'label': str}.
         label is one of: POSITIVE | NEUTRAL | NEGATIVE | NO_RESPONSE | ERROR
         """
+        from textblob import TextBlob
         if not text or self.is_non_answer(text):
             return {'polarity': 0.0, 'subjectivity': 0.0, 'label': 'NO_RESPONSE'}
 
