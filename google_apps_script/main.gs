@@ -537,11 +537,19 @@ function _handleGenerateCertificate(payload) {
       slide.getShapes().forEach(shape => {
         const textRange = shape.getText();
         if (textRange) {
-          // Snapshots paragraph alignment
+          // Snapshot paragraph alignments BEFORE replacement
+          // (replaceAllText can reset alignment to LEFT — we restore it after)
           const alignments = [];
-          textRange.getParagraphs().forEach(p => {
-            alignments.push(p.getParagraphStyle().getParagraphAlignment());
-          });
+          try {
+            textRange.getParagraphs().forEach(p => {
+              try {
+                // Slides API: Paragraph → getRange() → getParagraphStyle()
+                alignments.push(p.getRange().getParagraphStyle().getParagraphAlignment());
+              } catch(e) {
+                alignments.push(null); // null = keep whatever alignment exists
+              }
+            });
+          } catch(e) {}
           
           // Case-insensitive/flexible placeholder replacement
           textRange.replaceAllText("«StudentName»", studentName);
@@ -589,56 +597,16 @@ function _handleGenerateCertificate(payload) {
           textRange.replaceAllText("«Semester»", "");
           textRange.replaceAllText("{{Semester}}", "");
           textRange.replaceAllText("{{semester}}", "");
-
-          // ── Restore Alignment ─────────────────────────────────────────────────
-          // replaceAllText() can reset paragraph alignment to LEFT.
-          // Re-apply the snapshotted alignment to each paragraph.
-          try {
-            const parasAfter = textRange.getParagraphs();
-            parasAfter.forEach((para, i) => {
-              try {
-                const savedAlign = alignments[i] || SlidesApp.ParagraphAlignment.CENTER;
-                para.getRange().getParagraphStyle().setParagraphAlignment(savedAlign);
-              } catch(e) {}
-            });
-          } catch(e) {}
-        }
-
-        // ── Auto-Shrink: reduce font size if text is too long for the shape ────
-        try {
-          const shapeW = shape.getWidth();
-          const shapeH = shape.getHeight();
-          if (shapeW > 0 && shapeH > 0) {
-            const tr2 = shape.getText();
-            const fullText2 = tr2 ? tr2.asString().trim() : '';
-            if (fullText2) {
-              let curFs = 12;
-              try {
-                const r0 = tr2.getParagraphs()[0].getRichText().getRuns();
-                if (r0 && r0.length > 0) {
-                  const fs0 = r0[0].getTextStyle().getFontSize();
-                  if (fs0 && fs0 > 0) curFs = fs0;
-                }
-              } catch(e) {}
-
-              const MIN_FS = 7;
-              let fs = curFs;
-              let fits = false;
-              while (!fits && fs > MIN_FS) {
-                const cpl  = Math.max(1, Math.floor(shapeW / (fs * 0.55)));
-                const lfIt = Math.max(1, Math.floor(shapeH / (fs * 1.35)));
+                const lfIt = Math.max(1, Math.floor(shapeH / (fs * 1.35))); // lines that fit
                 let need = 0;
-                fullText2.split('\n').forEach(ln => {
-                  need += Math.max(1, Math.ceil(ln.length / cpl));
-                });
+                fullText2.split('\n').forEach(ln => { need += Math.max(1, Math.ceil(ln.length / cpl)); });
                 if (need <= lfIt) { fits = true; } else { fs -= 1; }
               }
+              // Apply shrunk font size if it changed
               if (fs < curFs) {
                 try {
                   tr2.getParagraphs().forEach(p => {
-                    p.getRichText().getRuns().forEach(r => {
-                      r.getTextStyle().setFontSize(fs);
-                    });
+                    p.getRichText().getRuns().forEach(r => { r.getTextStyle().setFontSize(fs); });
                   });
                 } catch(e) {}
               }
@@ -791,7 +759,7 @@ function SETUP_PREDEFINED_TEMPLATES() {
   p.setProperty("TEMPLATE_ME",  "1l4T1JiMhn2PY6hYC4Xy4DSUslzyz834XCxZ02WgB1qQ");
   p.setProperty("TEMPLATE_RAI", "1vpT9yBsycuE9Jk3ieE8025zXW6P9E6cXDM3eG19q0pQ");
   p.setProperty("TEMPLATE_EC",  "1iwZYerDqWeh6F7NaKALLV9jeMCc4qVr3DFFiDM0H03U");
-  p.setProperty("TEMPLATE_LAW", "1i4NPQpQEuzlJ2x7R5aa_Ce_wepNKIB7HKdUtbJlDhnw");
+  p.setProperty("TEMPLATE_LAW", "15En9laE0KdBxx8znSAz0B8i7LARMUV0W4596KqyWk9s");
   p.setProperty("TEMPLATE_BUS", "1XrVO-Om4CukE8Jlp2Vpz9dGKRZnvJvqR4NutHDCATHw");
   p.setProperty("TEMPLATE_SCI", "1xlTishh5Mj5jJhwY-Lq4fWxCKrGKcvZ55Ug1oqYzL0k");
   Logger.log("Predefined template settings updated.");
