@@ -242,3 +242,42 @@
     .topbar { padding: 0 18px; }
     .search-box-top input { width: 140px; }
 }
+
+/* ── Live Certificate Queue Log Animations ── */
+#cert-logs-live-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+    opacity: 0;
+    transition: opacity 0.3s;
+    box-shadow: 0 0 8px #10b981;
+}
+
+#cert-logs-live-dot.active {
+    opacity: 1;
+    animation: liveDotPulse 1.5s infinite;
+}
+
+@keyframes liveDotPulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+    }
+    50% {
+        transform: scale(1.3);
+        box-shadow: 0 0 14px rgba(16, 185, 129, 1);
+    }
+}
+
+@keyframes slideInCertLog {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

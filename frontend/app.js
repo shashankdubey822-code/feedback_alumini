@@ -120,12 +120,24 @@ function setupRealtime() {
     };
 
     socket.on('status_changed', (data) => {
-        // Show layout overflow warning if GAS detected potential text overflow
-        if (data && data.type === 'certificate_job' && data.status === 'completed' && data.has_layout_warning) {
-            showNotification(
-                `⚠️ Certificate sent but layout warning detected — text may overflow the slide. Check the certificate manually.`,
-                'warning'
-            );
+        if (data && data.type === 'certificate_job') {
+            // ── Instant in-place badge update (zero-delay visual feedback) ──────
+            const statusMap = {
+                'pending':    { text: 'PENDING', color: '#fbbf24' },
+                'processing': { text: 'SENDING', color: '#60a5fa' },
+                'completed':  { text: data.has_layout_warning ? 'SENT ⚠️' : 'SENT', color: data.has_layout_warning ? '#f59e0b' : '#34d399' },
+                'failed':     { text: 'FAILED',  color: '#ef4444' }
+            };
+            const s = statusMap[data.status] || { text: (data.status || '').toUpperCase(), color: '#8b8b9e' };
+            const targetItem = document.querySelector(`[data-job-id="${data.id}"]`);
+            if (targetItem) {
+                const badge = targetItem.querySelector('.cert-status-badge');
+                if (badge) { badge.textContent = s.text; badge.style.color = s.color; }
+            }
+            // Show layout warning toast
+            if (data.status === 'completed' && data.has_layout_warning) {
+                showNotification(`⚠️ Certificate sent but layout warning detected — text may overflow the slide.`, 'warning');
+            }
         }
         refreshEvents();
     });
@@ -3588,35 +3600,114 @@ function renderDepartmentCharts(depts) {
     async function loadCertLogs() {
         const list = document.getElementById('fb-cert-logs-list');
         if (!list) return;
-        
-        // Show loading state
-        list.innerHTML = '<div style="color:#8b8b9e;font-size:11px;text-align:center;padding:10px;">Loading...</div>';
-        
+
+        // ── Smart no-flicker refresh ─────────────────────────────────────────
+        // Only show "Loading..." on first load (when list is empty).
+        // Subsequent auto-refreshes preserve existing content until new data arrives.
+        const isFirstLoad = list.children.length === 0 ||
+            (list.children.length === 1 && list.firstElementChild.textContent.trim() === 'Loading...');
+        if (isFirstLoad) {
+            list.innerHTML = '<div style="color:#8b8b9e;font-size:11px;text-align:center;padding:10px;">Loading...</div>';
+        }
+
+        // Setup event delegation for retry buttons once
+        if (!list._hasResendListener) {
+            list._hasResendListener = true;
+            list.addEventListener('click', async (e) => {
+                const btn = e.target.closest('.btn-resend-cert');
+                if (!btn) return;
+                const jobId = btn.dataset.jobId;
+                if (btn.disabled) return;
+                btn.textContent = 'Retrying...';
+                btn.disabled = true;
+                try {
+                    const r = await fetch(`${API_BASE}/api/admin/certificate-jobs/retry`, {
+                        method: 'POST',
+                        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ job_id: jobId })
+                    });
+                    const d = await r.json();
+                    if (d.success) {
+                        showNotification('Job rescheduled for retry successfully!', 'success');
+                        loadCertLogs();
+                    } else {
+                        btn.textContent = 'Resend';
+                        btn.disabled = false;
+                        showNotification(`Retry failed: ${d.error || 'Unknown error'}`, 'error');
+                    }
+                } catch (e) {
+                    btn.textContent = 'Resend';
+                    btn.disabled = false;
+                    showNotification(`Retry error: ${e.message}`, 'error');
+                }
+            });
+        }
+
         try {
             const res = await safeFetch(`${API_BASE}/api/admin/certificate-jobs`, { headers: authHeaders() });
             const data = await res.json();
             if (!data.success) throw new Error(data.error);
+
+            // Track whether any jobs are still active (used by auto-poll)
+            const hasActiveJobs = (data.jobs || []).some(j => j.status === 'pending' || j.status === 'processing');
+            window._certLogsHasActive = hasActiveJobs;
+
+            // Update LIVE indicator dot
+            const liveDot = document.getElementById('cert-logs-live-dot');
+            if (liveDot) {
+                if (hasActiveJobs) {
+                    liveDot.classList.add('active');
+                    liveDot.title = 'Live — jobs in progress';
+                } else {
+                    liveDot.classList.remove('active');
+                    liveDot.title = '';
+                }
+            }
 
             if (!data.jobs || data.jobs.length === 0) {
                 list.innerHTML = '<div style="color:#8b8b9e;font-size:12px;text-align:center;padding:10px;">No certificate jobs in queue.</div>';
                 return;
             }
 
-            list.innerHTML = '';
-            data.jobs.forEach(job => {
-                const item = document.createElement('div');
-                item.style.cssText = 'padding:8px;border-radius:6px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);font-size:11px;line-height:1.4;';
-                
+            // Clear loading placeholder if it was showing
+            const firstChild = list.firstElementChild;
+            if (firstChild && !firstChild.getAttribute('data-job-id')) {
+                list.innerHTML = '';
+            }
+
+            // Build a set of new job IDs to remove stale elements
+            const newJobIds = new Set(data.jobs.map(j => String(j.id)));
+
+            // Remove any elements that are no longer in the backend list
+            Array.from(list.children).forEach(child => {
+                const jobId = child.getAttribute('data-job-id');
+                if (jobId && !newJobIds.has(jobId)) {
+                    child.remove();
+                }
+            });
+
+            // Smart in-place DOM update / insert
+            data.jobs.forEach((job, idx) => {
+                const jobIdStr = String(job.id);
+                let item = list.querySelector(`[data-job-id="${jobIdStr}"]`);
+                const isNew = !item;
+
+                if (isNew) {
+                    item = document.createElement('div');
+                    item.setAttribute('data-job-id', jobIdStr);
+                    item.style.cssText = 'padding:8px;border-radius:6px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);font-size:11px;line-height:1.4;transition:all 0.3s;opacity:0;transform:translateY(10px);animation: slideInCertLog 0.3s ease-out forwards;margin-bottom:6px;';
+                }
+
                 let statusColor = '#8b8b9e';
                 let statusText = job.status.toUpperCase();
-                if (job.status === 'pending') { statusColor = '#fbbf24'; }
+                if (job.status === 'pending')    { statusColor = '#fbbf24'; }
                 else if (job.status === 'processing') { statusColor = '#60a5fa'; statusText = 'SENDING'; }
-                else if (job.status === 'completed') { statusColor = '#34d399'; statusText = 'SENT'; }
-                else if (job.status === 'failed') { statusColor = '#ef4444'; }
+                else if (job.status === 'completed')  { statusColor = '#34d399'; statusText = 'SENT'; }
+                else if (job.status === 'failed')     { statusColor = '#ef4444'; }
 
                 const attemptsText = job.attempts > 0 ? ` (Attempts: ${job.attempts})` : '';
                 const errorToShow = job.error_message || job.error_log;
-                
+
                 // Detect layout overflow warning vs real error
                 let errText = '';
                 let hasLayoutWarning = false;
@@ -3639,7 +3730,7 @@ function renderDepartmentCharts(depts) {
                     }
                 }
 
-                // Adjust status badge — completed with warning = amber instead of green
+                // Completed with layout warning → amber badge
                 if (job.status === 'completed' && hasLayoutWarning) {
                     statusColor = '#f59e0b';
                     statusText = 'SENT ⚠️';
@@ -3654,10 +3745,10 @@ function renderDepartmentCharts(depts) {
                     `;
                 }
 
-                item.innerHTML = `
+                const newHtml = `
                     <div style="display:flex;justify-content:space-between;align-items:center;">
                         <span style="font-weight:600;color:#000000;">${esc(job.student_name)}</span>
-                        <span style="font-weight:700;color:${statusColor};">${statusText}${attemptsText}</span>
+                        <span class="cert-status-badge" style="font-weight:700;color:${statusColor};transition:color 0.3s;">${statusText}${attemptsText}</span>
                     </div>
                     <div style="color:#8b8b9e;font-size:10px;margin-top:2px;">
                         Email: ${esc(job.student_email)} &nbsp;·&nbsp; Event: ${esc(job.speaker_name)}
@@ -3665,48 +3756,48 @@ function renderDepartmentCharts(depts) {
                     ${errText}
                     ${actionHtml}
                 `;
-                list.appendChild(item);
-            });
 
-            // Resend certificate buttons
-            list.querySelectorAll('.btn-resend-cert').forEach(btn => {
-                btn.addEventListener('click', async () => {
-                    const jobId = btn.dataset.jobId;
-                    if (btn.disabled) return;
-                    btn.textContent = 'Retrying...';
-                    btn.disabled = true;
-                    try {
-                        const r = await fetch(`${API_BASE}/api/admin/certificate-jobs/retry`, {
-                            method: 'POST',
-                            headers: {
-                                ...authHeaders(),
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ job_id: jobId })
-                        });
-                        const d = await r.json();
-                        if (d.success) {
-                            showNotification('Job rescheduled for retry successfully!', 'success');
-                            loadCertLogs();
-                        } else {
-                            btn.textContent = 'Resend';
-                            btn.disabled = false;
-                            showNotification(`Retry failed: ${d.error || 'Unknown error'}`, 'error');
-                        }
-                    } catch (e) {
-                        btn.textContent = 'Resend';
-                        btn.disabled = false;
-                        showNotification(`Retry error: ${e.message}`, 'error');
+                // Only update innerHTML if it's different to prevent layout flicker and DOM thrashing
+                if (item.innerHTML !== newHtml) {
+                    item.innerHTML = newHtml;
+                }
+
+                // Ensure exact ordering in DOM
+                if (isNew) {
+                    if (idx === 0) {
+                        list.insertBefore(item, list.firstChild);
+                    } else {
+                        const referenceNode = list.children[idx];
+                        list.insertBefore(item, referenceNode || null);
                     }
-                });
+                } else {
+                    if (list.children[idx] !== item) {
+                        list.insertBefore(item, list.children[idx] || null);
+                    }
+                }
             });
 
         } catch (err) {
             if (err.message === 'Request was cancelled') return;
             console.error('[CERT LOGS] Error:', err);
-            list.innerHTML = `<div style="color:#ef4444;font-size:11px;text-align:center;padding:10px;">Failed to load logs: ${esc(err.message)}</div>`;
+            // Only show error if list is currently empty (don't wipe good data on transient failure)
+            if (list.children.length === 0) {
+                list.innerHTML = `<div style="color:#ef4444;font-size:11px;text-align:center;padding:10px;">Failed to load logs: ${esc(err.message)}</div>`;
+            }
         }
     }
+
+    // ── Auto-poll certificate logs ────────────────────────────────────────────
+    // Fast poll (5s): only runs while there are PENDING or PROCESSING jobs
+    setInterval(() => {
+        if (window._certLogsHasActive && typeof loadCertLogs === 'function') {
+            loadCertLogs();
+        }
+    }, 5000);
+    // Heartbeat poll (30s): always runs to catch any missed socket events
+    setInterval(() => {
+        if (typeof loadCertLogs === 'function') loadCertLogs();
+    }, 30000);
 
     // ── Speaker Autocomplete Logic ───────────────────────────
     let selectedSuggestionIdx = -1;
