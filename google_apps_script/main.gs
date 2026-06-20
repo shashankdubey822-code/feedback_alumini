@@ -586,8 +586,123 @@ function _handleGenerateCertificate(payload) {
           textRange.replaceAllText("{{Semester}}", "");
           textRange.replaceAllText("{{semester}}", "");
         }
+
+        // ── Auto-Shrink: reduce font if text overflows the shape ──────────────
+        // Prevents text from going outside the certificate boundary.
+        try {
+          const shapeW = shape.getWidth();
+          const shapeH = shape.getHeight();
+          if (shapeW > 0 && shapeH > 0) {
+            const tr2 = shape.getText();
+            const fullText2 = tr2 ? tr2.asString().trim() : '';
+            if (fullText2) {
+              // Read current font size
+              let curFs = 12;
+              try {
+                const r0 = tr2.getParagraphs()[0].getRichText().getRuns();
+                if (r0 && r0.length > 0) { const fs0 = r0[0].getTextStyle().getFontSize(); if (fs0 > 0) curFs = fs0; }
+              } catch(e) {}
+
+              const MIN_FS = 7; // never go below 7pt
+              let fs = curFs;
+              let fits = false;
+              while (!fits && fs > MIN_FS) {
+                const cpl  = Math.max(1, Math.floor(shapeW / (fs * 0.55))); // chars per line
+                const lfIt = Math.max(1, Math.floor(shapeH / (fs * 1.35))); // lines that fit
+                let need = 0;
+                fullText2.split('\n').forEach(ln => { need += Math.max(1, Math.ceil(ln.length / cpl)); });
+                if (need <= lfIt) { fits = true; } else { fs -= 1; }
+              }
+              // Apply shrunk font size if it changed
+              if (fs < curFs) {
+                try {
+                  tr2.getParagraphs().forEach(p => {
+                    p.getRichText().getRuns().forEach(r => { r.getTextStyle().setFontSize(fs); });
+                  });
+                } catch(e) {}
+              }
+            }
+          }
+        } catch(shrinkErr) {}
       });
     });
+
+    // ── Overflow / Layout Check ──────────────────────────────────────────────
+    // Google Slides API has no native isOverflowing() method.
+    // We use a heuristic: estimate text lines needed vs lines that fit in the shape.
+    // Formula: charsPerLine ≈ shapeWidthPts / (fontSize * 0.55)  [monospace estimate]
+    //          linesNeeded  ≈ totalChars / charsPerLine
+    //          linesFit     ≈ shapeHeightPts / (fontSize * 1.35)  [line-height factor]
+    const overflowWarnings = [];
+    try {
+      const filledSlides = presentation.getSlides();
+      filledSlides.forEach((slide, slideIdx) => {
+        slide.getShapes().forEach(shape => {
+          try {
+            const tr = shape.getText();
+            if (!tr) return;
+            const fullText = tr.asString().trim();
+            if (!fullText) return;
+
+            // Get shape physical size in points (1 pt = 1/72 inch)
+            const shapeW = shape.getWidth();   // points
+            const shapeH = shape.getHeight();  // points
+            if (!shapeW || !shapeH || shapeW <= 0 || shapeH <= 0) return;
+
+            // Estimate font size from first paragraph's first text run
+            let fontSize = 12; // default fallback
+            try {
+              const paras = tr.getParagraphs();
+              if (paras && paras.length > 0) {
+                const runs = paras[0].getRichText().getRuns();
+                if (runs && runs.length > 0) {
+                  const fs = runs[0].getTextStyle().getFontSize();
+                  if (fs && fs > 0) fontSize = fs;
+                }
+              }
+            } catch (fsErr) { /* use default */ }
+
+            // Heuristic calculations
+            const avgCharWidthPts  = fontSize * 0.55;  // average char width
+            const lineHeightPts    = fontSize * 1.35;  // line height with spacing
+            const charsPerLine     = Math.max(1, Math.floor(shapeW / avgCharWidthPts));
+            const linesFit         = Math.max(1, Math.floor(shapeH / lineHeightPts));
+
+            // Count actual lines (split on newlines first, then wrap estimate)
+            const hardLines = fullText.split("\n");
+            let estimatedLinesNeeded = 0;
+            hardLines.forEach(line => {
+              estimatedLinesNeeded += Math.max(1, Math.ceil(line.length / charsPerLine));
+            });
+
+            // Flag if estimated lines exceed capacity by >20% (buffer for heuristic error)
+            if (estimatedLinesNeeded > linesFit * 1.2) {
+              // Identify which field is in this shape
+              const lowerText = fullText.toLowerCase();
+              let fieldHint = "unknown field";
+              if (lowerText.includes(studentName.toLowerCase())) fieldHint = "Student Name";
+              else if (lowerText.includes(speakerName.toLowerCase())) fieldHint = "Speaker Name";
+              else if (lectureTitle && lowerText.includes(lectureTitle.toLowerCase())) fieldHint = "Lecture Title";
+              else if (lowerText.includes(venueDate.toLowerCase())) fieldHint = "Venue Date";
+
+              overflowWarnings.push({
+                slide: slideIdx + 1,
+                field: fieldHint,
+                shape_width_pts: Math.round(shapeW),
+                shape_height_pts: Math.round(shapeH),
+                font_size: fontSize,
+                chars_per_line: charsPerLine,
+                lines_fit: linesFit,
+                lines_estimated: estimatedLinesNeeded,
+                text_preview: fullText.substring(0, 60) + (fullText.length > 60 ? "..." : "")
+              });
+            }
+          } catch (shapeErr) { /* skip broken shape */ }
+        });
+      });
+    } catch (overflowCheckErr) {
+      console.warn("Overflow check failed: " + overflowCheckErr);
+    }
 
     // Save and close presentation to persist modifications
     presentation.saveAndClose();
@@ -620,9 +735,11 @@ function _handleGenerateCertificate(payload) {
       console.warn("Failed to trash temporary file copy: " + cleanupErr);
     }
 
-    return _json(true, "Certificate generated and sent successfully", {
+    const hasWarnings = overflowWarnings.length > 0;
+    return _json(true, hasWarnings ? "success_with_warnings" : "Certificate generated and sent successfully", {
       student_name: studentName,
-      student_email: studentEmail
+      student_email: studentEmail,
+      overflow_warnings: overflowWarnings  // empty array = no issues
     });
 
   } catch (err) {
