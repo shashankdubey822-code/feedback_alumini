@@ -304,6 +304,7 @@ def create_event_and_form():
         venue_date        = data.get('venue_date', '').strip()
         template_id_raw   = data.get('template_id', '').strip() or None
         send_certificates = bool(data.get('send_certificates', False))
+        lecture_title     = data.get('lecture_title', '').strip()
 
         template_id = None
         if template_id_raw:
@@ -345,7 +346,8 @@ def create_event_and_form():
             api_update('events', 'id', event_id, {
                 'status': 'creating_form',
                 'template_id': template_id,
-                'send_certificates': send_certificates
+                'send_certificates': send_certificates,
+                'lecture_title': lecture_title
             })
             logger.info(f"Retrying form creation for existing event #{event_id}")
         else:
@@ -357,7 +359,8 @@ def create_event_and_form():
                 'send_certificates': send_certificates,
                 'form_url': form_url,
                 'form_id': form_id,
-                'form_edit_url': form_edit_url
+                'form_edit_url': form_edit_url,
+                'lecture_title': lecture_title
             }
             try:
                 inserted = api_insert('events', event_data)
@@ -424,6 +427,8 @@ def verify_template():
     try:
         data = request.get_json() or {}
         template_id_raw = data.get('template_id', '').strip()
+        if template_id_raw == "PREDEFINED":
+            return jsonify({'success': True, 'message': 'Predefined templates selected'}), 200
         if not template_id_raw:
             return jsonify({'success': False, 'error': 'template_id is required'}), 400
 

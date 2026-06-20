@@ -82,7 +82,8 @@ def start_job_worker(logger_unused=None):
                                 COALESCE(s.department, e.department) AS department, 
                                 e.template_id, 
                                 e.speaker_name, 
-                                e.venue_date
+                                e.venue_date,
+                                e.lecture_title
                             FROM certificate_jobs j
                             JOIN students s ON j.student_id = s.id
                             JOIN events e ON j.event_id = e.id
@@ -142,6 +143,7 @@ def start_job_worker(logger_unused=None):
                         'department': department,
                         'speaker_name': speaker_name,
                         'venue_date': venue_date,
+                        'lecture_title': job['lecture_title'] or '',
                     }
 
                     success, error = call_apps_script(apps_script_url, payload)

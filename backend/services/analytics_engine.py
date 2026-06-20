@@ -34,6 +34,7 @@ class AnalyticsEngine:
                 e.id as event_id,
                 e.speaker_name,
                 e.venue_date,
+                e.lecture_title,
                 COALESCE(s.department, e.department) AS department,
                 s.id as student_id,
                 s.name as student_name,
@@ -56,7 +57,7 @@ class AnalyticsEngine:
                 self._df = pd.DataFrame(columns=[
                     'response_id', 'submitted_at', 'extracted_date', 'extracted_time', 'session_rating', 'aspect_most_valuable',
                     'improvements_suggestions', 'session_help_understanding', 'future_topics',
-                    'event_id', 'speaker_name', 'venue_date', 'event_name',
+                    'event_id', 'speaker_name', 'venue_date', 'lecture_title', 'event_name',
                     'student_id', 'student_name', 'roll_no', 'department',
                     'sentiment_label', 'sentiment_score', 'keywords_json'
                 ])
@@ -84,6 +85,7 @@ class AnalyticsEngine:
                 e.id as event_id,
                 e.speaker_name,
                 e.venue_date,
+                e.lecture_title,
                 COALESCE(s.department, e.department) AS department,
                 s.id as student_id,
                 s.name as student_name,

@@ -537,9 +537,15 @@
                 </svg>
                 Filters
               </h3>
-              <button class="btn-clear" id="btn-clear-filters">
-                Clear All
-              </button>
+              <div style="display: flex; align-items: center; gap: 16px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <input type="checkbox" id="filter-has-lecture-title" style="width: 16px; height: 16px; cursor: pointer;" />
+                  <label for="filter-has-lecture-title" style="font-size: 13px; color: #a5b4fc; cursor: pointer; font-weight: 500;">Filter by Lecture Title</label>
+                </div>
+                <button class="btn-clear" id="btn-clear-filters">
+                  Clear All
+                </button>
+              </div>
             </div>
             <div class="filters-grid" id="filters-grid"></div>
           </div>
@@ -579,7 +585,11 @@
             </div>
             <div class="table-wrapper">
               <table id="data-table">
-                <thead id="table-head"></thead>
+                <thead id="table-head">
+                  <tr>
+                    <th>Lecture Title</th>
+                  </tr>
+                </thead>
                 <tbody id="table-body"></tbody>
               </table>
             </div>
@@ -2487,11 +2497,13 @@
                       margin-bottom: 6px;
                       font-weight: 500;
                     "
-                    >Venue Date</label
+                    >Lecture Title (Optional)</label
                   >
                   <input
-                    type="date"
-                    id="fb-venue-date"
+                    type="text"
+                    id="fb-lecture-title"
+                    placeholder="Enter lecture title..."
+                    autocomplete="off"
                     style="
                       width: 100%;
                       padding: 10px 12px;
@@ -2517,13 +2529,11 @@
                       margin-bottom: 6px;
                       font-weight: 500;
                     "
-                    >Google Slides Template ID (Optional)</label
+                    >Venue Date</label
                   >
                   <input
-                    type="text"
-                    id="fb-template-id"
-                    placeholder="Paste Google Slides file ID..."
-                    autocomplete="off"
+                    type="date"
+                    id="fb-venue-date"
                     style="
                       width: 100%;
                       padding: 10px 12px;
@@ -2564,6 +2574,44 @@
                     "
                     >Auto-generate Certificates for this event</label
                   >
+                </div>
+                <div id="fb-cert-options-container" style="display: none; flex-direction: column; gap: 12px; margin-top: 4px;">
+                  <div style="display: flex; gap: 8px; border-bottom: 1px solid rgba(0,0,0,0.1); padding-bottom: 6px;">
+                    <button type="button" id="tab-cert-custom" class="cert-tab active" style="padding: 6px 12px; font-size: 12px; font-weight: 600; border: none; background: none; cursor: pointer; border-bottom: 2px solid #6366f1; color: #6366f1;">Custom Template</button>
+                    <button type="button" id="tab-cert-predefined" class="cert-tab" style="padding: 6px 12px; font-size: 12px; font-weight: 600; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; color: #666;">Predefined Templates</button>
+                  </div>
+                  <div id="fb-template-id-container">
+                    <label
+                      style="
+                        display: block;
+                        font-size: 12px;
+                        color: #000000;
+                        margin-bottom: 6px;
+                        font-weight: 500;
+                      "
+                      >Google Slides Template ID</label
+                    >
+                    <input
+                      type="text"
+                      id="fb-template-id"
+                      placeholder="Paste Google Slides file ID..."
+                      autocomplete="off"
+                      style="
+                        width: 100%;
+                        padding: 10px 12px;
+                        border-radius: 8px;
+                        border: 1px solid #000000;
+                        background: #fff;
+                        color: #000000;
+                        font-family: Inter;
+                        font-size: 14px;
+                        outline: none;
+                        box-sizing: border-box;
+                      "
+                      onfocus="this.style.borderColor = '#6366f1'"
+                      onblur="this.style.borderColor = '#000000'"
+                    />
+                  </div>
                 </div>
                 <button
                   id="btn-generate-form"

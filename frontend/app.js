@@ -333,6 +333,7 @@ async function loadInitialData() {
             'roll_no',
             'date_of_lecture',
             'alumni_speaker_name',
+            'lecture_title',
             'session_help_understanding',
             'aspect_most_valuable',
             'session_rating',
@@ -352,6 +353,7 @@ async function loadInitialData() {
             'roll_no': 'Roll No.',
             'date_of_lecture': 'Date of the Session',
             'alumni_speaker_name': 'Alumni Speaker Name',
+            'lecture_title': 'Lecture Title',
             'session_help_understanding': 'Did the session help you gain a better understanding...?',
             'aspect_most_valuable': 'What aspect of the session did you find most valuable?',
             'session_rating': 'How would you rate the session overall?',
@@ -560,6 +562,10 @@ function setupDashboardHandlers() {
     }
     document.getElementById('btn-clear-filters').addEventListener('click', clearAllFilters);
     document.getElementById('global-search').addEventListener('input', debounce(applyFilters, 400));
+    const filterHasLectureTitle = document.getElementById('filter-has-lecture-title');
+    if (filterHasLectureTitle) {
+        filterHasLectureTitle.addEventListener('change', applyFilters);
+    }
 
     // Speaker profile page handlers
     const btnBackToSpeakers = document.getElementById('btn-back-to-speakers');
@@ -1340,6 +1346,11 @@ async function applyFilters() {
     const globalSearch = document.getElementById('global-search').value.trim();
     const filters = {};
 
+    const filterHasLectureTitle = document.getElementById('filter-has-lecture-title');
+    if (filterHasLectureTitle && filterHasLectureTitle.checked) {
+        filters['has_lecture_title'] = true;
+    }
+
     // Text / numeric / date inputs
     document.querySelectorAll('#filters-grid [data-column]').forEach(el => {
         const col = el.dataset.column;
@@ -1412,6 +1423,10 @@ function clearAllFilters() {
     document.querySelectorAll('#filters-grid .filter-multiselect input[type="checkbox"]').forEach(cb => {
         cb.checked = false;
     });
+    const filterHasLectureTitle = document.getElementById('filter-has-lecture-title');
+    if (filterHasLectureTitle) {
+        filterHasLectureTitle.checked = false;
+    }
     document.getElementById('global-search').value = '';
     applyFilters();
 }
@@ -3035,9 +3050,29 @@ function renderDepartmentCharts(depts) {
             dropdown.innerHTML = '';
             dropdown.classList.remove('active');
         }
+        if (document.getElementById('fb-lecture-title')) document.getElementById('fb-lecture-title').value = '';
         document.getElementById('fb-venue-date').value = '';
         if (document.getElementById('fb-template-id')) document.getElementById('fb-template-id').value = '';
         if (document.getElementById('fb-send-certs')) document.getElementById('fb-send-certs').checked = false;
+        
+        if (document.getElementById('fb-cert-options-container')) {
+            document.getElementById('fb-cert-options-container').style.display = 'none';
+        }
+        const tabCustom = document.getElementById('tab-cert-custom');
+        const tabPredef = document.getElementById('tab-cert-predefined');
+        if (tabCustom && tabPredef) {
+            tabCustom.className = 'cert-tab active';
+            tabCustom.style.borderBottom = '2px solid #6366f1';
+            tabCustom.style.color = '#6366f1';
+            tabPredef.className = 'cert-tab';
+            tabPredef.style.borderBottom = '2px solid transparent';
+            tabPredef.style.color = '#666';
+        }
+        const templateIdContainer = document.getElementById('fb-template-id-container');
+        if (templateIdContainer) {
+            templateIdContainer.style.display = 'block';
+        }
+
         document.getElementById('fb-status').style.display = 'none';
         document.getElementById('fb-result').style.display = 'none';
         const btn = document.getElementById('btn-generate-form');
@@ -3076,6 +3111,15 @@ function renderDepartmentCharts(depts) {
     async function checkTemplateVerification() {
         const sendCertsCheckbox = document.getElementById('fb-send-certs');
         if (!sendCertsCheckbox || !sendCertsCheckbox.checked) return;
+
+        const tabPredefined = document.getElementById('tab-cert-predefined');
+        if (tabPredefined && tabPredefined.classList.contains('active')) {
+            const btn = document.getElementById('btn-generate-form');
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            hideStatus();
+            return;
+        }
 
         const templateInput = document.getElementById('fb-template-id');
         const templateId = templateInput ? templateInput.value.trim() : '';
@@ -3124,6 +3168,15 @@ function renderDepartmentCharts(depts) {
         const sendCertsCheckbox = document.getElementById('fb-send-certs');
         if (!sendCertsCheckbox || !sendCertsCheckbox.checked) return;
 
+        const tabPredefined = document.getElementById('tab-cert-predefined');
+        if (tabPredefined && tabPredefined.classList.contains('active')) {
+            const btn = document.getElementById('btn-generate-form');
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            hideStatus();
+            return;
+        }
+
         const btn = document.getElementById('btn-generate-form');
         btn.disabled = true;
         btn.style.opacity = '0.5';
@@ -3136,7 +3189,18 @@ function renderDepartmentCharts(depts) {
     function handleSendCertsChange() {
         const sendCertsCheckbox = document.getElementById('fb-send-certs');
         const btn = document.getElementById('btn-generate-form');
+        const optionsContainer = document.getElementById('fb-cert-options-container');
         if (sendCertsCheckbox && sendCertsCheckbox.checked) {
+            if (optionsContainer) optionsContainer.style.display = 'flex';
+
+            const tabPredefined = document.getElementById('tab-cert-predefined');
+            if (tabPredefined && tabPredefined.classList.contains('active')) {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                hideStatus();
+                return;
+            }
+
             btn.disabled = true;
             btn.style.opacity = '0.5';
             const templateInput = document.getElementById('fb-template-id');
@@ -3147,6 +3211,7 @@ function renderDepartmentCharts(depts) {
                 showStatus("Please paste a Google Slides Template ID to verify.", "warning");
             }
         } else {
+            if (optionsContainer) optionsContainer.style.display = 'none';
             btn.disabled = false;
             btn.style.opacity = '1';
             hideStatus();
@@ -3157,7 +3222,14 @@ function renderDepartmentCharts(depts) {
     async function generateForm() {
         const speaker = document.getElementById('fb-speaker-name').value.trim();
         const date    = document.getElementById('fb-venue-date').value.trim();
-        const templateId = document.getElementById('fb-template-id') ? document.getElementById('fb-template-id').value.trim() : '';
+        const lectureTitle = document.getElementById('fb-lecture-title') ? document.getElementById('fb-lecture-title').value.trim() : '';
+        let templateId = '';
+        const tabPredefined = document.getElementById('tab-cert-predefined');
+        if (tabPredefined && tabPredefined.classList.contains('active')) {
+            templateId = 'PREDEFINED';
+        } else {
+            templateId = document.getElementById('fb-template-id') ? document.getElementById('fb-template-id').value.trim() : '';
+        }
         const sendCerts = document.getElementById('fb-send-certs') ? (document.getElementById('fb-send-certs').checked ? 1 : 0) : 0;
 
         if (!speaker || !date) {
@@ -3194,7 +3266,8 @@ function renderDepartmentCharts(depts) {
                     speaker_name: speaker, 
                     venue_date: date,
                     template_id: templateId,
-                    send_certificates: sendCerts
+                    send_certificates: sendCerts,
+                    lecture_title: lectureTitle
                 })
             });
             
@@ -3755,6 +3828,52 @@ function renderDepartmentCharts(depts) {
             ?.addEventListener('change', handleSendCertsChange);
         document.getElementById('fb-template-id')
             ?.addEventListener('input', handleTemplateIdInput);
+
+        const tabCertCustom = document.getElementById('tab-cert-custom');
+        const tabCertPredefined = document.getElementById('tab-cert-predefined');
+        if (tabCertCustom && tabCertPredefined) {
+            tabCertCustom.addEventListener('click', () => {
+                tabCertCustom.className = 'cert-tab active';
+                tabCertCustom.style.borderBottom = '2px solid #6366f1';
+                tabCertCustom.style.color = '#6366f1';
+                tabCertPredefined.className = 'cert-tab';
+                tabCertPredefined.style.borderBottom = '2px solid transparent';
+                tabCertPredefined.style.color = '#666';
+                
+                const templateIdContainer = document.getElementById('fb-template-id-container');
+                if (templateIdContainer) templateIdContainer.style.display = 'block';
+
+                // Re-evaluate template verification status
+                const templateInput = document.getElementById('fb-template-id');
+                const templateId = templateInput ? templateInput.value.trim() : '';
+                if (templateId) {
+                    checkTemplateVerification();
+                } else {
+                    showStatus("Please paste a Google Slides Template ID to verify.", "warning");
+                    const btn = document.getElementById('btn-generate-form');
+                    btn.disabled = true;
+                    btn.style.opacity = '0.5';
+                }
+            });
+
+            tabCertPredefined.addEventListener('click', () => {
+                tabCertPredefined.className = 'cert-tab active';
+                tabCertPredefined.style.borderBottom = '2px solid #6366f1';
+                tabCertPredefined.style.color = '#6366f1';
+                tabCertCustom.className = 'cert-tab';
+                tabCertCustom.style.borderBottom = '2px solid transparent';
+                tabCertCustom.style.color = '#666';
+                
+                const templateIdContainer = document.getElementById('fb-template-id-container');
+                if (templateIdContainer) templateIdContainer.style.display = 'none';
+
+                // Bypass verification
+                const btn = document.getElementById('btn-generate-form');
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                hideStatus();
+            });
+        }
 
         // Refresh events list
         document.getElementById('btn-refresh-events')

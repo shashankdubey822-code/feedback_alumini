@@ -311,6 +311,9 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
     
     if filters:
         for col, val in filters.items():
+            if col == 'has_lecture_title' and val:
+                df = df[df['lecture_title'].notna() & (df['lecture_title'].str.strip() != '')]
+                continue
             if val and col in df.columns:
                 if isinstance(val, list):
                     df = df[df[col].isin(val)]
@@ -348,6 +351,7 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
             'department': row.get('department', ''),
             'date_of_lecture': venue_date,
             'alumni_speaker_name': row.get('speaker_name', ''),
+            'lecture_title': row.get('lecture_title', ''),
             'session_rating': row.get('session_rating', ''),
             'aspect_most_valuable': row.get('aspect_most_valuable', ''),
             'improvements_suggestions': row.get('improvements_suggestions', ''),
