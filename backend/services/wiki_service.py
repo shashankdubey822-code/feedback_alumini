@@ -1368,7 +1368,7 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
 
         if self.cohere_key:
             from langchain_cohere import ChatCohere
-            models_to_try.append(("Cohere Command-R", ChatCohere(cohere_api_key=self.cohere_key, model="command-r-plus", temperature=0.1, max_retries=0, timeout=15)))
+            models_to_try.append(("Cohere Command-R", ChatCohere(cohere_api_key=self.cohere_key, model="command-r", temperature=0.1, max_retries=0, timeout=15)))
 
         if not models_to_try:
             return {"answer": "No AI available (API keys missing). Cannot execute Agentic ReAct Loop.", "citations": []}
