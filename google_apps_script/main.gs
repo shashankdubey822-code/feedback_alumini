@@ -547,10 +547,20 @@ function _handleGenerateCertificate(payload) {
           textRange.replaceAllText("{{roll_no}}", rollNo);
           textRange.replaceAllText("{{RollNo}}", rollNo);
           
-          textRange.replaceAllText("«LectureTitle»", lectureTitle);
-          textRange.replaceAllText("{{lecture}}", lectureTitle);
-          textRange.replaceAllText("{{LectureTitle}}", lectureTitle);
-          textRange.replaceAllText("{{lecture_title}}", lectureTitle);
+          // Lecture title — if empty, also remove surrounding quote placeholders
+          const titleValue = lectureTitle || "";
+          textRange.replaceAllText("«LectureTitle»", titleValue);
+          textRange.replaceAllText("{{lecture}}", titleValue);
+          textRange.replaceAllText("{{LectureTitle}}", titleValue);
+          textRange.replaceAllText("{{lecture_title}}", titleValue);
+          // If title is blank, remove patterns that have surrounding quotes so cert shows clean
+          if (!titleValue) {
+            textRange.replaceAllText("\u201c{{LectureTitle}}\u201d,", "");
+            textRange.replaceAllText("\u201c{{lecture_title}}\u201d,", "");
+            textRange.replaceAllText("\u201c{{lecture}}\u201d,", "");
+            textRange.replaceAllText("\"\",", "");
+            textRange.replaceAllText("\u201c\u201d,", "");
+          }
           
           textRange.replaceAllText("«AlumniName»", speakerName);
           textRange.replaceAllText("{{AlumniName}}", speakerName);
