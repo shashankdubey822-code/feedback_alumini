@@ -1193,7 +1193,8 @@ function renderDeepAnalysis(da) {
         state.charts.push(actChart);
     }
 
-    const cats = da.categories || [];
+    let cats = da.categories || [];
+    cats = cats.filter(c => (c.name || '').trim().toLowerCase() !== 'non-actionable');
     if (cats.length > 0 && container) {
         const catCard = document.createElement('div');
         catCard.className = 'chart-card';
@@ -4108,8 +4109,17 @@ function renderDepartmentCharts(depts) {
             dataByDept[d] = { ratings: [], sentimentScores: [] };
         });
 
+        const normalizeDept = (dept) => {
+            const clean = (dept || '').trim().toLowerCase();
+            if (clean === 'csd' || clean === 'b.tech cse' || clean === 'b.tech (cse)' || clean === 'cse') return 'CSD';
+            if (clean === 'me' || clean === 'b.tech me' || clean === 'b.tech (me)' || clean === 'mechanical') return 'ME';
+            if (clean === 'r and ai' || clean === 'r & ai' || clean === 'b.tech r&ai' || clean === 'b.tech r and ai' || clean === 'r&ai') return 'R and AI';
+            if (clean === 'ec' || clean === 'ece' || clean === 'b.tech ece' || clean === 'b.tech (ece)' || clean === 'b.tech ec') return 'EC';
+            return dept;
+        };
+
         state.tableData.forEach(row => {
-            const d = (row.department || '').trim();
+            const d = normalizeDept(row.department);
             if (soeDepts.includes(d)) {
                 const rating = parseFloat(row.session_rating);
                 if (!isNaN(rating)) dataByDept[d].ratings.push(rating);
@@ -4193,8 +4203,17 @@ function renderDepartmentCharts(depts) {
             dataByDept[d] = { sentimentScores: [], actionableCount: 0 };
         });
 
+        const normalizeDept = (dept) => {
+            const clean = (dept || '').trim().toLowerCase();
+            if (clean === 'csd' || clean === 'b.tech cse' || clean === 'b.tech (cse)' || clean === 'cse') return 'CSD';
+            if (clean === 'me' || clean === 'b.tech me' || clean === 'b.tech (me)' || clean === 'mechanical') return 'ME';
+            if (clean === 'r and ai' || clean === 'r & ai' || clean === 'b.tech r&ai' || clean === 'b.tech r and ai' || clean === 'r&ai') return 'R and AI';
+            if (clean === 'ec' || clean === 'ece' || clean === 'b.tech ece' || clean === 'b.tech (ece)' || clean === 'b.tech ec') return 'EC';
+            return dept;
+        };
+
         state.tableData.forEach(row => {
-            const d = (row.department || '').trim();
+            const d = normalizeDept(row.department);
             if (soeDepts.includes(d)) {
                 const score = parseFloat(row.dl_sentiment_score || row.sentiment_score);
                 if (!isNaN(score)) dataByDept[d].sentimentScores.push(score);

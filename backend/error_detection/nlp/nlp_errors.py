@@ -45,7 +45,7 @@ class NLPErrorDetector(ErrorDetector):
                     LEFT JOIN feedback_analysis a ON r.id = a.response_id 
                     WHERE a.response_id IS NULL
                 """)
-                backlog = backlog_res["count"] if backlog_res else 0
+                backlog = int(backlog_res["count"]) if backlog_res else 0
                 if backlog > 50:
                     results.append(self._warn("dl_backlog",
                         f"{backlog} rows pending DL processing",
@@ -66,7 +66,7 @@ class NLPErrorDetector(ErrorDetector):
                     
             if "sentiment_label" in cols:
                 sent_res = execute_one("SELECT COUNT(*) as count FROM feedback_analysis WHERE sentiment_label IS NOT NULL")
-                sent_count = sent_res["count"] if sent_res else 0
+                sent_count = int(sent_res["count"]) if sent_res else 0
                 if sent_count == 0:
                     results.append(self._warn("sentiment_data", "No sentiment labels found — NLP section will be empty"))
                 else:

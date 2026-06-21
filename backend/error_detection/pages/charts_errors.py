@@ -48,7 +48,7 @@ class ChartsErrorDetector(ErrorDetector):
         # Check session_rating column exists and has data
         try:
             res = execute_one("SELECT COUNT(*) as count FROM feedback_responses WHERE session_rating IS NOT NULL")
-            rated = res["count"] if res else 0
+            rated = int(res["count"]) if res else 0
             if rated == 0:
                 results.append(self._warn("rating_data", "No session_rating data — rating distribution chart will be empty"))
             else:

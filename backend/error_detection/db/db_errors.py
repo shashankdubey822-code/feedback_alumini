@@ -66,7 +66,7 @@ class DBErrorDetector(ErrorDetector):
         # 4. Row count sanity
         try:
             res = execute_one("SELECT COUNT(*) as count FROM feedback_responses")
-            count = res["count"] if res else 0
+            count = int(res["count"]) if res else 0
             if count == 0:
                 results.append(self._warn("row_count", "feedback_responses table is empty"))
             else:

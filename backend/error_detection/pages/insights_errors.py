@@ -35,8 +35,8 @@ class InsightsErrorDetector(ErrorDetector):
             row_total = execute_one("SELECT COUNT(*) as count FROM feedback_responses")
             row_processed = execute_one("SELECT COUNT(*) as count FROM feedback_analysis")
             
-            total = row_total['count'] if row_total else 0
-            processed = row_processed['count'] if row_processed else 0
+            total = int(row_total['count']) if row_total else 0
+            processed = int(row_processed['count']) if row_processed else 0
             
             if processed == 0 and total > 0:
                 results.append(self._warn("dl_processed_count",
