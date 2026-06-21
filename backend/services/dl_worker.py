@@ -65,6 +65,10 @@ def start_dl_worker(logger_unused=None):
                     if not batch:
                         dl_logger.info(f"[BACKFILL] Complete. {total_done} embeddings generated.")
                         break
+                    
+                    batch_attempted = 0
+                    batch_success = 0
+                    
                     for row in batch:
                         try:
                             # 1. Clean and combine feedback responses
@@ -78,6 +82,9 @@ def start_dl_worker(logger_unused=None):
                             if (not clean_feedback.strip() or 
                                     len(clean_feedback) < 4 or 
                                     clean_feedback.lower() in ['na', 'none', 'n/a', 'nil', '.', 'ok', 'okay', 'good', 'nothing']):
+                                # Save dummy zero-vector so we don't query it next time
+                                dummy_emb = [0.0] * 768
+                                api_update('feedback_responses', 'id', row['id'], {'embedding': dummy_emb})
                                 continue
 
                             # 3. Enrich the text with context details (Speaker & Topic)
@@ -85,13 +92,23 @@ def start_dl_worker(logger_unused=None):
                             topic = str(row['lecture_title'] or 'Unknown').strip()
                             enriched_text = f"Speaker: {speaker} | Topic: {topic} | Feedback: {clean_feedback}"
 
+                            batch_attempted += 1
                             emb = _rag.generate_embedding(enriched_text)
                             if emb:
                                 api_update('feedback_responses', 'id', row['id'], {'embedding': emb})
                                 total_done += 1
+                                batch_success += 1
+                            else:
+                                dl_logger.warning(f"[BACKFILL] Failed to generate embedding for row {row['id']}.")
                         except Exception as e_b:
                             dl_logger.warning(f"[BACKFILL] Skipped row {row['id']}: {e_b}")
                         time.sleep(0.05)  # small pause — don't hammer the model
+                    
+                    # Prevent infinite loops when all real embedding generations in a batch fail
+                    if batch_attempted > 0 and batch_success == 0:
+                        dl_logger.error("[BACKFILL] All embedding generations in this batch failed. Stopping backfill to prevent infinite retry loops.")
+                        break
+
                     dl_logger.info(f"[BACKFILL] Progress: {total_done} embeddings done so far...")
             except Exception as e_bf:
                 dl_logger.error(f"[BACKFILL] Failed: {e_bf}")
@@ -211,9 +228,24 @@ def start_dl_worker(logger_unused=None):
                         # ── Generate and persist embedding vector ─────────────────────
                         try:
                             _rag = RAGService()
-                            combined_text = " ".join(filter(None, [val_text, imp_text, fut_text]))
-                            if combined_text.strip():
-                                emb = _rag.generate_embedding(combined_text)
+                            # 1. Clean and combine feedback responses
+                            val_clean = str(row.get('aspect_most_valuable') or '').strip()
+                            imp_clean = str(row.get('improvements_suggestions') or '').strip()
+                            fut_clean = str(row.get('future_topics') or '').strip()
+                            feedback_parts = [t for t in [val_clean, imp_clean, fut_clean] if t and t.lower() != 'nan' and t.strip()]
+                            clean_feedback = " ".join(feedback_parts)
+
+                            if not clean_feedback.strip() or len(clean_feedback) < 4 or clean_feedback.lower() in ['na', 'none', 'n/a', 'nil', '.', 'ok', 'okay', 'good', 'nothing']:
+                                # Save dummy zero-vector so we don't query it again during backfill
+                                dummy_emb = [0.0] * 768
+                                api_update('feedback_responses', 'id', response_id, {'embedding': dummy_emb})
+                            else:
+                                # 2. Enrich the text with context details (Speaker & Topic)
+                                speaker = str(row.get('speaker_name') or 'Unknown').strip()
+                                topic = str(row.get('lecture_title') or 'Unknown').strip()
+                                enriched_text = f"Speaker: {speaker} | Topic: {topic} | Feedback: {clean_feedback}"
+
+                                emb = _rag.generate_embedding(enriched_text)
                                 if emb:
                                     api_update('feedback_responses', 'id', response_id, {'embedding': emb})
                                     dl_logger.info(f"Embedding saved for response {response_id} ({len(emb)} dims)")
