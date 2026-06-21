@@ -4200,208 +4200,208 @@ function renderDepartmentCharts(depts) {
         }
     }, 1000);
 
-    // ========== SoE SPECIFIC CHARTS & NLP METRICS ==========
-    function renderSoECharts() {
-        const container = document.getElementById('soe-charts-grid');
-        if (!container) return;
-        container.innerHTML = '';
-
-        if (!state.tableData || state.tableData.length === 0) {
-            container.innerHTML = '<div class="empty-state">No engineering data found.</div>';
-            return;
-        }
-
-        const soeDepts = ['CSD', 'ME', 'R and AI', 'EC'];
-        const dataByDept = {};
-        soeDepts.forEach(d => {
-            dataByDept[d] = { ratings: [], sentimentScores: [] };
-        });
-
-        const normalizeDept = (dept) => {
-            const clean = (dept || '').trim().toLowerCase();
-            if (clean === 'csd' || clean === 'b.tech cse' || clean === 'b.tech (cse)' || clean === 'cse') return 'CSD';
-            if (clean === 'me' || clean === 'b.tech me' || clean === 'b.tech (me)' || clean === 'mechanical') return 'ME';
-            if (clean === 'r and ai' || clean === 'r & ai' || clean === 'b.tech r&ai' || clean === 'b.tech r and ai' || clean === 'r&ai') return 'R and AI';
-            if (clean === 'ec' || clean === 'ece' || clean === 'b.tech ece' || clean === 'b.tech (ece)' || clean === 'b.tech ec') return 'EC';
-            return dept;
-        };
-
-        state.tableData.forEach(row => {
-            const d = normalizeDept(row.department);
-            if (soeDepts.includes(d)) {
-                const rating = parseFloat(row.session_rating);
-                if (!isNaN(rating)) dataByDept[d].ratings.push(rating);
-                const score = parseFloat(row.dl_sentiment_score || row.sentiment_score);
-                if (!isNaN(score)) dataByDept[d].sentimentScores.push(score);
-            }
-        });
-
-        // 1) Response Volume Chart
-        const volCard = document.createElement('div');
-        volCard.className = 'chart-card';
-        volCard.innerHTML = `<div class="chart-card-header"><div class="chart-card-title">SoE Response Volume</div></div><div class="chart-canvas-wrapper"><canvas id="soe-vol-chart"></canvas></div>`;
-        container.appendChild(volCard);
-        const ctxVol = document.getElementById('soe-vol-chart').getContext('2d');
-        const chartVol = new Chart(ctxVol, {
-            type: 'doughnut',
-            data: {
-                labels: soeDepts,
-                datasets: [{
-                    data: soeDepts.map(d => dataByDept[d].ratings.length),
-                    backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ec4899']
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'bottom', labels: { color: '#8b8b9e' } }
-                },
-                cutout: '60%'
-            }
-        });
-        state.charts.push(chartVol);
-
-        // 2) Average Rating Chart
-        const ratingCard = document.createElement('div');
-        ratingCard.className = 'chart-card';
-        ratingCard.innerHTML = `<div class="chart-card-header"><div class="chart-card-title">SoE Avg Rating Comparison</div></div><div class="chart-canvas-wrapper"><canvas id="soe-rating-chart"></canvas></div>`;
-        container.appendChild(ratingCard);
-        const ctxRating = document.getElementById('soe-rating-chart').getContext('2d');
-        const chartRating = new Chart(ctxRating, {
-            type: 'bar',
-            data: {
-                labels: soeDepts,
-                datasets: [{
-                    label: 'Avg Rating',
-                    data: soeDepts.map(d => {
-                        const r = dataByDept[d].ratings;
-                        return r.length ? Math.round((r.reduce((a, b) => a + b, 0) / r.length) * 100) / 100 : 0;
-                    }),
-                    backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ec4899'],
-                    borderRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: { min: 1, max: 5, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b8b9e' } },
-                    x: { grid: { display: false }, ticks: { color: '#8b8b9e' } }
-                }
-            }
-        });
-        state.charts.push(chartRating);
-    }
-
-    function renderSoENLPMetrics() {
-        const container = document.getElementById('soe-nlp-grid');
-        if (!container) return;
-        container.innerHTML = '';
-
-        if (!state.tableData || state.tableData.length === 0) {
-            container.innerHTML = '<div class="empty-state">No engineering data found.</div>';
-            return;
-        }
-
-        const soeDepts = ['CSD', 'ME', 'R and AI', 'EC'];
-        const dataByDept = {};
-        soeDepts.forEach(d => {
-            dataByDept[d] = { sentimentScores: [], actionableCount: 0 };
-        });
-
-        const normalizeDept = (dept) => {
-            const clean = (dept || '').trim().toLowerCase();
-            if (clean === 'csd' || clean === 'b.tech cse' || clean === 'b.tech (cse)' || clean === 'cse') return 'CSD';
-            if (clean === 'me' || clean === 'b.tech me' || clean === 'b.tech (me)' || clean === 'mechanical') return 'ME';
-            if (clean === 'r and ai' || clean === 'r & ai' || clean === 'b.tech r&ai' || clean === 'b.tech r and ai' || clean === 'r&ai') return 'R and AI';
-            if (clean === 'ec' || clean === 'ece' || clean === 'b.tech ece' || clean === 'b.tech (ece)' || clean === 'b.tech ec') return 'EC';
-            return dept;
-        };
-
-        state.tableData.forEach(row => {
-            const d = normalizeDept(row.department);
-            if (soeDepts.includes(d)) {
-                const score = parseFloat(row.dl_sentiment_score || row.sentiment_score);
-                if (!isNaN(score)) dataByDept[d].sentimentScores.push(score);
-
-                // Actionable suggestions count
-                const keywordsRaw = row.dl_keywords;
-                if (keywordsRaw) {
-                    try {
-                        const kw = typeof keywordsRaw === 'string' ? JSON.parse(keywordsRaw) : keywordsRaw;
-                        if (kw && kw.is_actionable) {
-                            dataByDept[d].actionableCount++;
-                        }
-                    } catch(e) {}
-                }
-            }
-        });
-
-        // 1) Sentiment Comparison Chart
-        const sentCard = document.createElement('div');
-        sentCard.className = 'chart-card';
-        sentCard.innerHTML = `<div class="chart-card-header"><div class="chart-card-title">SoE Avg Sentiment Polarity</div></div><div class="chart-canvas-wrapper"><canvas id="soe-sent-chart"></canvas></div>`;
-        container.appendChild(sentCard);
-        const ctxSent = document.getElementById('soe-sent-chart').getContext('2d');
-        const chartSent = new Chart(ctxSent, {
-            type: 'bar',
-            data: {
-                labels: soeDepts,
-                datasets: [{
-                    label: 'Avg Sentiment Polarity',
-                    data: soeDepts.map(d => {
-                        const s = dataByDept[d].sentimentScores;
-                        return s.length ? Math.round((s.reduce((a, b) => a + b, 0) / s.length) * 100) / 100 : 0;
-                    }),
-                    backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ec4899'],
-                    borderRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: { min: -1, max: 1, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b8b9e' } },
-                    x: { grid: { display: false }, ticks: { color: '#8b8b9e' } }
-                }
-            }
-        });
-        state.charts.push(chartSent);
-
-        // 2) Actionable Suggestions Chart
-        const actCard = document.createElement('div');
-        actCard.className = 'chart-card';
-        actCard.innerHTML = `<div class="chart-card-header"><div class="chart-card-title">SoE Actionable Suggestions Count</div></div><div class="chart-canvas-wrapper"><canvas id="soe-act-chart"></canvas></div>`;
-        container.appendChild(actCard);
-        const ctxAct = document.getElementById('soe-act-chart').getContext('2d');
-        const chartAct = new Chart(ctxAct, {
-            type: 'bar',
-            data: {
-                labels: soeDepts,
-                datasets: [{
-                    label: 'Actionable Suggestions',
-                    data: soeDepts.map(d => dataByDept[d].actionableCount),
-                    backgroundColor: ['#ff5500', '#10b981', '#f59e0b', '#ec4899'],
-                    borderRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b8b9e' } },
-                    x: { grid: { display: false }, ticks: { color: '#8b8b9e' } }
-                }
-            }
-        });
-        state.charts.push(chartAct);
-    }
-
 })();
+
+// ========== SoE SPECIFIC CHARTS & NLP METRICS ==========
+function renderSoECharts() {
+    const container = document.getElementById('soe-charts-grid');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!state.tableData || state.tableData.length === 0) {
+        container.innerHTML = '<div class="empty-state">No engineering data found.</div>';
+        return;
+    }
+
+    const soeDepts = ['CSD', 'ME', 'R and AI', 'EC'];
+    const dataByDept = {};
+    soeDepts.forEach(d => {
+        dataByDept[d] = { ratings: [], sentimentScores: [] };
+    });
+
+    const normalizeDept = (dept) => {
+        const clean = (dept || '').trim().toLowerCase();
+        if (clean === 'csd' || clean === 'b.tech cse' || clean === 'b.tech (cse)' || clean === 'cse') return 'CSD';
+        if (clean === 'me' || clean === 'b.tech me' || clean === 'b.tech (me)' || clean === 'mechanical') return 'ME';
+        if (clean === 'r and ai' || clean === 'r & ai' || clean === 'b.tech r&ai' || clean === 'b.tech r and ai' || clean === 'r&ai') return 'R and AI';
+        if (clean === 'ec' || clean === 'ece' || clean === 'b.tech ece' || clean === 'b.tech (ece)' || clean === 'b.tech ec') return 'EC';
+        return dept;
+    };
+
+    state.tableData.forEach(row => {
+        const d = normalizeDept(row.department);
+        if (soeDepts.includes(d)) {
+            const rating = parseFloat(row.session_rating);
+            if (!isNaN(rating)) dataByDept[d].ratings.push(rating);
+            const score = parseFloat(row.dl_sentiment_score || row.sentiment_score);
+            if (!isNaN(score)) dataByDept[d].sentimentScores.push(score);
+        }
+    });
+
+    // 1) Response Volume Chart
+    const volCard = document.createElement('div');
+    volCard.className = 'chart-card';
+    volCard.innerHTML = `<div class="chart-card-header"><div class="chart-card-title">SoE Response Volume</div></div><div class="chart-canvas-wrapper"><canvas id="soe-vol-chart"></canvas></div>`;
+    container.appendChild(volCard);
+    const ctxVol = document.getElementById('soe-vol-chart').getContext('2d');
+    const chartVol = new Chart(ctxVol, {
+        type: 'doughnut',
+        data: {
+            labels: soeDepts,
+            datasets: [{
+                data: soeDepts.map(d => dataByDept[d].ratings.length),
+                backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ec4899']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { color: '#8b8b9e' } }
+            },
+            cutout: '60%'
+        }
+    });
+    state.charts.push(chartVol);
+
+    // 2) Average Rating Chart
+    const ratingCard = document.createElement('div');
+    ratingCard.className = 'chart-card';
+    ratingCard.innerHTML = `<div class="chart-card-header"><div class="chart-card-title">SoE Avg Rating Comparison</div></div><div class="chart-canvas-wrapper"><canvas id="soe-rating-chart"></canvas></div>`;
+    container.appendChild(ratingCard);
+    const ctxRating = document.getElementById('soe-rating-chart').getContext('2d');
+    const chartRating = new Chart(ctxRating, {
+        type: 'bar',
+        data: {
+            labels: soeDepts,
+            datasets: [{
+                label: 'Avg Rating',
+                data: soeDepts.map(d => {
+                    const r = dataByDept[d].ratings;
+                    return r.length ? Math.round((r.reduce((a, b) => a + b, 0) / r.length) * 100) / 100 : 0;
+                }),
+                backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ec4899'],
+                borderRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { min: 1, max: 5, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b8b9e' } },
+                x: { grid: { display: false }, ticks: { color: '#8b8b9e' } }
+            }
+        }
+    });
+    state.charts.push(chartRating);
+}
+
+function renderSoENLPMetrics() {
+    const container = document.getElementById('soe-nlp-grid');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!state.tableData || state.tableData.length === 0) {
+        container.innerHTML = '<div class="empty-state">No engineering data found.</div>';
+        return;
+    }
+
+    const soeDepts = ['CSD', 'ME', 'R and AI', 'EC'];
+    const dataByDept = {};
+    soeDepts.forEach(d => {
+        dataByDept[d] = { sentimentScores: [], actionableCount: 0 };
+    });
+
+    const normalizeDept = (dept) => {
+        const clean = (dept || '').trim().toLowerCase();
+        if (clean === 'csd' || clean === 'b.tech cse' || clean === 'b.tech (cse)' || clean === 'cse') return 'CSD';
+        if (clean === 'me' || clean === 'b.tech me' || clean === 'b.tech (me)' || clean === 'mechanical') return 'ME';
+        if (clean === 'r and ai' || clean === 'r & ai' || clean === 'b.tech r&ai' || clean === 'b.tech r and ai' || clean === 'r&ai') return 'R and AI';
+        if (clean === 'ec' || clean === 'ece' || clean === 'b.tech ece' || clean === 'b.tech (ece)' || clean === 'b.tech ec') return 'EC';
+        return dept;
+    };
+
+    state.tableData.forEach(row => {
+        const d = normalizeDept(row.department);
+        if (soeDepts.includes(d)) {
+            const score = parseFloat(row.dl_sentiment_score || row.sentiment_score);
+            if (!isNaN(score)) dataByDept[d].sentimentScores.push(score);
+
+            // Actionable suggestions count
+            const keywordsRaw = row.dl_keywords;
+            if (keywordsRaw) {
+                try {
+                    const kw = typeof keywordsRaw === 'string' ? JSON.parse(keywordsRaw) : keywordsRaw;
+                    if (kw && kw.is_actionable) {
+                        dataByDept[d].actionableCount++;
+                    }
+                } catch(e) {}
+            }
+        }
+    });
+
+    // 1) Sentiment Comparison Chart
+    const sentCard = document.createElement('div');
+    sentCard.className = 'chart-card';
+    sentCard.innerHTML = `<div class="chart-card-header"><div class="chart-card-title">SoE Avg Sentiment Polarity</div></div><div class="chart-canvas-wrapper"><canvas id="soe-sent-chart"></canvas></div>`;
+    container.appendChild(sentCard);
+    const ctxSent = document.getElementById('soe-sent-chart').getContext('2d');
+    const chartSent = new Chart(ctxSent, {
+        type: 'bar',
+        data: {
+            labels: soeDepts,
+            datasets: [{
+                label: 'Avg Sentiment Polarity',
+                data: soeDepts.map(d => {
+                    const s = dataByDept[d].sentimentScores;
+                    return s.length ? Math.round((s.reduce((a, b) => a + b, 0) / s.length) * 100) / 100 : 0;
+                }),
+                backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ec4899'],
+                borderRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { min: -1, max: 1, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b8b9e' } },
+                x: { grid: { display: false }, ticks: { color: '#8b8b9e' } }
+            }
+        }
+    });
+    state.charts.push(chartSent);
+
+    // 2) Actionable Suggestions Chart
+    const actCard = document.createElement('div');
+    actCard.className = 'chart-card';
+    actCard.innerHTML = `<div class="chart-card-header"><div class="chart-card-title">SoE Actionable Suggestions Count</div></div><div class="chart-canvas-wrapper"><canvas id="soe-act-chart"></canvas></div>`;
+    container.appendChild(actCard);
+    const ctxAct = document.getElementById('soe-act-chart').getContext('2d');
+    const chartAct = new Chart(ctxAct, {
+        type: 'bar',
+        data: {
+            labels: soeDepts,
+            datasets: [{
+                label: 'Actionable Suggestions',
+                data: soeDepts.map(d => dataByDept[d].actionableCount),
+                backgroundColor: ['#ff5500', '#10b981', '#f59e0b', '#ec4899'],
+                borderRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b8b9e' } },
+                x: { grid: { display: false }, ticks: { color: '#8b8b9e' } }
+            }
+        }
+    });
+    state.charts.push(chartAct);
+}
 
 // ============================================================
 // ADVANCED ANALYTICS CHARTS — Sentiment Timeline, Speaker
