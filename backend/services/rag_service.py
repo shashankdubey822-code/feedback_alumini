@@ -16,27 +16,16 @@ import os
 _embedding_model = None
 
 def _get_embedding_model():
-    """Load embedding model: Use Gemini if available, else local SentenceTransformer"""
+    """Load embedding model: Exclusively BAAI/bge-base-en-v1.5 (768-dim)"""
     global _embedding_model
     if _embedding_model is None:
-        gemini_key = os.environ.get("GEMINI_API_KEY")
-        if gemini_key:
-            try:
-                logger.info("Loading Gemini Embedding model (faster, no local download)...")
-                from langchain_google_genai import GoogleGenerativeAIEmbeddings
-                _embedding_model = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-2-preview", google_api_key=gemini_key)
-                logger.info("Gemini Embedding model loaded successfully.")
-                return _embedding_model
-            except Exception as e:
-                logger.error(f"Failed to load Gemini embeddings: {str(e)}")
-                
         try:
-            logger.info("Loading local sentence-transformers/all-mpnet-base-v2 embedding model...")
+            logger.info("Loading local sentence-transformers BAAI/bge-base-en-v1.5 embedding model...")
             from sentence_transformers import SentenceTransformer
-            _embedding_model = SentenceTransformer('all-mpnet-base-v2')
-            logger.info("Local embedding model loaded successfully.")
+            _embedding_model = SentenceTransformer('BAAI/bge-base-en-v1.5')
+            logger.info("BAAI/bge-base-en-v1.5 model loaded successfully.")
         except Exception as e:
-            logger.error(f"Failed to load sentence-transformers model: {str(e)}")
+            logger.error(f"Failed to load BAAI/bge-base-en-v1.5 model: {str(e)}")
             _embedding_model = False  # Flag load failure
     return _embedding_model
 
@@ -57,15 +46,9 @@ class RAGService:
             return None
 
         try:
-            # Check if using LangChain Gemini Embeddings
-            if hasattr(model, 'embed_query'):
-                embedding = model.embed_query(text.strip())
-                # Truncate to first 768 dimensions (leveraging Matryoshka Representation Learning)
-                return [float(x) for x in embedding[:768]]
-            else:
-                # Local SentenceTransformer (all-mpnet-base-v2 is 768 dims)
-                embedding = model.encode(text.strip(), convert_to_numpy=True)
-                return [float(x) for x in embedding[:768]]
+            # Local SentenceTransformer (BAAI/bge-base-en-v1.5 is 768 dims)
+            embedding = model.encode(text.strip(), convert_to_numpy=True)
+            return [float(x) for x in embedding[:768]]
         except Exception as e:
             logger.error(f"Error generating embedding: {str(e)}")
             return None

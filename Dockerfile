@@ -19,7 +19,7 @@ RUN uv pip install --system --no-cache -r requirements.txt
 
 ENV HF_HOME=/app/.cache
 ENV HF_HUB_ENABLE_HF_TRANSFER=1
-RUN python -c "from transformers import AutoTokenizer, AutoModelForSequenceClassification; AutoTokenizer.from_pretrained('cardiffnlp/twitter-roberta-base-sentiment-latest'); AutoModelForSequenceClassification.from_pretrained('cardiffnlp/twitter-roberta-base-sentiment-latest'); from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-mpnet-base-v2')"
+RUN python -c "from transformers import AutoTokenizer, AutoModelForSequenceClassification; AutoTokenizer.from_pretrained('cardiffnlp/twitter-roberta-base-sentiment-latest'); AutoModelForSequenceClassification.from_pretrained('cardiffnlp/twitter-roberta-base-sentiment-latest'); from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-base-en-v1.5')"
 RUN chmod -R 777 /app/.cache
 RUN python -c "import nltk; [nltk.download(res, download_dir='/usr/local/share/nltk_data', quiet=True) for res in ['punkt_tab', 'stopwords', 'brown', 'wordnet']]"
 
