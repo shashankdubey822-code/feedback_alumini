@@ -785,6 +785,71 @@ function setupDashboardRAGChat() {
 
     const chatHistory = [];
 
+    // ── Preset question chips ────────────────────────────────────────────────
+    const PRESET_QUESTIONS = [
+        '💡 What topics do students want in future sessions?',
+        '⭐ Which department gave the lowest ratings?',
+        '🎤 Which alumni speaker was rated highest?',
+        '📝 What are the most common improvement suggestions?',
+        '😊 What did students find most valuable?',
+        '📊 How many responses mentioned practical skills?',
+    ];
+    const chipsContainer = document.createElement('div');
+    chipsContainer.id = 'rag-preset-chips';
+    chipsContainer.style.cssText = `
+        display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 0 12px 0;
+        border-bottom: 1px solid rgba(108,92,231,0.15); margin-bottom: 10px;
+    `;
+    PRESET_QUESTIONS.forEach(q => {
+        const chip = document.createElement('button');
+        chip.textContent = q;
+        chip.style.cssText = `
+            background: rgba(108,92,231,0.1); border: 1px solid rgba(108,92,231,0.3);
+            color: #4c3a9e; border-radius: 20px; padding: 4px 12px; font-size: 11.5px;
+            cursor: pointer; transition: all 0.2s; white-space: nowrap;
+        `;
+        chip.addEventListener('mouseenter', () => { chip.style.background = 'rgba(108,92,231,0.25)'; });
+        chip.addEventListener('mouseleave', () => { chip.style.background = 'rgba(108,92,231,0.1)'; });
+        chip.addEventListener('click', () => {
+            // Strip emoji prefix
+            const cleanQ = q.replace(/^[^a-zA-Z]+/, '').trim();
+            inputEl.value = cleanQ;
+            sendMessage();
+        });
+        chipsContainer.appendChild(chip);
+    });
+    if (logEl && logEl.parentNode) {
+        logEl.parentNode.insertBefore(chipsContainer, logEl);
+    }
+    // ── Filter-aware context banner ──────────────────────────────────────────
+    const _buildFilterBanner = () => {
+        const existing = document.getElementById('rag-filter-banner');
+        if (existing) existing.remove();
+        const activeFilters = [];
+        const yearEl = document.getElementById('filter-year') || document.querySelector('[data-filter="venue_year"]');
+        const sessEl = document.getElementById('filter-session') || document.querySelector('[data-filter="venue_session"]');
+        const deptEl = document.getElementById('filter-department') || document.querySelector('[data-filter="department"]');
+        if (yearEl && yearEl.value) activeFilters.push('Year: ' + yearEl.value);
+        if (sessEl && sessEl.value) activeFilters.push('Session: ' + sessEl.value);
+        if (deptEl && deptEl.value) activeFilters.push('Dept: ' + deptEl.value);
+        if (activeFilters.length === 0) return;
+        const banner = document.createElement('div');
+        banner.id = 'rag-filter-banner';
+        banner.style.cssText = `
+            background: rgba(0,184,148,0.1); border: 1px solid rgba(0,184,148,0.3);
+            border-radius: 8px; padding: 6px 12px; font-size: 11.5px; color: #00695c;
+            margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+        `;
+        banner.innerHTML = '🎯 <strong>AI analyzing filtered data:</strong> ' + activeFilters.join(' | ');
+        if (logEl && logEl.parentNode) {
+            logEl.parentNode.insertBefore(banner, chipsContainer);
+        }
+    };
+    // Rebuild banner whenever filters change
+    document.addEventListener('filter-applied', _buildFilterBanner);
+    _buildFilterBanner();
+    // ────────────────────────────────────────────────────────────────────────
+
     const sendMessage = async () => {
         const text = inputEl.value.trim();
         if (!text) return;
@@ -805,13 +870,28 @@ function setupDashboardRAGChat() {
         }, 3000);
 
         try {
+            // Collect active dashboard filters to pass context to AI
+            const _getActiveFilter = (selectors) => {
+                for (const sel of selectors) {
+                    const el = document.querySelector(sel);
+                    if (el && el.value) return el.value;
+                }
+                return null;
+            };
+            const _filterYear = _getActiveFilter(['#filter-year', '[data-filter="venue_year"]']);
+            const _filterSession = _getActiveFilter(['#filter-session', '[data-filter="venue_session"]']);
+            const _filterDept = _getActiveFilter(['#filter-department', '[data-filter="department"]']);
+
             const res = await fetch(`${API_BASE}/api/v1/wiki/query`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     question: text,
                     history: chatHistory,
-                    session_id: 'dashboard_rag_' + (localStorage.getItem('wiki_session_id') || 'gen')
+                    session_id: 'dashboard_rag_' + (localStorage.getItem('wiki_session_id') || 'gen'),
+                    filter_year: _filterYear ? parseInt(_filterYear) : null,
+                    filter_semester: _filterSession || null,
+                    filter_dept: _filterDept || null,
                 })
             });
 

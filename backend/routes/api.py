@@ -625,3 +625,204 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
         'absa': absa_data
     }
 
+
+# ════════════════════════════════════════════════════════════════════
+#  NEW ANALYTICS ENDPOINTS — Advanced Dashboard Features
+# ════════════════════════════════════════════════════════════════════
+
+@legacy_bp.route('/analytics/sentiment-timeline', methods=['POST'])
+@log_endpoint_access
+def get_sentiment_timeline():
+    """Return monthly sentiment breakdown (positive/neutral/negative counts + avg rating)"""
+    try:
+        body = request.get_json() or {}
+        filters = body.get('filters', {})
+        year = filters.get('venue_year')
+        session = filters.get('venue_session')
+        dept = filters.get('department')
+
+        sql = """
+            SELECT
+                TO_CHAR(DATE_TRUNC('month', fr.submitted_at), 'YYYY-MM') AS month,
+                COUNT(*) AS total,
+                SUM(CASE WHEN fa.sentiment_label = 'POSITIVE' THEN 1 ELSE 0 END) AS positive,
+                SUM(CASE WHEN fa.sentiment_label = 'NEUTRAL'  THEN 1 ELSE 0 END) AS neutral,
+                SUM(CASE WHEN fa.sentiment_label = 'NEGATIVE' THEN 1 ELSE 0 END) AS negative,
+                ROUND(AVG(fr.session_rating)::numeric, 2) AS avg_rating
+            FROM feedback_responses fr
+            JOIN feedback_analysis fa ON fa.response_id = fr.id
+            JOIN events e ON e.id = fr.event_id
+            WHERE fr.submitted_at IS NOT NULL
+        """
+        params = []
+        if year:
+            sql += " AND EXTRACT(YEAR FROM e.venue_date) = %s"
+            params.append(int(year))
+        if session:
+            month_map = {
+                'Odd':  [7, 8, 9, 10, 11, 12],
+                'Even': [1, 2, 3, 4, 5, 6],
+            }
+            months = month_map.get(session, [])
+            if months:
+                placeholders = ','.join(['%s'] * len(months))
+                sql += f" AND EXTRACT(MONTH FROM e.venue_date) IN ({placeholders})"
+                params.extend(months)
+        if dept:
+            sql += " AND e.department = %s"
+            params.append(dept)
+        sql += " GROUP BY month ORDER BY month ASC"
+
+        rows = execute_all(sql, tuple(params) if params else None)
+        return jsonify({'timeline': [dict(r) for r in rows]}), 200
+    except Exception as e:
+        logger.error(f"sentiment-timeline error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@legacy_bp.route('/analytics/speaker-effectiveness', methods=['POST'])
+@log_endpoint_access
+def get_speaker_effectiveness():
+    """Return per-speaker avg rating, response count, and top department"""
+    try:
+        body = request.get_json() or {}
+        filters = body.get('filters', {})
+        year = filters.get('venue_year')
+        session = filters.get('venue_session')
+        dept = filters.get('department')
+
+        sql = """
+            SELECT
+                e.speaker_name,
+                COUNT(fr.id) AS response_count,
+                ROUND(AVG(fr.session_rating)::numeric, 2) AS avg_rating,
+                ROUND(AVG(fa.sentiment_score)::numeric, 3) AS avg_sentiment,
+                MODE() WITHIN GROUP (ORDER BY e.department) AS top_dept
+            FROM feedback_responses fr
+            JOIN events e ON e.id = fr.event_id
+            LEFT JOIN feedback_analysis fa ON fa.response_id = fr.id
+            WHERE e.speaker_name IS NOT NULL AND e.speaker_name <> ''
+        """
+        params = []
+        if year:
+            sql += " AND EXTRACT(YEAR FROM e.venue_date) = %s"
+            params.append(int(year))
+        if session:
+            month_map = {'Odd': [7,8,9,10,11,12], 'Even': [1,2,3,4,5,6]}
+            months = month_map.get(session, [])
+            if months:
+                phs = ','.join(['%s'] * len(months))
+                sql += f" AND EXTRACT(MONTH FROM e.venue_date) IN ({phs})"
+                params.extend(months)
+        if dept:
+            sql += " AND e.department = %s"
+            params.append(dept)
+        sql += " GROUP BY e.speaker_name ORDER BY avg_rating DESC NULLS LAST"
+
+        rows = execute_all(sql, tuple(params) if params else None)
+        return jsonify({'speakers': [dict(r) for r in rows]}), 200
+    except Exception as e:
+        logger.error(f"speaker-effectiveness error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@legacy_bp.route('/analytics/rating-histogram', methods=['POST'])
+@log_endpoint_access
+def get_rating_histogram():
+    """Return count of each rating (1-5) with optional filters"""
+    try:
+        body = request.get_json() or {}
+        filters = body.get('filters', {})
+        year = filters.get('venue_year')
+        session = filters.get('venue_session')
+        dept = filters.get('department')
+
+        sql = """
+            SELECT fr.session_rating, COUNT(*) AS count
+            FROM feedback_responses fr
+            JOIN events e ON e.id = fr.event_id
+            WHERE fr.session_rating IS NOT NULL
+        """
+        params = []
+        if year:
+            sql += " AND EXTRACT(YEAR FROM e.venue_date) = %s"
+            params.append(int(year))
+        if session:
+            month_map = {'Odd': [7,8,9,10,11,12], 'Even': [1,2,3,4,5,6]}
+            months = month_map.get(session, [])
+            if months:
+                phs = ','.join(['%s'] * len(months))
+                sql += f" AND EXTRACT(MONTH FROM e.venue_date) IN ({phs})"
+                params.extend(months)
+        if dept:
+            sql += " AND e.department = %s"
+            params.append(dept)
+        sql += " GROUP BY fr.session_rating ORDER BY fr.session_rating ASC"
+
+        rows = execute_all(sql, tuple(params) if params else None)
+        return jsonify({'histogram': [dict(r) for r in rows]}), 200
+    except Exception as e:
+        logger.error(f"rating-histogram error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@legacy_bp.route('/analytics/future-topics', methods=['POST'])
+@log_endpoint_access
+def get_future_topics():
+    """Return most requested future topics extracted from feedback_analysis"""
+    try:
+        import json as _json
+        body = request.get_json() or {}
+        filters = body.get('filters', {})
+        year = filters.get('venue_year')
+        session = filters.get('venue_session')
+        dept = filters.get('department')
+
+        sql = """
+            SELECT fa.key_topics, fr.future_topics AS raw_text
+            FROM feedback_analysis fa
+            JOIN feedback_responses fr ON fr.id = fa.response_id
+            JOIN events e ON e.id = fr.event_id
+            WHERE fr.future_topics IS NOT NULL AND fr.future_topics <> ''
+        """
+        params = []
+        if year:
+            sql += " AND EXTRACT(YEAR FROM e.venue_date) = %s"
+            params.append(int(year))
+        if session:
+            month_map = {'Odd': [7,8,9,10,11,12], 'Even': [1,2,3,4,5,6]}
+            months = month_map.get(session, [])
+            if months:
+                phs = ','.join(['%s'] * len(months))
+                sql += f" AND EXTRACT(MONTH FROM e.venue_date) IN ({phs})"
+                params.extend(months)
+        if dept:
+            sql += " AND e.department = %s"
+            params.append(dept)
+
+        rows = execute_all(sql, tuple(params) if params else None)
+        word_counts = {}
+        for row in rows:
+            # Extract from key_topics JSON first
+            kt = row.get('key_topics')
+            if kt:
+                try:
+                    topics = _json.loads(kt) if isinstance(kt, str) else kt
+                    for word in (topics.get('general_keywords', []) if isinstance(topics, dict) else []):
+                        w = (word.get('text', word) if isinstance(word, dict) else str(word)).lower().strip()
+                        if len(w) > 3:
+                            word_counts[w] = word_counts.get(w, 0) + 1
+                except Exception:
+                    pass
+            # Also split raw future_topics text for extra signal
+            raw = (row.get('raw_text') or '').lower()
+            for w in raw.split():
+                w = w.strip('.,;!?')
+                if len(w) > 4 and w not in ('about', 'would', 'like', 'more', 'also', 'want', 'some', 'that', 'this', 'with', 'from', 'have', 'will', 'they', 'been', 'such'):
+                    word_counts[w] = word_counts.get(w, 0) + 1
+
+        sorted_topics = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)[:30]
+        return jsonify({'topics': [{'word': w, 'count': c} for w, c in sorted_topics]}), 200
+    except Exception as e:
+        logger.error(f"future-topics error: {e}")
+        return jsonify({'error': str(e)}), 500

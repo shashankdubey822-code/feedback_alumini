@@ -1232,7 +1232,27 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
         
         logger.info(f"Agentic ReAct Wiki Query: '{question}' with history length {len(history) if history else 0}, session_id: {session_id}")
         
-        # Build the models list from highest priority to lowest
+        # ── Greeting / non-question guard ─────────────────────────────────────
+        _greetings = {"hi", "hello", "hey", "hii", "helo", "yo", "sup", "greetings",
+                      "good morning", "good afternoon", "good evening", "what's up",
+                      "how are you", "who are you", "what can you do", "help"}
+        _q_lower = question.lower().strip().rstrip("!?.")
+        if _q_lower in _greetings or len(question.strip()) < 5:
+            return {
+                "answer": (
+                    "👋 Hi! I'm your **Alumni Feedback Intelligence Assistant**. "
+                    "I can answer data-backed questions about student feedback. Try asking:\n\n"
+                    "• *What topics do students want covered in future sessions?*\n"
+                    "• *Which department gave the lowest ratings?*\n"
+                    "• *What did students find most valuable about alumni sessions?*\n"
+                    "• *How many responses mentioned practical skills?*\n"
+                    "• *What are the most common improvement suggestions?*"
+                ),
+                "citations": [],
+                "grounded": False,
+            }
+        # ──────────────────────────────────────────────────────────────────────
+
         models_to_try = []
         
         if self.groq_key:
