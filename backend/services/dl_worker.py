@@ -47,8 +47,11 @@ def start_dl_worker(logger_unused=None):
                                 SELECT fr.id,
                                        fr.aspect_most_valuable,
                                        fr.improvements_suggestions,
-                                       fr.future_topics
+                                       fr.future_topics,
+                                       e.speaker_name,
+                                       e.lecture_title
                                 FROM feedback_responses fr
+                                LEFT JOIN events e ON fr.event_id = e.id
                                 WHERE fr.embedding IS NULL
                                   AND (
                                       fr.aspect_most_valuable IS NOT NULL OR
@@ -64,16 +67,28 @@ def start_dl_worker(logger_unused=None):
                         break
                     for row in batch:
                         try:
-                            combined = " ".join(filter(None, [
-                                str(row['aspect_most_valuable'] or '').strip(),
-                                str(row['improvements_suggestions'] or '').strip(),
-                                str(row['future_topics'] or '').strip(),
-                            ]))
-                            if combined.strip():
-                                emb = _rag.generate_embedding(combined)
-                                if emb:
-                                    api_update('feedback_responses', 'id', row['id'], {'embedding': emb})
-                                    total_done += 1
+                            # 1. Clean and combine feedback responses
+                            val_text = str(row['aspect_most_valuable'] or '').strip()
+                            imp_text = str(row['improvements_suggestions'] or '').strip()
+                            fut_text = str(row['future_topics'] or '').strip()
+                            feedback_parts = [t for t in [val_text, imp_text, fut_text] if t and t.lower() != 'nan' and t.strip()]
+                            clean_feedback = " ".join(feedback_parts)
+
+                            # 2. Block low-value noise strings from generating embeddings
+                            if (not clean_feedback.strip() or 
+                                    len(clean_feedback) < 4 or 
+                                    clean_feedback.lower() in ['na', 'none', 'n/a', 'nil', '.', 'ok', 'okay', 'good', 'nothing']):
+                                continue
+
+                            # 3. Enrich the text with context details (Speaker & Topic)
+                            speaker = str(row['speaker_name'] or 'Unknown').strip()
+                            topic = str(row['lecture_title'] or 'Unknown').strip()
+                            enriched_text = f"Speaker: {speaker} | Topic: {topic} | Feedback: {clean_feedback}"
+
+                            emb = _rag.generate_embedding(enriched_text)
+                            if emb:
+                                api_update('feedback_responses', 'id', row['id'], {'embedding': emb})
+                                total_done += 1
                         except Exception as e_b:
                             dl_logger.warning(f"[BACKFILL] Skipped row {row['id']}: {e_b}")
                         time.sleep(0.05)  # small pause — don't hammer the model
@@ -100,6 +115,7 @@ def start_dl_worker(logger_unused=None):
                                 fr.future_topics,
                                 fr.session_rating,
                                 e.speaker_name,
+                                e.lecture_title,
                                 e.venue_date,
                                 s.name as student_name
                             FROM feedback_responses fr
