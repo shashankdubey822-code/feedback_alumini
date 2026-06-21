@@ -19,9 +19,13 @@ RUN uv pip install --system --no-cache -r requirements.txt
 
 ENV HF_HOME=/app/.cache
 ENV HF_HUB_ENABLE_HF_TRANSFER=1
-RUN python -c "from transformers import AutoTokenizer, AutoModelForSequenceClassification; AutoTokenizer.from_pretrained('cardiffnlp/twitter-roberta-base-sentiment-latest'); AutoModelForSequenceClassification.from_pretrained('cardiffnlp/twitter-roberta-base-sentiment-latest'); from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-base-en-v1.5')"
+RUN python -c "from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline; AutoTokenizer.from_pretrained('cardiffnlp/twitter-roberta-base-sentiment-latest'); AutoModelForSequenceClassification.from_pretrained('cardiffnlp/twitter-roberta-base-sentiment-latest'); pipeline('zero-shot-classification', model='cross-encoder/nli-deberta-v3-small'); from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-base-en-v1.5'); SentenceTransformer('BAAI/bge-small-en-v1.5'); SentenceTransformer('all-MiniLM-L6-v2')"
 RUN chmod -R 777 /app/.cache
 RUN python -c "import nltk; [nltk.download(res, download_dir='/usr/local/share/nltk_data', quiet=True) for res in ['punkt_tab', 'stopwords', 'brown', 'wordnet']]"
+
+# Enforce offline mode for Hugging Face at runtime to prevent any startup downloads
+ENV HF_HUB_OFFLINE=1
+ENV TRANSFORMERS_OFFLINE=1
 
 # Copy application code
 COPY . .
