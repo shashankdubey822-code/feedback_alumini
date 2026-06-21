@@ -1340,10 +1340,17 @@ function renderFilters(filters) {
 
         if (f.type === 'categorical' && f.options) {
             html += `<select class="filter-select" data-column="${escAttr(f.column)}" data-type="categorical">`;
-            html += `<option value="">All (${f.options.length})</option>`;
-            f.options.forEach(opt => {
-                html += `<option value="${escAttr(opt.value)}">${esc(truncate(opt.value, 28))} (${opt.count})</option>`;
-            });
+            if (f.column === 'venue_year' || f.column === 'venue_session') {
+                html += `<option value="">All</option>`;
+                f.options.forEach(opt => {
+                    html += `<option value="${escAttr(opt.value)}">${esc(truncate(opt.value, 28))}</option>`;
+                });
+            } else {
+                html += `<option value="">All (${f.options.length})</option>`;
+                f.options.forEach(opt => {
+                    html += `<option value="${escAttr(opt.value)}">${esc(truncate(opt.value, 28))} (${opt.count})</option>`;
+                });
+            }
             html += `</select>`;
         } else if (f.type === 'date' && f.options) {
             html += `<div class="filter-date-range">`;
