@@ -374,6 +374,39 @@
           </div>
         </header>
 
+        <!-- Filters -->
+        <div class="filters-panel" id="shared-filters-panel" style="margin: 32px 36px 0; display: none;">
+          <div class="filters-header">
+            <h3 class="subsection-title">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polygon
+                  points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"
+                />
+              </svg>
+              Filters
+            </h3>
+            <div style="display: flex; align-items: center; gap: 16px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="filter-has-lecture-title" style="width: 16px; height: 16px; cursor: pointer;" />
+                <label for="filter-has-lecture-title" style="font-size: 13px; color: #a5b4fc; cursor: pointer; font-weight: 500;">Filter by Lecture Title</label>
+              </div>
+              <button class="btn-clear" id="btn-clear-filters">
+                Clear All
+              </button>
+            </div>
+          </div>
+          <div class="filters-grid" id="filters-grid"></div>
+        </div>
+
         <!-- ███ UPLOAD SECTION ███ -->
         <section class="dashboard-section" id="upload-section">
           <div class="section-header">
@@ -516,39 +549,6 @@
 
           <!-- KPI Cards -->
           <div class="kpi-grid" id="kpi-grid"></div>
-
-          <!-- Filters -->
-          <div class="filters-panel">
-            <div class="filters-header">
-              <h3 class="subsection-title">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polygon
-                    points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"
-                  />
-                </svg>
-                Filters
-              </h3>
-              <div style="display: flex; align-items: center; gap: 16px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <input type="checkbox" id="filter-has-lecture-title" style="width: 16px; height: 16px; cursor: pointer;" />
-                  <label for="filter-has-lecture-title" style="font-size: 13px; color: #a5b4fc; cursor: pointer; font-weight: 500;">Filter by Lecture Title</label>
-                </div>
-                <button class="btn-clear" id="btn-clear-filters">
-                  Clear All
-                </button>
-              </div>
-            </div>
-            <div class="filters-grid" id="filters-grid"></div>
-          </div>
 
           <!-- Data Table (Embedded in Overview) -->
           <div

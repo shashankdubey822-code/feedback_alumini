@@ -15,6 +15,19 @@ class AnalyticsEngine:
         self._df = pd.DataFrame()
         self._last_refresh = None
         
+    def _process_df_columns(self, df):
+        """Helper to create venue_year and venue_session columns on any constructed dataframe."""
+        if df.empty:
+            df['venue_year'] = pd.Series(dtype=str)
+            df['venue_session'] = pd.Series(dtype=str)
+            return df
+        venue_dt = pd.to_datetime(df['venue_date'], errors='coerce')
+        df['venue_year'] = venue_dt.dt.year.map(lambda y: str(int(y)) if pd.notnull(y) else None)
+        df['venue_session'] = venue_dt.dt.month.map(
+            lambda m: "Odd Session" if pd.notnull(m) and m >= 7 else ("Even Session" if pd.notnull(m) and m <= 6 else None)
+        )
+        return df
+        
     def refresh_data(self):
         """Fetch all data from the database and rebuild the master DataFrame."""
         logger.info("Refreshing in-memory analytics data...")
@@ -62,6 +75,7 @@ class AnalyticsEngine:
                     'sentiment_label', 'sentiment_score', 'keywords_json'
                 ])
                 
+            self._df = self._process_df_columns(self._df)
             self._last_refresh = datetime.now()
             logger.info(f"Analytics Engine refreshed. Loaded {len(self._df)} records.")
         except Exception as e:
@@ -104,6 +118,7 @@ class AnalyticsEngine:
             if rows:
                 new_df = pd.DataFrame(rows)
                 new_df['submitted_at'] = pd.to_datetime(new_df['submitted_at'])
+                new_df = self._process_df_columns(new_df)
                 
                 # If dataframe is not empty, concat. Otherwise just assign
                 if not self._df.empty:
@@ -183,16 +198,20 @@ class AnalyticsEngine:
     def get_filter_options(self):
         df = self.get_dataframe()
         if df.empty:
-            return {'speakers': [], 'dates': [], 'departments': []}
+            return {'speakers': [], 'dates': [], 'departments': [], 'years': [], 'sessions': []}
             
         speakers = df['speaker_name'].dropna().unique().tolist()
         dates = df['venue_date'].dropna().unique().tolist()
         depts = df['department'].dropna().unique().tolist()
+        years = df['venue_year'].dropna().unique().tolist() if 'venue_year' in df.columns else []
+        sessions = df['venue_session'].dropna().unique().tolist() if 'venue_session' in df.columns else []
         
         return {
             'speakers': sorted(speakers),
             'dates': sorted(dates),
-            'departments': sorted(depts)
+            'departments': sorted(depts),
+            'years': sorted(years),
+            'sessions': sorted(sessions)
         }
 
 # Global singleton

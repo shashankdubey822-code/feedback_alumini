@@ -535,8 +535,22 @@ function showSection(sectionId) {
         renderDepartmentComparison();
     }
 
-    // SCOPING: If leaving overview, reset filters to show global data in other sections
-    if (sectionId !== 'overview-section' && Object.keys(state.activeFilters || {}).length > 0) {
+    // Manage display of shared-filters-panel and adjust target padding
+    const filtersPanel = document.getElementById('shared-filters-panel');
+    if (filtersPanel && target) {
+        const filterSupportingSections = ['overview-section', 'charts-section', 'nlp-section', 'departments-section'];
+        if (filterSupportingSections.includes(sectionId)) {
+            filtersPanel.style.display = 'block';
+            target.style.paddingTop = '16px';
+        } else {
+            filtersPanel.style.display = 'none';
+            target.style.paddingTop = '32px';
+        }
+    }
+
+    // SCOPING: If leaving filter supporting sections, clear filters
+    const filterSupportingSections = ['overview-section', 'charts-section', 'nlp-section', 'departments-section'];
+    if (!filterSupportingSections.includes(sectionId)) {
         clearAllFilters();
     }
 }
@@ -1315,7 +1329,14 @@ function renderFilters(filters) {
         const badgeClass = f.type === 'date' ? 'badge-date' : f.type === 'numeric' ? 'badge-num' : f.type === 'categorical' ? 'badge-cat' : 'badge-text';
         const typeLabel = f.type === 'date' ? 'Date' : f.type === 'numeric' ? 'Num' : f.type === 'categorical' ? 'Cat' : 'Text';
 
-        let html = `<div class="filter-label">${esc(truncate(f.column, 22))} <span class="filter-type-badge ${badgeClass}">${typeLabel}</span></div>`;
+        let label = f.column;
+        if (f.column === 'venue_year') {
+            label = 'Year';
+        } else if (f.column === 'venue_session') {
+            label = 'Session';
+        }
+
+        let html = `<div class="filter-label">${esc(truncate(label, 22))} <span class="filter-type-badge ${badgeClass}">${typeLabel}</span></div>`;
 
         if (f.type === 'categorical' && f.options) {
             html += `<select class="filter-select" data-column="${escAttr(f.column)}" data-type="categorical">`;

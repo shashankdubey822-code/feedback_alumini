@@ -364,7 +364,7 @@ def get_consolidated_analytics(app, filters=None, search=None, page=1, page_size
 
     formatted_filters = []
     if not df.empty:
-        for col, label in [('department', 'department'), ('speaker_name', 'alumni_speaker_name')]:
+        for col, label in [('department', 'department'), ('speaker_name', 'alumni_speaker_name'), ('venue_year', 'venue_year'), ('venue_session', 'venue_session')]:
             counts = df[col].value_counts()
             opts = [{'value': k, 'count': v} for k, v in counts.items() if k]
             if opts:
