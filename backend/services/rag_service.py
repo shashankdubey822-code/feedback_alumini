@@ -31,9 +31,9 @@ def _get_embedding_model():
                 logger.error(f"Failed to load Gemini embeddings: {str(e)}")
                 
         try:
-            logger.info("Loading local sentence-transformers/all-MiniLM-L6-v2 embedding model...")
+            logger.info("Loading local sentence-transformers/all-mpnet-base-v2 embedding model...")
             from sentence_transformers import SentenceTransformer
-            _embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+            _embedding_model = SentenceTransformer('all-mpnet-base-v2')
             logger.info("Local embedding model loaded successfully.")
         except Exception as e:
             logger.error(f"Failed to load sentence-transformers model: {str(e)}")
@@ -60,12 +60,12 @@ class RAGService:
             # Check if using LangChain Gemini Embeddings
             if hasattr(model, 'embed_query'):
                 embedding = model.embed_query(text.strip())
-                # Full 768-dimensional Gemini embedding — matches DB vector(768)
-                return [float(x) for x in embedding]
+                # Truncate to first 768 dimensions (leveraging Matryoshka Representation Learning)
+                return [float(x) for x in embedding[:768]]
             else:
-                # Local SentenceTransformer
+                # Local SentenceTransformer (all-mpnet-base-v2 is 768 dims)
                 embedding = model.encode(text.strip(), convert_to_numpy=True)
-                return [float(x) for x in embedding]
+                return [float(x) for x in embedding[:768]]
         except Exception as e:
             logger.error(f"Error generating embedding: {str(e)}")
             return None

@@ -4402,3 +4402,186 @@ function renderDepartmentCharts(depts) {
     }
 
 })();
+
+// ============================================================
+// ADVANCED ANALYTICS CHARTS — Sentiment Timeline, Speaker
+// Effectiveness, Rating Histogram, Future Topics Word Cloud
+// ============================================================
+
+async function renderAdvancedCharts(filters = {}) {
+    const API = '';
+    const body = { filters };
+
+    // ── 1. Sentiment Timeline ────────────────────────────────────
+    const timelineContainer = _ensureAdvChart('adv-sentiment-timeline', 'Sentiment Timeline — Monthly Breakdown', 'trends-grid');
+    try {
+        const r = await fetch(`${API}/api/analytics/sentiment-timeline`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+        const d = await r.json();
+        if (d.timeline && d.timeline.length > 0) {
+            const labels = d.timeline.map(t => t.month);
+            const canvas = timelineContainer.querySelector('canvas');
+            if (window._advChartInstances && window._advChartInstances['adv-sentiment-timeline']) {
+                window._advChartInstances['adv-sentiment-timeline'].destroy();
+            }
+            if (!window._advChartInstances) window._advChartInstances = {};
+            window._advChartInstances['adv-sentiment-timeline'] = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: '✅ Positive', data: d.timeline.map(t => t.positive || 0), borderColor: '#00b894', backgroundColor: 'rgba(0,184,148,0.12)', fill: true, tension: 0.4, pointRadius: 4 },
+                        { label: '⚪ Neutral',  data: d.timeline.map(t => t.neutral  || 0), borderColor: '#6c5ce7', backgroundColor: 'rgba(108,92,231,0.10)', fill: true, tension: 0.4, pointRadius: 4 },
+                        { label: '❌ Negative', data: d.timeline.map(t => t.negative || 0), borderColor: '#e17055', backgroundColor: 'rgba(225,112,85,0.10)', fill: true, tension: 0.4, pointRadius: 4 },
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top' }, tooltip: { mode: 'index' } },
+                    scales: { x: { title: { display: true, text: 'Month' } }, y: { title: { display: true, text: 'Response Count' }, beginAtZero: true } }
+                }
+            });
+        } else {
+            timelineContainer.querySelector('.adv-chart-body').innerHTML = '<p style="color:#888;padding:20px;text-align:center;">No sentiment timeline data available yet.</p>';
+        }
+    } catch(e) { console.warn('Sentiment timeline error:', e); }
+
+    // ── 2. Speaker Effectiveness Bar Chart ─────────────────────────
+    const speakerContainer = _ensureAdvChart('adv-speaker-effectiveness', 'Alumni Speaker Effectiveness — Avg Rating Ranking', 'charts-grid');
+    try {
+        const r = await fetch(`${API}/api/analytics/speaker-effectiveness`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+        const d = await r.json();
+        if (d.speakers && d.speakers.length > 0) {
+            const canvas = speakerContainer.querySelector('canvas');
+            if (window._advChartInstances && window._advChartInstances['adv-speaker-effectiveness']) {
+                window._advChartInstances['adv-speaker-effectiveness'].destroy();
+            }
+            const colors = d.speakers.map(s => {
+                const r = parseFloat(s.avg_rating) || 0;
+                if (r >= 4.5) return 'rgba(0,184,148,0.85)';
+                if (r >= 3.5) return 'rgba(108,92,231,0.75)';
+                return 'rgba(225,112,85,0.80)';
+            });
+            window._advChartInstances['adv-speaker-effectiveness'] = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: d.speakers.map(s => s.speaker_name),
+                    datasets: [{
+                        label: 'Avg Rating / 5',
+                        data: d.speakers.map(s => parseFloat(s.avg_rating) || 0),
+                        backgroundColor: colors,
+                        borderRadius: 6,
+                    }, {
+                        label: 'Response Count',
+                        data: d.speakers.map(s => parseInt(s.response_count) || 0),
+                        backgroundColor: 'rgba(253,203,110,0.6)',
+                        borderRadius: 6,
+                        yAxisID: 'y2',
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: { legend: { position: 'top' }, tooltip: {
+                        callbacks: { label: ctx => ctx.datasetIndex === 0 ? `Rating: ${ctx.parsed.x}/5` : `Responses: ${ctx.parsed.x}` }
+                    }},
+                    scales: {
+                        x: { title: { display: true, text: 'Avg Rating' }, min: 0, max: 5 },
+                        y2: { position: 'right', title: { display: true, text: 'Responses' }, beginAtZero: true, grid: { drawOnChartArea: false } }
+                    }
+                }
+            });
+        } else {
+            speakerContainer.querySelector('.adv-chart-body').innerHTML = '<p style="color:#888;padding:20px;text-align:center;">No speaker data available yet.</p>';
+        }
+    } catch(e) { console.warn('Speaker effectiveness error:', e); }
+
+    // ── 3. Rating Histogram ──────────────────────────────────────
+    const histContainer = _ensureAdvChart('adv-rating-histogram', 'Rating Distribution — Count per Star Level', 'charts-grid');
+    try {
+        const r = await fetch(`${API}/api/analytics/rating-histogram`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+        const d = await r.json();
+        if (d.histogram && d.histogram.length > 0) {
+            const canvas = histContainer.querySelector('canvas');
+            if (window._advChartInstances && window._advChartInstances['adv-rating-histogram']) {
+                window._advChartInstances['adv-rating-histogram'].destroy();
+            }
+            const starColors = { 1:'rgba(225,112,85,0.85)', 2:'rgba(253,203,110,0.85)', 3:'rgba(108,92,231,0.75)', 4:'rgba(0,184,148,0.80)', 5:'rgba(0,210,211,0.85)' };
+            window._advChartInstances['adv-rating-histogram'] = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: d.histogram.map(h => `⭐ ${h.session_rating}`),
+                    datasets: [{
+                        label: 'Number of Responses',
+                        data: d.histogram.map(h => parseInt(h.count) || 0),
+                        backgroundColor: d.histogram.map(h => starColors[h.session_rating] || 'rgba(108,92,231,0.6)'),
+                        borderRadius: 8,
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.parsed.y} responses` } } },
+                    scales: { x: { title: { display: true, text: 'Star Rating' } }, y: { title: { display: true, text: 'Count' }, beginAtZero: true } }
+                }
+            });
+        } else {
+            histContainer.querySelector('.adv-chart-body').innerHTML = '<p style="color:#888;padding:20px;text-align:center;">No rating data available yet.</p>';
+        }
+    } catch(e) { console.warn('Rating histogram error:', e); }
+
+    // ── 4. Future Topics Word Cloud (text-based, no external lib) ───
+    const topicsContainer = _ensureAdvChart('adv-future-topics', 'Most Requested Future Topics', 'charts-grid');
+    try {
+        const r = await fetch(`${API}/api/analytics/future-topics`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+        const d = await r.json();
+        if (d.topics && d.topics.length > 0) {
+            const body2 = topicsContainer.querySelector('.adv-chart-body');
+            const maxCount = d.topics[0].count || 1;
+            body2.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:8px;padding:16px;align-items:center;">' +
+                d.topics.map(t => {
+                    const size = 11 + Math.round((t.count / maxCount) * 14);
+                    const opacity = 0.4 + (t.count / maxCount) * 0.6;
+                    const colors = ['#6c5ce7','#00b894','#0984e3','#e17055','#fdcb6e','#a29bfe','#00cec9'];
+                    const color = colors[Math.floor(Math.random() * colors.length)];
+                    return `<span title="${t.count} mentions" style="font-size:${size}px;color:${color};opacity:${opacity};font-weight:600;cursor:default;padding:2px 4px;border-radius:4px;background:${color}18">${t.word} <sup style="font-size:9px">${t.count}</sup></span>`;
+                }).join('') + '</div>';
+        } else {
+            topicsContainer.querySelector('.adv-chart-body').innerHTML = '<p style="color:#888;padding:20px;text-align:center;">No future topic suggestions found yet.</p>';
+        }
+    } catch(e) { console.warn('Future topics error:', e); }
+}
+
+function _ensureAdvChart(id, title, gridId) {
+    let el = document.getElementById(id);
+    if (!el) {
+        el = document.createElement('div');
+        el.id = id;
+        el.className = 'chart-container';
+        el.style.cssText = 'background:rgba(255,255,255,0.7);border-radius:12px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,0.08);';
+        el.innerHTML = `
+            <h4 style="margin:0 0 12px;font-size:13px;font-weight:700;color:#2d3436;">${title}</h4>
+            <div class="adv-chart-body" style="position:relative;height:220px;">
+                <canvas style="max-height:220px;"></canvas>
+            </div>`;
+        const grid = document.getElementById(gridId);
+        if (grid) grid.appendChild(el);
+    }
+    return el;
+}
+
+// Hook renderAdvancedCharts into the dashboard load + filter apply cycle
+document.addEventListener('DOMContentLoaded', () => {
+    // After initial data loads, render advanced charts
+    const origApply = window.applyFilters;
+    if (origApply) {
+        window.applyFiltersWithAdvanced = async (silent) => {
+            await origApply(silent);
+            const activeFilters = {};
+            ['department', 'venue_year', 'venue_session'].forEach(key => {
+                const el = document.querySelector(`[data-filter="${key}"]`);
+                if (el && el.value) activeFilters[key] = el.value;
+            });
+            renderAdvancedCharts(activeFilters);
+        };
+    }
+    setTimeout(() => renderAdvancedCharts({}), 3500);
+});
