@@ -23,3 +23,5 @@ User uploads CSV → Browser sends file to Python Flask API → Python processes
 - **Frontend**: HTML + CSS + JavaScript + Chart.js
 - **Database**: SQLite (persistent storage for admissions data)
 - **Admin Panel**: Secure access for data uploads and Google Sheets integration
+
+<!-- Build trigger: 2026-06-21T14:29:00+05:30 -->
