@@ -37,7 +37,7 @@ class NLPErrorDetector(ErrorDetector):
                     cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'feedback_analysis'")
                     cols = {row["column_name"] for row in cursor.fetchall()}
                     
-            if "processed_at" in cols:
+            if "analyzed_at" in cols:
                 # rows in feedback_responses not in feedback_analysis
                 backlog_res = execute_one("""
                     SELECT COUNT(*) as count 
@@ -83,14 +83,14 @@ class NLPErrorDetector(ErrorDetector):
                     cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'feedback_analysis'")
                     cols = {row["column_name"] for row in cursor.fetchall()}
                     
-            if "keywords_json" in cols:
+            if "key_topics" in cols:
                 with get_db() as conn:
                     with conn.cursor() as cursor:
-                        cursor.execute("SELECT keywords_json FROM feedback_analysis WHERE keywords_json IS NOT NULL LIMIT 10")
+                        cursor.execute("SELECT key_topics FROM feedback_analysis WHERE key_topics IS NOT NULL LIMIT 10")
                         rows = cursor.fetchall()
                 bad = 0
                 for r in rows:
-                    kw_val = r["keywords_json"]
+                    kw_val = r["key_topics"]
                     if not isinstance(kw_val, (dict, list)):
                         try:
                             if isinstance(kw_val, str):
@@ -100,11 +100,11 @@ class NLPErrorDetector(ErrorDetector):
                         except Exception:
                             bad += 1
                 if bad > 0:
-                    results.append(self._warn("keyword_json", f"{bad}/10 sampled keywords_json rows have invalid JSON"))
+                    results.append(self._warn("keyword_json", f"{bad}/10 sampled key_topics rows have invalid JSON"))
                 else:
-                    results.append(self._ok("keyword_json", "keywords_json is valid in sampled rows"))
+                    results.append(self._ok("keyword_json", "key_topics is valid in sampled rows"))
             else:
-                results.append(self._warn("keyword_json", "keywords_json column missing"))
+                results.append(self._warn("keyword_json", "key_topics column missing"))
         except Exception as e:
             results.append(self._warn("keyword_json", "Could not validate keyword JSON", str(e)))
 

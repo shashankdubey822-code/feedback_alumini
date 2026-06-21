@@ -58,11 +58,11 @@ def get_schema_info() -> str:
     schema = (
         "SCHEMA INFORMATION:\n\n"
         "Table: students\n"
-        "Columns: id, name, email\n\n"
+        "Columns: id (uuid), name (text), email (text), roll_no (text), department (text)\n\n"
         "Table: events\n"
-        "Columns: id, speaker_name, topic, event_date\n\n"
+        "Columns: id (uuid), speaker_name (text), venue_date (date), department (text), status (text), lecture_title (text)\n\n"
         "Table: feedback_responses\n"
-        "Columns: id, student_id, event_id, aspect_most_valuable, improvements_suggestions, future_topics, session_rating, submitted_at\n"
+        "Columns: id (uuid), student_id (uuid), event_id (uuid), session_rating (int), session_help_understanding (text), aspect_most_valuable (text), improvements_suggestions (text), future_topics (text), submitted_at (timestamp)\n"
         "Join conditions: feedback_responses.student_id = students.id, feedback_responses.event_id = events.id"
     )
     return schema

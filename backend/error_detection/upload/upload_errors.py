@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import List
 from ..base import ErrorDetector, DetectionResult
+from backend.utils.insforge_db import execute_one
 
 
 class UploadErrorDetector(ErrorDetector):
@@ -25,14 +26,12 @@ class UploadErrorDetector(ErrorDetector):
         else:
             results.append(self._ok("upload_dir", f"Upload directory accessible: {self.upload_dir}"))
 
-        # 2. DB writable (needed for CSV insert)
-        if os.path.exists(self.db_path):
-            if not os.access(self.db_path, os.W_OK):
-                results.append(self._critical("db_writable", "Database file is not writable — CSV upload will fail"))
-            else:
-                results.append(self._ok("db_writable", "Database file is writable"))
-        else:
-            results.append(self._warn("db_writable", f"Database file not found at: {self.db_path}"))
+        # 2. DB connectivity check (needed for CSV insert)
+        try:
+            execute_one("SELECT 1")
+            results.append(self._ok("db_conn", "Database connection is healthy"))
+        except Exception as e:
+            results.append(self._critical("db_conn", "Database connection is down — CSV upload will fail", str(e)))
 
         # 3. pandas importable (required for CSV parsing)
         try:

@@ -1216,7 +1216,10 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
         """
         import re
         from langchain_core.prompts import ChatPromptTemplate
-        from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+        try:
+            from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+        except ImportError:
+            return {"answer": "LangChain message classes failed to import. Cannot run ReAct agent.", "citations": []}
         from backend.services.agent_tools import execute_readonly_sql, semantic_vector_search, get_schema_info
         
         logger.info(f"Agentic ReAct Wiki Query: '{question}' with history length {len(history) if history else 0}, session_id: {session_id}")
@@ -1574,11 +1577,11 @@ Return ONLY the 4 questions, one per line. Do not use bullet points, numbering, 
 
         # Attempt to get an LLM to generate the questions
         llm = None
-        if self.groq_key:
+        if self.groq_key and ChatGroq is not None:
             llm = ChatGroq(api_key=self.groq_key, model="llama-3.3-70b-versatile", temperature=0.3, max_retries=0, timeout=5)
-        elif self.gemini_key:
+        elif self.gemini_key and ChatGoogleGenerativeAI is not None:
             llm = ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.3, max_retries=0, request_timeout=5)
-        elif self.openrouter_key:
+        elif self.openrouter_key and ChatOpenAI is not None:
             try:
                 llm = ChatOpenAI(api_key=self.openrouter_key, base_url="https://openrouter.ai/api/v1", model="meta-llama/llama-3.3-70b-instruct", temperature=0.3, max_retries=0, request_timeout=5)
             except:

@@ -134,7 +134,6 @@ class NLPService:
         Returns {'polarity': float, 'subjectivity': float, 'label': str}.
         label is one of: POSITIVE | NEUTRAL | NEGATIVE | NO_RESPONSE | ERROR
         """
-        from textblob import TextBlob
         if not text or self.is_non_answer(text):
             return {'polarity': 0.0, 'subjectivity': 0.0, 'label': 'NO_RESPONSE'}
 
@@ -162,6 +161,7 @@ class NLPService:
                 }
 
             # ── TextBlob fallback ────────────────────────────────────────────
+            from textblob import TextBlob
             blob     = TextBlob(text)
             polarity = round(blob.sentiment.polarity, 3)
             label    = 'POSITIVE' if polarity > 0.1 else ('NEGATIVE' if polarity < -0.1 else 'NEUTRAL')

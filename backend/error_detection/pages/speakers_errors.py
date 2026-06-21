@@ -46,26 +46,26 @@ class SpeakersErrorDetector(ErrorDetector):
                     else:
                         results.append(self._ok("rating_column", "session_rating column present"))
 
-                    # 4. Sentiment score range check (dl_sentiment_score should be -1 to 1)
+                    # 4. Sentiment score range check (sentiment_score should be -1 to 1)
                     cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'feedback_analysis'")
                     analysis_cols = {row["column_name"] for row in cursor.fetchall()}
 
-                    if "dl_sentiment_score" in analysis_cols:
+                    if "sentiment_score" in analysis_cols:
                         cursor.execute("""
                             SELECT COUNT(*) as cnt FROM feedback_analysis
-                            WHERE dl_sentiment_score IS NOT NULL
-                            AND (CAST(dl_sentiment_score AS REAL) < -1.0 OR CAST(dl_sentiment_score AS REAL) > 1.0)
+                            WHERE sentiment_score IS NOT NULL
+                            AND (CAST(sentiment_score AS REAL) < -1.0 OR CAST(sentiment_score AS REAL) > 1.0)
                         """)
                         range_res = cursor.fetchone()
                         out_of_range = int(range_res["cnt"]) if range_res and range_res["cnt"] is not None else 0
                         if out_of_range > 0:
                             results.append(self._warn("sentiment_range",
-                                f"{out_of_range} rows have dl_sentiment_score outside [-1, 1]",
+                                f"{out_of_range} rows have sentiment_score outside [-1, 1]",
                                 "Speaker sentiment averages may be skewed"))
                         else:
-                            results.append(self._ok("sentiment_range", "dl_sentiment_score values are in valid range"))
+                            results.append(self._ok("sentiment_range", "sentiment_score values are in valid range"))
                     else:
-                        results.append(self._warn("sentiment_range", "dl_sentiment_score column missing from feedback_analysis"))
+                        results.append(self._warn("sentiment_range", "sentiment_score column missing from feedback_analysis"))
 
         except Exception as e:
             results.append(self._critical("speakers_check", "Speakers error detection failed", str(e)))

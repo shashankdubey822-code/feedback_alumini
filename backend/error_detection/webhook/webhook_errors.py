@@ -56,13 +56,13 @@ class WebhookErrorDetector(ErrorDetector):
         except Exception as e:
             results.append(self._warn("sync_health", "Could not read sync_health.json", str(e)))
 
-        # 4. Admin secret configured
-        admin_secret = os.getenv("ADMIN_SECRET", "")
-        if not admin_secret or admin_secret in ("admin", "password", "changeme", ""):
-            results.append(self._warn("admin_secret",
-                "ADMIN_SECRET is weak or unset",
+        # 4. Admin password configured
+        admin_password = os.getenv("ADMIN_PASSWORD", "")
+        if not admin_password or admin_password in ("admin", "password", "changeme", "admin123"):
+            results.append(self._warn("admin_password",
+                "ADMIN_PASSWORD is weak or default",
                 "Admin panel is insecure"))
         else:
-            results.append(self._ok("admin_secret", "ADMIN_SECRET is configured"))
+            results.append(self._ok("admin_password", "ADMIN_PASSWORD is configured"))
 
         return results

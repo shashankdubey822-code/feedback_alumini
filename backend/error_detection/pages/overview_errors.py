@@ -44,7 +44,7 @@ class OverviewErrorDetector(ErrorDetector):
                         results.append(self._ok("kpi_column_type", "session_rating column is numeric"))
 
                     # 3. Filter columns exist
-                    for tbl, col in [("feedback_responses", "department_cleaned"), ("events", "speaker_name")]:
+                    for tbl, col in [("students", "department"), ("events", "speaker_name")]:
                         cursor.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{tbl}'")
                         cols = {row["column_name"] for row in cursor.fetchall()}
                         if col not in cols:
