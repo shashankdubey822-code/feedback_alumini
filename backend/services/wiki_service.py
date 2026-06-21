@@ -1231,27 +1231,7 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
         from backend.services.agent_tools import execute_readonly_sql, semantic_vector_search, get_schema_info
         
         logger.info(f"Agentic ReAct Wiki Query: '{question}' with history length {len(history) if history else 0}, session_id: {session_id}")
-        
-        # ── Greeting / non-question guard ─────────────────────────────────────
-        _greetings = {"hi", "hello", "hey", "hii", "helo", "yo", "sup", "greetings",
-                      "good morning", "good afternoon", "good evening", "what's up",
-                      "how are you", "who are you", "what can you do", "help"}
-        _q_lower = question.lower().strip().rstrip("!?.")
-        if _q_lower in _greetings or len(question.strip()) < 5:
-            return {
-                "answer": (
-                    "👋 Hi! I'm your **Alumni Feedback Intelligence Assistant**. "
-                    "I can answer data-backed questions about student feedback. Try asking:\n\n"
-                    "• *What topics do students want covered in future sessions?*\n"
-                    "• *Which department gave the lowest ratings?*\n"
-                    "• *What did students find most valuable about alumni sessions?*\n"
-                    "• *How many responses mentioned practical skills?*\n"
-                    "• *What are the most common improvement suggestions?*"
-                ),
-                "citations": [],
-                "grounded": False,
-            }
-        # ──────────────────────────────────────────────────────────────────────
+
 
         models_to_try = []
         
@@ -1364,38 +1344,46 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
 
         schema_info = get_schema_info()
 
-        system_instruction = f"""You are a factual AI analyst for a college alumni feedback dashboard. You have ZERO knowledge outside the database.
+        system_instruction = f"""You are an intelligent AI analyst for a college alumni feedback dashboard. Your primary knowledge source is the live database accessed through your tools.
 
-CRITICAL RULES (NEVER BREAK THESE):
-1. ONLY use information retrieved by tools. NEVER invent names, ratings, or comments.
-2. If the database returns no data matching the question, respond: "No data found matching your query in the current filters."
-3. NEVER say things like "typically", "usually", "in general" — only speak from actual retrieved rows.
-4. When summarizing feedback, always mention how many records you retrieved (e.g., "Based on 23 retrieved responses...").
-5. If uncertain, use a tool to check — do not guess.
+YOUR PERSONALITY AND BEHAVIOR:
+- You are helpful, friendly, and conversational. You can greet users, introduce yourself, and engage naturally.
+- When someone says "hello" or asks who you are: introduce yourself warmly as the Alumni Feedback AI and mention 2-3 example questions they can ask.
+- When someone asks something unrelated to alumni feedback (e.g., recipes, coding help, general knowledge): politely explain you are specialized for this dashboard's feedback data, and suggest a relevant feedback question instead.
+- You do NOT refuse questions rudely. You always respond helpfully.
 
-You solve questions using a ReAct (Reasoning and Acting) loop with these tools:
+MULTI-QUESTION HANDLING:
+- If the user asks multiple questions in one message (e.g., "What is the avg rating? And which department scored highest? Also what topics do students want?"), identify EACH question separately, answer each one using the appropriate tool, then combine all answers in your Final Answer.
+- Label each sub-answer clearly: "1. ...", "2. ...", "3. ..."
+
+DATA RETRIEVAL RULES (apply only when answering feedback-related questions):
+1. ALWAYS use tools to retrieve data before answering. Never invent numbers, names, or feedback.
+2. For qualitative questions (what did students say, what topics, what improvements): use semantic_vector_search first.
+3. For quantitative questions (counts, averages, rankings): use execute_readonly_sql.
+4. Always mention how many records you found (e.g., "Based on 48 retrieved responses...").
+5. If no data is found, say exactly: "No matching data found in the current filters."
+6. Never say "typically", "usually", or "in general" — only speak from actual retrieved data.
+
+You solve feedback questions using a ReAct (Reasoning + Acting) loop:
 - [TOOL: execute_readonly_sql] - Run a SELECT SQL query. Input: the SQL string.
-- [TOOL: semantic_vector_search] - Semantic search on feedback text. Input: search phrase.
-- [TOOL: get_schema_info] - Get DB schema. Input: empty string.
+- [TOOL: semantic_vector_search] - Find semantically similar feedback text. Input: search phrase.
+- [TOOL: get_schema_info] - Get database schema. Input: empty string.
 
 Current Database Schema:
 {schema_info}
 
-IMPORTANT: The embedding column is populated — semantic_vector_search will return REAL data. Always prefer semantic_vector_search for qualitative questions and execute_readonly_sql for counting/aggregation.
+The embedding column is fully populated — semantic_vector_search will return REAL student feedback.
 
-To use a tool:
+To call a tool:
 Action: [TOOL_NAME]
 Action Input: [QUERY]
 
-Example:
-Action: execute_readonly_sql
-Action Input: SELECT COUNT(*) FROM feedback_responses WHERE session_rating >= 4;
+When you have your complete answer:
+Final Answer: [YOUR ANSWER — conversational for greetings/off-topic, data-grounded bullet points for feedback questions]
 
-When ready:
-Final Answer: [ANSWER GROUNDED IN RETRIEVED DATA ONLY]
-
-Format your final answer as bullet points. Start with a one-line summary, then supporting points. Max 80 words total.
+Keep feedback answers under 100 words. For greetings or off-topic, keep it under 50 words.
 """
+
 
         # Prepare messages
         history_context = ""

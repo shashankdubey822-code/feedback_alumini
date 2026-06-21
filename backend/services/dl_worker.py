@@ -32,6 +32,60 @@ def start_dl_worker(logger_unused=None):
         nlp = NLPService()
         dl_logger.info("AI Models Initialized. Polling for unprocessed feedback...")
 
+        # ── AUTO-BACKFILL: Quietly generate embeddings for all old rows ────────
+        def _backfill_embeddings():
+            try:
+                from backend.utils.insforge_db import api_update
+                _rag = RAGService()
+                dl_logger.info("[BACKFILL] Checking for feedback rows missing embeddings...")
+                batch_size = 10
+                total_done = 0
+                while True:
+                    with get_db() as conn:
+                        with conn.cursor() as cur:
+                            cur.execute("""
+                                SELECT fr.id,
+                                       fr.aspect_most_valuable,
+                                       fr.improvements_suggestions,
+                                       fr.future_topics
+                                FROM feedback_responses fr
+                                WHERE fr.embedding IS NULL
+                                  AND (
+                                      fr.aspect_most_valuable IS NOT NULL OR
+                                      fr.improvements_suggestions IS NOT NULL OR
+                                      fr.future_topics IS NOT NULL
+                                  )
+                                ORDER BY fr.submitted_at ASC
+                                LIMIT %s
+                            """, (batch_size,))
+                            batch = cur.fetchall()
+                    if not batch:
+                        dl_logger.info(f"[BACKFILL] Complete. {total_done} embeddings generated.")
+                        break
+                    for row in batch:
+                        try:
+                            combined = " ".join(filter(None, [
+                                str(row['aspect_most_valuable'] or '').strip(),
+                                str(row['improvements_suggestions'] or '').strip(),
+                                str(row['future_topics'] or '').strip(),
+                            ]))
+                            if combined.strip():
+                                emb = _rag.generate_embedding(combined)
+                                if emb:
+                                    api_update('feedback_responses', 'id', row['id'], {'embedding': emb})
+                                    total_done += 1
+                        except Exception as e_b:
+                            dl_logger.warning(f"[BACKFILL] Skipped row {row['id']}: {e_b}")
+                        time.sleep(0.05)  # small pause — don't hammer the model
+                    dl_logger.info(f"[BACKFILL] Progress: {total_done} embeddings done so far...")
+            except Exception as e_bf:
+                dl_logger.error(f"[BACKFILL] Failed: {e_bf}")
+
+        # Run backfill in a separate daemon thread so it doesn't block the main worker
+        threading.Thread(target=_backfill_embeddings, daemon=True, name="embedding_backfill").start()
+        # ── END BACKFILL ───────────────────────────────────────────────────────
+
+
         while True:
             try:
                 with get_db() as conn:
