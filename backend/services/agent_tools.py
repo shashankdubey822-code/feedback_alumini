@@ -56,7 +56,7 @@ def semantic_vector_search(
                 f"Improvements: {r.get('improvements_suggestions', 'N/A')} | "
                 f"Future Topics: {r.get('future_topics', 'N/A')} | "
                 f"Rating: {r.get('session_rating', 'N/A')}/5 | "
-                f"Similarity: {r.get('similarity', 'N/A'):.3f}"
+                f"Similarity: {float(r.get('similarity') or 0.0):.3f}"
             )
             result_lines.append(line)
 

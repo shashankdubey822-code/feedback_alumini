@@ -268,12 +268,21 @@ def execute_wiki_query():
         question = body.get('question', '').strip()
         history = body.get('history', [])
         session_id = body.get('session_id', 'default_session').strip()
+        # Active dashboard filters — forwarded to vector search
+        filter_year = body.get('filter_year')  # int or None
+        filter_semester = body.get('filter_semester')  # 'Odd', 'Even', or None
+        filter_dept = body.get('filter_dept')  # str or None
         
         if not question:
             return jsonify({'error': 'Question cannot be empty.'}), 400
             
         service = _get_wiki_service()
-        result = service.query_wiki(question, history, session_id)
+        result = service.query_wiki(
+            question, history, session_id,
+            filter_year=filter_year,
+            filter_semester=filter_semester,
+            filter_dept=filter_dept,
+        )
         return jsonify(result), 200
     except Exception as e:
         logger.error(f"Error executing wiki query: {str(e)}")

@@ -1209,7 +1209,15 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
 
     # ─── QUERY SYNTHESIZER (RAG ON WIKI) ──────────────────────────────────────
 
-    def query_wiki(self, question: str, history: List[Dict[str, str]] = None, session_id: str = None) -> Dict[str, Any]:
+    def query_wiki(
+        self,
+        question: str,
+        history: List[Dict[str, str]] = None,
+        session_id: str = None,
+        filter_year: int = None,
+        filter_semester: str = None,
+        filter_dept: str = None,
+    ) -> Dict[str, Any]:
         """
         Query the compiled Wiki.
         Now implemented as an Agentic ReAct Loop calling tools.
@@ -1419,7 +1427,12 @@ Format your final answer as bullet points. Start with a one-line summary, then s
                             if "execute_readonly_sql" in tool_name:
                                 observation = execute_readonly_sql(tool_input)
                             elif "semantic_vector_search" in tool_name:
-                                observation = semantic_vector_search(tool_input)
+                                observation = semantic_vector_search(
+                                    tool_input,
+                                    filter_year=filter_year,
+                                    filter_semester=filter_semester,
+                                    filter_dept=filter_dept,
+                                )
                             elif "get_schema_info" in tool_name:
                                 observation = get_schema_info()
                             else:
