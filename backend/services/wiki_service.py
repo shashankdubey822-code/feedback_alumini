@@ -1604,26 +1604,26 @@ Do NOT include generic questions that don't use the data.
 
 Return ONLY the 4 questions, one per line. Do not use bullet points, numbering, or introductory text."""
 
-        # Attempt to get an LLM to generate the questions
-        llm = None
+        # Try LLMs in order of preference (Groq -> Gemini -> OpenRouter)
+        candidates = []
         if self.groq_key and ChatGroq is not None:
-            llm = ChatGroq(api_key=self.groq_key, model="llama-3.3-70b-versatile", temperature=0.3, max_retries=0, timeout=5)
-        elif self.gemini_key and ChatGoogleGenerativeAI is not None:
-            llm = ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.3, max_retries=0, request_timeout=5)
-        elif self.openrouter_key and ChatOpenAI is not None:
+            candidates.append(("Groq", ChatGroq(api_key=self.groq_key, model="llama-3.3-70b-versatile", temperature=0.3, max_retries=0, timeout=5)))
+        if self.gemini_key and ChatGoogleGenerativeAI is not None:
+            candidates.append(("Gemini", ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.3, max_retries=0, request_timeout=5)))
+        if self.openrouter_key and ChatOpenAI is not None:
             try:
-                llm = ChatOpenAI(api_key=self.openrouter_key, base_url="https://openrouter.ai/api/v1", model="meta-llama/llama-3.3-70b-instruct", temperature=0.3, max_retries=0, request_timeout=5)
+                candidates.append(("OpenRouter", ChatOpenAI(api_key=self.openrouter_key, base_url="https://openrouter.ai/api/v1", model="meta-llama/llama-3.3-70b-instruct", temperature=0.3, max_retries=0, request_timeout=5)))
             except:
                 pass
-                
-        if llm:
+
+        for name, llm in candidates:
             try:
                 res = llm.invoke([HumanMessage(content=prompt_text)])
                 questions = [q.strip().strip('-*0123456789. ') for q in res.content.split('\n') if q.strip()]
                 if len(questions) >= 4:
                     return questions[:4]
             except Exception as e:
-                logger.warning(f"Failed to dynamically generate questions with LLM: {e}")
+                logger.warning(f"Failed to dynamically generate questions with {name}: {e}")
 
         fallback_questions = [
             "What is the overall sentiment of guest lectures?",
