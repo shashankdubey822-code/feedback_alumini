@@ -9,6 +9,7 @@ import time
 import json
 from datetime import datetime
 from backend.services.nlp_service import NLPService
+from backend.services.rag_service import RAGService
 from backend.utils.logger import get_section_logger
 from backend.utils.insforge_db import get_db
 
@@ -128,7 +129,7 @@ def start_dl_worker(logger_unused=None):
 
                     # Upsert into feedback_analysis using REST API
                     try:
-                        from backend.utils.insforge_db import api_upsert
+                        from backend.utils.insforge_db import api_upsert, api_update
                         api_upsert('feedback_analysis', {
                             'response_id': response_id,
                             'sentiment_score': sentiment.get('polarity', 0.0),
@@ -136,7 +137,19 @@ def start_dl_worker(logger_unused=None):
                             'key_topics': json.dumps(keywords_payload),
                             'analyzed_at': datetime.now().isoformat()
                         }, 'response_id')
-                        
+
+                        # ── Generate and persist embedding vector ─────────────────────
+                        try:
+                            _rag = RAGService()
+                            combined_text = " ".join(filter(None, [val_text, imp_text, fut_text]))
+                            if combined_text.strip():
+                                emb = _rag.generate_embedding(combined_text)
+                                if emb:
+                                    api_update('feedback_responses', 'id', response_id, {'embedding': emb})
+                                    dl_logger.info(f"Embedding saved for response {response_id} ({len(emb)} dims)")
+                        except Exception as e_emb:
+                            dl_logger.warning(f"Embedding generation skipped for {response_id}: {e_emb}")
+
                         # Sync analytics cache immediately and emit socket event
                         try:
                             from backend.services.analytics_engine import analytics_engine

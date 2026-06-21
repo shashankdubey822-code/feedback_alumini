@@ -60,8 +60,8 @@ class RAGService:
             # Check if using LangChain Gemini Embeddings
             if hasattr(model, 'embed_query'):
                 embedding = model.embed_query(text.strip())
-                # Ensure 384 dimensions if InsForge uses 384! Gemini is 768
-                return [float(x) for x in embedding[:384]]
+                # Full 768-dimensional Gemini embedding — matches DB vector(768)
+                return [float(x) for x in embedding]
             else:
                 # Local SentenceTransformer
                 embedding = model.encode(text.strip(), convert_to_numpy=True)
@@ -70,43 +70,46 @@ class RAGService:
             logger.error(f"Error generating embedding: {str(e)}")
             return None
 
-    def search_similar_feedback(self, query_text: str, limit: int = 50, threshold: float = 0.4) -> List[Dict[str, Any]]:
+    def search_similar_feedback(
+        self,
+        query_text: str,
+        limit: int = 50,
+        threshold: float = 0.3,
+        filter_year: int = None,
+        filter_semester: str = None,
+        filter_dept: str = None,
+    ) -> List[Dict[str, Any]]:
         """
-        Execute semantic search for feedback matching the query text.
-        Routes to InsForge RPC 'match_feedback' if active, otherwise runs local SQL search.
+        Execute semantic vector search on feedback with optional year/semester/dept filters.
+        Uses match_feedback_filtered stored procedure on InsForge (pgvector).
+        Falls back to keyword search if embeddings unavailable.
         """
-        # If InsForge is not active, skip generating the embedding (which loads the slow SentenceTransformer model)
-        # and go straight to the fast fallback keyword search.
         if not is_insforge_active():
-            logger.info("InsForge not active. Skipping slow local embedding generation and using fast keyword search.")
+            logger.info("InsForge not active. Using fast keyword search fallback.")
             return self._fallback_keyword_search(query_text, limit)
 
         query_vector = self.generate_embedding(query_text)
         if not query_vector:
-            # Fallback to simple keyword search
             return self._fallback_keyword_search(query_text, limit)
 
-        # 1. INSFORGE VECTOR SEARCH (SQL FUNCTION)
-        if is_insforge_active():
-            try:
-                logger.info(f"Executing InsForge pgvector SQL function search for query: '{query_text}'")
-                rows = execute_all(
-                    "SELECT * FROM match_feedback(%s, %s, %s)",
-                    (str(query_vector), threshold, limit),
-                )
-                return rows or []
-            except Exception as e:
-                logger.error(f"InsForge pgvector query failed: {str(e)}")
-                # Fallback to local
-        
-        # 2. LOCAL SQLITE FALLBACK
-        logger.info(f"Running local SQLite search fallback for query: '{query_text}'")
         try:
-            return self._fallback_keyword_search(query_text, limit)
-            
+            logger.info(
+                f"pgvector search: '{query_text}' | year={filter_year} "
+                f"sem={filter_semester} dept={filter_dept}"
+            )
+            rows = execute_all(
+                "SELECT * FROM match_feedback_filtered(%s::vector, %s, %s, %s, %s, %s)",
+                (str(query_vector), threshold, limit, filter_year, filter_semester, filter_dept),
+            )
+            if rows:
+                logger.info(f"pgvector returned {len(rows)} results.")
+                return rows
+            # No vector results — fall back
+            logger.warning("pgvector returned 0 results. Embeddings may not be populated yet.")
         except Exception as e:
-            logger.error(f"Local RAG search fallback failed: {str(e)}")
-            return self._fallback_keyword_search(query_text, limit)
+            logger.error(f"pgvector search failed: {str(e)}")
+
+        return self._fallback_keyword_search(query_text, limit)
 
     def _fallback_keyword_search(self, query_text: str, limit: int) -> List[Dict[str, Any]]:
         """Simple InsForge-backed substring search in case vector models fail"""

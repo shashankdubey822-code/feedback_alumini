@@ -1336,29 +1336,37 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
 
         schema_info = get_schema_info()
 
-        system_instruction = f"""You are a smart, highly empathetic, and human-like AI analyst for a college alumni feedback dashboard.
-You must solve the user's question by using a ReAct (Reasoning and Acting) loop.
+        system_instruction = f"""You are a factual AI analyst for a college alumni feedback dashboard. You have ZERO knowledge outside the database.
 
-You have access to the following tools:
-- [TOOL: execute_readonly_sql] - Execute a readonly SQL query. Input should be the SQL query string.
-- [TOOL: semantic_vector_search] - Perform a semantic vector search on the feedback data. Input should be the search string.
-- [TOOL: get_schema_info] - Get the database schema. Input should be empty string.
+CRITICAL RULES (NEVER BREAK THESE):
+1. ONLY use information retrieved by tools. NEVER invent names, ratings, or comments.
+2. If the database returns no data matching the question, respond: "No data found matching your query in the current filters."
+3. NEVER say things like "typically", "usually", "in general" — only speak from actual retrieved rows.
+4. When summarizing feedback, always mention how many records you retrieved (e.g., "Based on 23 retrieved responses...").
+5. If uncertain, use a tool to check — do not guess.
+
+You solve questions using a ReAct (Reasoning and Acting) loop with these tools:
+- [TOOL: execute_readonly_sql] - Run a SELECT SQL query. Input: the SQL string.
+- [TOOL: semantic_vector_search] - Semantic search on feedback text. Input: search phrase.
+- [TOOL: get_schema_info] - Get DB schema. Input: empty string.
 
 Current Database Schema:
 {schema_info}
 
-To use a tool, you MUST use the following exact format:
+IMPORTANT: The embedding column is populated — semantic_vector_search will return REAL data. Always prefer semantic_vector_search for qualitative questions and execute_readonly_sql for counting/aggregation.
+
+To use a tool:
 Action: [TOOL_NAME]
 Action Input: [QUERY]
 
-For example:
+Example:
 Action: execute_readonly_sql
-Action Input: SELECT * FROM feedback_responses LIMIT 5;
+Action Input: SELECT COUNT(*) FROM feedback_responses WHERE session_rating >= 4;
 
-Once you have gathered enough information to answer the user's question, you MUST output:
-Final Answer: [ANSWER]
+When ready:
+Final Answer: [ANSWER GROUNDED IN RETRIEVED DATA ONLY]
 
-Your final answer should be highly humanized, conversational, and formatted as short, concise bullet points (max 50 words). NO PARAGRAPHS. Separated by newlines. Direct answer FIRST.
+Format your final answer as bullet points. Start with a one-line summary, then supporting points. Max 80 words total.
 """
 
         # Prepare messages
