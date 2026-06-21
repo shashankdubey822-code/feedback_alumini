@@ -1419,10 +1419,6 @@ Keep feedback answers under 100 words. For greetings or off-topic, keep it under
                     
                     messages.append(AIMessage(content=response_text))
                     
-                    if "Final Answer:" in response_text:
-                        final_answer = response_text.split("Final Answer:", 1)[1].strip()
-                        break
-                        
                     action_match = re.search(r"Action:\s*(.+)", response_text)
                     action_input_match = re.search(r"Action Input:\s*(.*)", response_text)
                     
@@ -1450,6 +1446,9 @@ Keep feedback answers under 100 words. For greetings or off-topic, keep it under
                         
                         logger.info(f"Observation: {observation}")
                         messages.append(HumanMessage(content=f"Observation: {observation}"))
+                    elif "Final Answer:" in response_text:
+                        final_answer = response_text.split("Final Answer:", 1)[1].strip()
+                        break
                     else:
                         messages.append(HumanMessage(content="You didn't specify an action in the correct format or provide a Final Answer. Please format as 'Action: [TOOL_NAME]' and 'Action Input: [QUERY]' or 'Final Answer: [ANSWER]'."))
                 
