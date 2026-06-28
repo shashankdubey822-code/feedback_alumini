@@ -96,7 +96,7 @@ export default async function handler(req: Request): Promise<Response> {
     // ── Step 2: Mark job as processing ──────────────────────────────
     await client.database
       .from('certificate_jobs')
-      .update({ status: 'processing', started_at: new Date().toISOString() })
+      .update({ status: 'processing', attempts: (job.attempts || 0) + 1 })
       .eq('id', job_id);
 
     // ── Step 3: Call Google Apps Script ─────────────────────────────
@@ -131,25 +131,44 @@ export default async function handler(req: Request): Promise<Response> {
     });
 
     const gasOk = gasResp.ok;
-    const gasBody = await gasResp.text();
-
-    if (!gasOk) {
-      console.error('Apps Script error:', gasBody);
+    let gasBodyText = '';
+    let gasData: any = {};
+    try {
+      gasBodyText = await gasResp.text();
+      gasData = JSON.parse(gasBodyText);
+    } catch (_) {
+      // not JSON or empty
     }
 
+    const isSuccess = gasOk && (gasData.success === true);
+
+    // Extract overflow warnings
+    let warningLog: string | null = null;
+    if (isSuccess && gasData.data && Array.isArray(gasData.data.overflow_warnings) && gasData.data.overflow_warnings.length > 0) {
+      warningLog = JSON.stringify({
+        type: 'layout_warning',
+        message: `${gasData.data.overflow_warnings.length} shape(s) may have text overflow`,
+        details: gasData.data.overflow_warnings
+      });
+    }
+
+    const finalStatus = isSuccess ? 'completed' : 'failed';
+    const errorLog = isSuccess 
+      ? warningLog 
+      : (gasData.message ? `${gasData.message}${gasData.data ? ': ' + JSON.stringify(gasData.data) : ''}` : gasBodyText || 'Unknown error');
+
     // ── Step 4: Update job status ────────────────────────────────────
-    const finalStatus = gasOk ? 'completed' : 'failed';
     await client.database
       .from('certificate_jobs')
       .update({
         status: finalStatus,
-        completed_at: new Date().toISOString(),
-        error_message: gasOk ? null : gasBody.slice(0, 500),
+        generated_at: new Date().toISOString(),
+        error_log: errorLog ? errorLog.slice(0, 1000) : null,
       })
       .eq('id', job_id);
 
     return new Response(JSON.stringify({
-      success: gasOk,
+      success: isSuccess,
       job_id,
       student: job.students?.name,
       status: finalStatus,
@@ -165,7 +184,7 @@ export default async function handler(req: Request): Promise<Response> {
     try {
       await client.database
         .from('certificate_jobs')
-        .update({ status: 'failed', error_message: String(err).slice(0, 500) })
+        .update({ status: 'failed', error_log: String(err).slice(0, 1000) })
         .eq('id', job_id);
     } catch (_) {
       // ignore secondary error

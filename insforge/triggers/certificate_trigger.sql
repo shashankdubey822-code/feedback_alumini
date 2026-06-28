@@ -10,8 +10,9 @@
 CREATE OR REPLACE FUNCTION notify_certificate_job()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- Only fire for 'pending' status
-  IF NEW.status = 'pending' THEN
+  -- Fire when status is set to 'pending' (on insert or update)
+  IF (TG_OP = 'INSERT' AND NEW.status = 'pending') OR 
+     (TG_OP = 'UPDATE' AND NEW.status = 'pending' AND (OLD.status IS DISTINCT FROM 'pending' OR OLD.error_log IS NOT NULL)) THEN
     PERFORM realtime.publish(
       'certificate:pending',  -- channel name
       'new_job',              -- event name
@@ -30,7 +31,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 DROP TRIGGER IF EXISTS on_certificate_job_insert ON certificate_jobs;
 
 CREATE TRIGGER on_certificate_job_insert
-  AFTER INSERT ON certificate_jobs
+  AFTER INSERT OR UPDATE ON certificate_jobs
   FOR EACH ROW
   EXECUTE FUNCTION notify_certificate_job();
 
