@@ -3707,8 +3707,11 @@ function renderDepartmentCharts(depts) {
 
     // ── Load Certificate Logs ─────────────────────────────────
     async function loadCertLogs() {
+        if (window._certLogsLoading) return;
         const list = document.getElementById('fb-cert-logs-list');
         if (!list) return;
+
+        window._certLogsLoading = true;
 
         // ── Smart no-flicker refresh ─────────────────────────────────────────
         // Only show "Loading..." on first load (when list is empty).
@@ -3893,6 +3896,8 @@ function renderDepartmentCharts(depts) {
             if (list.children.length === 0) {
                 list.innerHTML = `<div style="color:#ef4444;font-size:11px;text-align:center;padding:10px;">Failed to load logs: ${esc(err.message)}</div>`;
             }
+        } finally {
+            window._certLogsLoading = false;
         }
     }
 
