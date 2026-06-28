@@ -270,9 +270,9 @@ def receive_form_submission():
                 try:
                     analytics_engine.refresh_single_record(record_id)
                     logger.info(f"Background analytics refresh completed for #{record_id}")
-                    # Wake up DL worker to process new submission immediately
-                    from backend.services.dl_worker import trigger_dl_processing
-                    trigger_dl_processing()
+                    # InsForge DB trigger now handles this — see insforge/triggers/feedback_trigger.sql
+                    # from backend.services.dl_worker import trigger_dl_processing
+                    # trigger_dl_processing()
                 except Exception as e:
                     logger.error(f"Background analytics refresh failed: {e}")
 

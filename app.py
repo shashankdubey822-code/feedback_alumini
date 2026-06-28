@@ -68,9 +68,9 @@ def create_app(config=None):
     from backend.services.dl_worker import start_dl_worker
     start_dl_worker(logger)
 
-    # Start Certificate background job worker thread
-    from backend.services.job_worker import start_job_worker
-    start_job_worker(logger)
+    # job_worker removed — replaced by InsForge DB trigger + Edge Function (see insforge/functions/send-certificate/)
+    # from backend.services.job_worker import start_job_worker
+    # start_job_worker(logger)
 
     # Enable CORS
     CORS(app, resources={

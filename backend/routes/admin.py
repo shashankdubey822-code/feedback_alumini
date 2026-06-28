@@ -155,12 +155,12 @@ def _insert_df_rows(df: pd.DataFrame, source: str = 'csv_upload') -> int:
     from backend.services.analytics_engine import analytics_engine
     analytics_engine.refresh_data()
 
-    # Wake up DL worker to process newly uploaded CSV responses immediately
-    try:
-        from backend.services.dl_worker import trigger_dl_processing
-        trigger_dl_processing()
-    except Exception as e_dl:
-        logger.error(f"Error waking up DL worker: {e_dl}")
+    # Replaced by InsForge DB trigger
+    # try:
+    #     from backend.services.dl_worker import trigger_dl_processing
+    #     trigger_dl_processing()
+    # except Exception as e_dl:
+    #     logger.error(f"Error waking up DL worker: {e_dl}")
     
     return inserted
 
@@ -737,9 +737,9 @@ def sync_responses():
             from backend.services.analytics_engine import analytics_engine
             analytics_engine.refresh_data()
             
-            # Wake up DL worker to process newly synced responses immediately
-            from backend.services.dl_worker import trigger_dl_processing
-            trigger_dl_processing()
+            # Replaced by InsForge DB trigger
+            # from backend.services.dl_worker import trigger_dl_processing
+            # trigger_dl_processing()
         except Exception as ae_err:
             logger.error(f"Error rebuilding analytics cache after sync: {ae_err}")
 

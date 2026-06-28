@@ -1,272 +1,250 @@
 """
-NLP Service - Natural Language Processing and text analysis
-Handles sentiment analysis, keyword extraction, and non-answer detection.
+nlp_service.py — NLP analysis via OpenRouter API (google/gemini-2.5-flash:free).
 
-Models used:
-  - Sentiment: cardiffnlp/twitter-roberta-base-sentiment-latest
-      Trained on short-form social/feedback text; outputs positive/neutral/negative natively.
-  - Keywords: KeyBERT (sentence-transformers/all-MiniLM-L6-v2 backend)
-      Embedding-based keyphrase extraction; far more accurate than TextBlob noun phrases.
-  - Fallback: TextBlob polarity for is_non_answer heuristic only.
+Replaces local transformer models (RoBERTa, DeBERTa, KeyBERT, BAAI/bge).
+All heavy ML libraries (torch, transformers, sentence-transformers, keybert, nltk)
+have been removed. Sentiment, keyphrases, and actionability now come from a
+single structured JSON call to the OpenRouter free-tier LLM.
 """
 
+import os
 import re
-from typing import List, Dict, Tuple, Optional
+import json
+import logging
+import requests
+from typing import List, Dict, Any, Optional, Tuple
 from collections import Counter
 
-# Lazy-loaded singleton — do NOT create at module level to avoid startup crash
-_actionability_classifier = None
-_nltk_bootstrapped = False
+logger = logging.getLogger(__name__)
+
+# Optional TextBlob fallback for sentiment when API is unavailable
+try:
+    from textblob import TextBlob
+    _TEXTBLOB_AVAILABLE = True
+except ImportError:
+    _TEXTBLOB_AVAILABLE = False
+
+_OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
+_FREE_MODEL = 'google/gemini-2.5-flash:free'
 
 
-def _get_actionability_classifier():
-    """Lazy-load the zero-shot classifier on first use."""
-    global _actionability_classifier
-    if _actionability_classifier is None:
-        try:
-            from transformers import pipeline
-            _actionability_classifier = pipeline(
-                "zero-shot-classification",
-                model="cross-encoder/nli-deberta-v3-small"
-            )
-        except Exception:
-            pass
-    return _actionability_classifier
+def _call_openrouter(prompt: str, system: str = None) -> Optional[str]:
+    """Make a single OpenRouter API call. Returns response text or None on failure."""
+    api_key = os.environ.get('OPENROUTER_API_KEY', '').strip()
+    if not api_key:
+        logger.warning('OPENROUTER_API_KEY not set — NLP API calls will fail')
+        return None
+    messages = []
+    if system:
+        messages.append({'role': 'system', 'content': system})
+    messages.append({'role': 'user', 'content': prompt})
+    try:
+        resp = requests.post(
+            _OPENROUTER_URL,
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://mamta-feedback.hf.space',
+                'X-Title': 'Alumni Feedback System',
+            },
+            json={
+                'model': _FREE_MODEL,
+                'messages': messages,
+                'response_format': {'type': 'json_object'},
+                'temperature': 0.1,
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data['choices'][0]['message']['content']
+    except Exception as e:
+        logger.error(f'OpenRouter call failed: {e}')
+        return None
 
 
 class NLPService:
-    """Handle NLP operations: sentiment analysis, keyword extraction, text cleaning."""
-
-    # ── Non-answer patterns (Removed in favor of Zero-Shot Classifier) ────────
+    """
+    NLP analysis service — now powered by OpenRouter (google/gemini-2.5-flash:free).
+    Public API is identical to the previous transformer-based implementation.
+    """
 
     def __init__(self, min_word_length: int = 3, max_keywords: int = 10):
-        global _nltk_bootstrapped
-        if not _nltk_bootstrapped:
-            try:
-                import nltk
-                for _resource, _path in [
-                    ('punkt_tab',  'tokenizers/punkt_tab'),
-                    ('stopwords',  'corpora/stopwords'),
-                    ('brown',      'corpora/brown'),
-                    ('wordnet',    'corpora/wordnet'),
-                ]:
-                    try:
-                        nltk.data.find(_path)
-                    except LookupError:
-                        nltk.download(_resource, quiet=True)
-                _nltk_bootstrapped = True
-            except Exception:
-                pass
-
-        try:
-            from nltk.corpus import stopwords
-            self.STOP_WORDS = set(stopwords.words('english'))
-        except Exception:
-            self.STOP_WORDS = set()
-        self.STOP_WORDS.update([
-            'na', 'n/a', 'pls', 'please', 'ok', 'okay', 'good', 'great', 'nice',
-            'thanks', 'thank', 'no', 'yes', 'feedback', 'session', 'v', 'b', 'c', 'n',
-            'related', 'domain', 'area', 'topics', 'field', 'like', 'aspect',
-            'subjects', 'about', 'more', 'would', 'also', 'make', 'really',
-            'everything', 'every', 'lot', 'much', 'get', 'got', 'well', 'can', 'one',
-        ])
         self.min_word_length = min_word_length
         self.max_keywords = max_keywords
+        # No model loading — all inference is remote via OpenRouter
+        self.STOP_WORDS = {
+            'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to',
+            'for', 'of', 'with', 'by', 'from', 'is', 'was', 'are', 'were',
+            'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
+            'will', 'would', 'could', 'should', 'may', 'might', 'shall',
+            'it', 'its', 'i', 'we', 'you', 'he', 'she', 'they', 'them',
+            'this', 'that', 'these', 'those', 'my', 'our', 'your', 'their',
+            'very', 'also', 'just', 'more', 'about', 'like', 'really', 'so',
+            'na', 'n/a', 'pls', 'please', 'ok', 'okay', 'good', 'great', 'nice',
+            'thanks', 'thank', 'no', 'yes', 'feedback', 'session',
+        }
 
-        # ── Sentiment model (RoBERTa, 3-class) ──────────────────────────────
-        self.sentiment_model = None
-        self._sentiment_id2label: Dict[int, str] = {}
-        try:
-            from transformers import pipeline, AutoConfig
-            _model_name = "cardiffnlp/twitter-roberta-base-sentiment-latest"
-            _cfg = AutoConfig.from_pretrained(_model_name)
-            self._sentiment_id2label = {int(k): v for k, v in _cfg.id2label.items()}
-            self.sentiment_model = pipeline(
-                "sentiment-analysis",
-                model=_model_name,
-                tokenizer=_model_name,
-                truncation=True,
-                max_length=512,
-            )
-        except Exception:
-            pass  # Falls back to TextBlob
+    # ------------------------------------------------------------------
+    # Public methods (same signatures as before)
+    # ------------------------------------------------------------------
 
-        # ── KeyBERT (lazy-loaded on first use) ───────────────────────────────
-        self._kw_model = None
-
-    # ── KeyBERT lazy loader ──────────────────────────────────────────────────
-    def _get_kw_model(self):
-        if self._kw_model is None:
-            try:
-                from keybert import KeyBERT
-                from sentence_transformers import SentenceTransformer
-                sentence_model = SentenceTransformer("BAAI/bge-small-en-v1.5")
-                self._kw_model = KeyBERT(model=sentence_model)
-            except Exception:
-                pass
-        return self._kw_model
-
-    # ── Non-answer detection ─────────────────────────────────────────────────
     def is_non_answer(self, text: str) -> bool:
+        """Returns True if text is noise/filler and should be skipped."""
         if not text or not isinstance(text, str):
             return True
         text = text.strip()
-        if not text or len(text) <= 2 or bool(re.match(r'^[^\w\s]+$', text)):
+        if not text or len(text) <= 2:
             return True
-            
-        try:
-            classifier = _get_actionability_classifier()
-            if classifier is not None:
-                result = classifier(
-                    text,
-                    candidate_labels=["actionable feedback", "non-actionable filler"]
-                )
-                if result['labels'][0] == "non-actionable filler" and result['scores'][0] > 0.6:
-                    return True
-        except Exception:
-            pass
-            
-        return False
-
-    # ── Sentiment analysis ───────────────────────────────────────────────────
-    def analyze_sentiment(self, text: str) -> Dict:
-        """
-        Returns {'polarity': float, 'subjectivity': float, 'label': str}.
-        label is one of: POSITIVE | NEUTRAL | NEGATIVE | NO_RESPONSE | ERROR
-        """
-        if not text or self.is_non_answer(text):
-            return {'polarity': 0.0, 'subjectivity': 0.0, 'label': 'NO_RESPONSE'}
-
-        try:
-            if self.sentiment_model:
-                result = self.sentiment_model(text[:512])[0]
-                raw_label: str = result['label'].lower()   # e.g. "positive", "neutral", "negative"
-                score: float   = result['score']
-
-                # Normalise to uppercase canonical labels
-                if 'positive' in raw_label:
-                    label    = 'POSITIVE'
-                    polarity = score
-                elif 'negative' in raw_label:
-                    label    = 'NEGATIVE'
-                    polarity = -score
-                else:
-                    label    = 'NEUTRAL'
-                    polarity = 0.0
-
-                return {
-                    'polarity':     round(polarity, 3),
-                    'subjectivity': round(score, 3),
-                    'label':        label,
-                }
-
-            # ── TextBlob fallback ────────────────────────────────────────────
-            from textblob import TextBlob
-            blob     = TextBlob(text)
-            polarity = round(blob.sentiment.polarity, 3)
-            label    = 'POSITIVE' if polarity > 0.1 else ('NEGATIVE' if polarity < -0.1 else 'NEUTRAL')
-            return {
-                'polarity':     polarity,
-                'subjectivity': round(blob.sentiment.subjectivity, 3),
-                'label':        label,
-            }
-
-        except Exception:
-            return {'polarity': 0.0, 'subjectivity': 0.0, 'label': 'ERROR'}
-
-    def get_sentiment(self, text: str) -> float:
-        return self.analyze_sentiment(text)['polarity']
-
-    # ── Keyword extraction (unigrams, fast) ──────────────────────────────────
-    def extract_keywords(self, text: str, limit: int = None) -> List[str]:
-        """Simple unigram extraction — used as fallback for very short texts."""
-        if not text or self.is_non_answer(text):
-            return []
-        limit = limit or self.max_keywords
-        try:
-            words = [
-                w.strip('.,!?"\'()-—')
-                for w in text.lower().split()
-            ]
-            words = [w for w in words if len(w) >= self.min_word_length and w not in self.STOP_WORDS]
-            if not words:
-                return []
-            return [w for w, _ in Counter(words).most_common(limit)]
-        except Exception:
-            return []
-
-    # ── Keyphrase extraction (KeyBERT) ────────────────────────────────────────
-    def extract_keyphrases(self, text: str, limit: int = None) -> List[str]:
-        """
-        Embedding-based keyphrase extraction via KeyBERT.
-        Falls back to unigram extraction if KeyBERT is unavailable or text is too short.
-        """
-        if not text or self.is_non_answer(text):
-            return []
-        limit = limit or self.max_keywords
-
-        # KeyBERT needs at least a few words to be meaningful
-        word_count = len(text.split())
-        kw_model = self._get_kw_model() if word_count >= 4 else None
-
-        if kw_model:
+        # Quick heuristic for common noise patterns (no API needed)
+        noise_patterns = [
+            r'^(ok|okay|nil|na|n/a|none|nothing|no|yes|good|fine|great|\.+)$',
+            r'^[^a-zA-Z]*$',
+        ]
+        cleaned = text.strip().lower()
+        for pat in noise_patterns:
+            if re.match(pat, cleaned):
+                return True
+        if len(cleaned.split()) <= 1:
+            return True
+        # API call for ambiguous multi-word cases
+        result = _call_openrouter(
+            f'Is this student feedback a non-answer (noise/filler/too vague to be useful)?\n'
+            f'Text: "{text[:300]}"\n'
+            f'Return JSON: {{"is_non_answer": true}} or {{"is_non_answer": false}}'
+        )
+        if result:
             try:
-                results = kw_model.extract_keywords(
-                    text,
-                    keyphrase_ngram_range=(1, 2),
-                    stop_words='english',
-                    top_n=limit,
-                    use_mmr=True,       # Maximal Marginal Relevance for diversity
-                    diversity=0.5,
-                )
-                # results: List[Tuple[str, float]]
-                return [phrase for phrase, _score in results if phrase]
+                return json.loads(result).get('is_non_answer', False)
             except Exception:
                 pass
+        return False
 
-        # Fallback: unigrams
+    def analyze_sentiment(self, text: str) -> Dict[str, Any]:
+        """Analyze sentiment. Returns {polarity, subjectivity, label}."""
+        if not text or not text.strip():
+            return {'polarity': 0.0, 'subjectivity': 0.0, 'label': 'NEUTRAL'}
+        if self.is_non_answer(text):
+            return {'polarity': 0.0, 'subjectivity': 0.0, 'label': 'NO_RESPONSE'}
+
+        result = _call_openrouter(
+            f'Analyze the sentiment of this student feedback about an alumni speaker session.\n'
+            f'Text: "{text[:500]}"\n'
+            f'Return JSON: {{'
+            f'"sentiment_label": "POSITIVE" or "NEUTRAL" or "NEGATIVE",'
+            f'"polarity": <float from -1.0 to 1.0>,'
+            f'"subjectivity": <float from 0.0 to 1.0>'
+            f'}}'
+        )
+        if result:
+            try:
+                parsed = json.loads(result)
+                return {
+                    'polarity': float(parsed.get('polarity', 0.0)),
+                    'subjectivity': float(parsed.get('subjectivity', 0.5)),
+                    'label': parsed.get('sentiment_label', 'NEUTRAL'),
+                }
+            except Exception:
+                pass
+        # Fallback to TextBlob
+        return self._textblob_sentiment(text)
+
+    def get_sentiment(self, text: str) -> float:
+        """Returns polarity score (-1.0 to 1.0)."""
+        return self.analyze_sentiment(text).get('polarity', 0.0)
+
+    def extract_keyphrases(self, text: str, limit: int = None) -> List[str]:
+        """Extract key phrases from text using OpenRouter."""
+        if not text or self.is_non_answer(text):
+            return []
+        limit = limit or self.max_keywords
+        if len(text.split()) < 4:
+            return self.extract_keywords(text, limit)
+
+        result = _call_openrouter(
+            f'Extract the {limit} most meaningful key phrases from this student feedback.\n'
+            f'Text: "{text[:500]}"\n'
+            f'Return JSON: {{"keyphrases": ["phrase1", "phrase2", ...]}}'
+        )
+        if result:
+            try:
+                phrases = json.loads(result).get('keyphrases', [])
+                return [str(p).lower() for p in phrases[:limit]]
+            except Exception:
+                pass
         return self.extract_keywords(text, limit)
 
-    # ── Bigram extraction ─────────────────────────────────────────────────────
-    def extract_bigrams(self, texts: List[str], limit: int = 10) -> List[Tuple[str, str]]:
-        bigrams: List[Tuple[str, str]] = []
-        for text in texts:
-            if text and not self.is_non_answer(text):
-                try:
-                    words = [
-                        w.strip('.,!?"\'()-—')
-                        for w in text.lower().split()
-                    ]
-                    words = [w for w in words if len(w) >= self.min_word_length and w not in self.STOP_WORDS]
-                    for i in range(len(words) - 1):
-                        bigrams.append((words[i], words[i + 1]))
-                except Exception:
-                    continue
-        if not bigrams:
+    def extract_keywords(self, text: str, limit: int = None) -> List[str]:
+        """Simple frequency-based keyword extraction (no API needed)."""
+        if not text:
             return []
-        return Counter(bigrams).most_common(limit)
+        limit = limit or self.max_keywords
+        words = re.findall(r'\b[a-z]{3,}\b', text.lower())
+        words = [w for w in words if w not in self.STOP_WORDS]
+        freq = Counter(words)
+        return [word for word, _ in freq.most_common(limit)]
 
-    # ── Utilities ─────────────────────────────────────────────────────────────
+    def extract_bigrams(self, texts: List[str], limit: int = 10) -> List[Tuple[str, str]]:
+        """Counter-based bigram extraction (no API needed)."""
+        all_bigrams: List[Tuple[str, str]] = []
+        for text in texts:
+            if not text:
+                continue
+            words = [w for w in re.findall(r'\b[a-z]{3,}\b', text.lower())
+                     if w not in self.STOP_WORDS]
+            all_bigrams.extend(zip(words, words[1:]))
+        freq = Counter(all_bigrams)
+        return Counter(all_bigrams).most_common(limit)
+
     def clean_text(self, text: str) -> str:
+        """Clean text of special characters and extra whitespace."""
         if not text:
             return ''
-        text = ' '.join(text.split())
-        text = re.sub(r'[^\w\s.,!?-]', '', text)
+        text = re.sub(r'[^\w\s.,!?-]', ' ', text)
+        text = re.sub(r'\s+', ' ', text)
         return text.strip()
 
-    def calculate_text_statistics(self, text: str) -> Dict:
+    def calculate_text_statistics(self, text: str) -> Dict[str, Any]:
+        """Return basic text statistics (no API needed)."""
         if not text:
             return {'length': 0, 'word_count': 0, 'avg_word_length': 0, 'sentence_count': 0}
-        sentences  = len(re.split(r'[.!?]+', text.strip()))
-        words      = text.split()
-        word_count = len(words)
-        avg_word_length = sum(len(w) for w in words) / word_count if word_count > 0 else 0
+        words = text.split()
+        sentences = re.split(r'[.!?]+', text)
+        sentences = [s for s in sentences if s.strip()]
+        avg_word_len = sum(len(w) for w in words) / len(words) if words else 0
         return {
-            'length':          len(text),
-            'word_count':      word_count,
-            'avg_word_length': round(avg_word_length, 2),
-            'sentence_count':  sentences,
+            'length': len(text),
+            'word_count': len(words),
+            'avg_word_length': round(avg_word_len, 2),
+            'sentence_count': len(sentences),
         }
 
     def batch_analyze_sentiment(self, texts: List[str]) -> List[Dict]:
+        """Analyze sentiment for a list of texts (sequential API calls)."""
         return [self.analyze_sentiment(t) for t in texts]
+
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def _textblob_sentiment(self, text: str) -> Dict[str, Any]:
+        """TextBlob fallback when OpenRouter is unavailable."""
+        if _TEXTBLOB_AVAILABLE:
+            try:
+                blob = TextBlob(text)
+                pol = blob.sentiment.polarity
+                sub = blob.sentiment.subjectivity
+                if pol > 0.1:
+                    label = 'POSITIVE'
+                elif pol < -0.1:
+                    label = 'NEGATIVE'
+                else:
+                    label = 'NEUTRAL'
+                return {'polarity': pol, 'subjectivity': sub, 'label': label}
+            except Exception:
+                pass
+        return {'polarity': 0.0, 'subjectivity': 0.0, 'label': 'NEUTRAL'}
+
+
+# Module-level singleton (same as before)
+nlp_service = NLPService()

@@ -99,7 +99,7 @@ def start_job_worker(logger_unused=None):
                         jobs = cur.fetchall()
 
                 if not jobs:
-                    time.sleep(5)
+                    time.sleep(300)
                     continue
 
                 job_logger.info(f"Processing {len(jobs)} pending certificate job(s)...")
@@ -212,7 +212,7 @@ def start_job_worker(logger_unused=None):
                         except Exception as ws_err:
                             job_logger.error(f"Failed to emit status_changed: {ws_err}")
 
-                time.sleep(5)
+                time.sleep(300)
 
             except Exception as e:
                 job_logger.error(f"Job Worker Loop Error: {e}")

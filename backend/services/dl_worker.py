@@ -146,7 +146,7 @@ def start_dl_worker(logger_unused=None):
                         rows = cur.fetchall()
 
                 if not rows:
-                    _dl_wakeup_event.wait(5)
+                    _dl_wakeup_event.wait(300)
                     _dl_wakeup_event.clear()
                     continue
 
@@ -294,7 +294,7 @@ def start_dl_worker(logger_unused=None):
 
                 dl_logger.info(f"DL Worker finished processing {len(rows)} record(s).")
 
-                _dl_wakeup_event.wait(5)
+                _dl_wakeup_event.wait(300)
                 _dl_wakeup_event.clear()
 
             except Exception as e:
