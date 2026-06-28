@@ -11,7 +11,7 @@
 import { createClient } from 'npm:@insforge/sdk';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1';
-const NLP_MODEL = 'google/gemini-2.5-flash:free';
+const NLP_MODEL = 'google/gemini-2.5-flash';
 const EMBED_MODEL = 'openai/text-embedding-3-small';
 
 const corsHeaders = {
