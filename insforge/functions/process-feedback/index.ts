@@ -50,13 +50,12 @@ export default async function handler(req: Request): Promise<Response> {
     });
   }
 
-  const {
-    response_id,
-    aspect_most_valuable = '',
-    improvements_suggestions = '',
-    future_topics = '',
-    session_rating,
-  } = payload;
+  const record = payload.record || payload;
+  const response_id = payload.response_id || record.id;
+  const aspect_most_valuable = record.aspect_most_valuable || '';
+  const improvements_suggestions = record.improvements_suggestions || '';
+  const future_topics = record.future_topics || '';
+  const session_rating = record.session_rating;
 
   if (!response_id) {
     return new Response(JSON.stringify({ error: 'response_id required' }), {

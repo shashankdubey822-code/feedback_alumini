@@ -47,7 +47,7 @@ export default async function handler(req: Request): Promise<Response> {
     });
   }
 
-  const { job_id } = payload;
+  const job_id = payload.job_id || payload.record?.id;
   if (!job_id) {
     return new Response(JSON.stringify({ error: 'job_id required' }), {
       status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
