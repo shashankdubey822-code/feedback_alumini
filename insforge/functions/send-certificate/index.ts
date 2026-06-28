@@ -27,13 +27,31 @@ export default async function handler(req: Request): Promise<Response> {
     });
   }
 
-  const insforgeUrl = Deno.env.get('INSFORGE_BASE_URL');
-  const anonKey = Deno.env.get('ANON_KEY');
-  const appsScriptUrl = Deno.env.get('APPS_SCRIPT_URL');
-  const appsScriptSecret = Deno.env.get('APPS_SCRIPT_SECRET');
+  const insforgeUrl = Deno.env.get('INSFORGE_BASE_URL') || 'https://ajas4w5j.us-east.insforge.app';
+  const anonKey = Deno.env.get('ANON_KEY') || 'anon_31d0b6c930373a82bbb50878968050a302c65093eff7b272135f271d205e3c52';
+
+  const client = createClient({ baseUrl: insforgeUrl, anonKey });
+
+  let appsScriptUrl = Deno.env.get('APPS_SCRIPT_URL');
+  let appsScriptSecret = Deno.env.get('APPS_SCRIPT_SECRET');
+
+  if (!appsScriptUrl) {
+    try {
+      const { data: configRows } = await client.database
+        .from('system_config')
+        .select('*');
+      if (configRows) {
+        const config = Object.fromEntries(configRows.map(r => [r.key, r.value]));
+        appsScriptUrl = config['APPS_SCRIPT_URL'];
+        appsScriptSecret = config['APPS_SCRIPT_SECRET'];
+      }
+    } catch (e) {
+      console.error('Failed to load config from DB:', e);
+    }
+  }
 
   if (!insforgeUrl || !anonKey || !appsScriptUrl) {
-    return new Response(JSON.stringify({ error: 'Missing environment variables' }), {
+    return new Response(JSON.stringify({ error: 'Missing environment variables or DB configuration' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
@@ -53,8 +71,6 @@ export default async function handler(req: Request): Promise<Response> {
       status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
-
-  const client = createClient({ baseUrl: insforgeUrl, anonKey });
 
   try {
     // ── Step 1: Fetch job with student + event details ───────────────
@@ -84,13 +100,23 @@ export default async function handler(req: Request): Promise<Response> {
       .eq('id', job_id);
 
     // ── Step 3: Call Google Apps Script ─────────────────────────────
+    let templateId = job.events?.template_id ?? '';
+    if (templateId) {
+      const match = templateId.match(/\/d\/([a-zA-Z0-9-_]+)/);
+      if (match) {
+        templateId = match[1];
+      }
+    }
+
     const gasPayload: Record<string, any> = {
       action: 'generate_certificate',
+      template_id: templateId,
       student_name: job.students?.name ?? '',
       student_email: job.students?.email ?? '',
       roll_no: job.students?.roll_no ?? '',
       speaker_name: job.events?.speaker_name ?? '',
-      event_date: job.events?.venue_date ?? '',
+      venue_date: job.events?.venue_date ?? '',
+      lecture_title: job.events?.lecture_title ?? '',
       department: job.students?.department ?? '',
     };
 

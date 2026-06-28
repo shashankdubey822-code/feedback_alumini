@@ -31,12 +31,29 @@ export default async function handler(req: Request): Promise<Response> {
     });
   }
 
-  const openrouterKey = Deno.env.get('OPENROUTER_API_KEY');
-  const insforgeUrl = Deno.env.get('INSFORGE_BASE_URL');
-  const anonKey = Deno.env.get('ANON_KEY');
+  const insforgeUrl = Deno.env.get('INSFORGE_BASE_URL') || 'https://ajas4w5j.us-east.insforge.app';
+  const anonKey = Deno.env.get('ANON_KEY') || 'anon_31d0b6c930373a82bbb50878968050a302c65093eff7b272135f271d205e3c52';
+
+  const client = createClient({ baseUrl: insforgeUrl, anonKey });
+
+  let openrouterKey = Deno.env.get('OPENROUTER_API_KEY');
+
+  if (!openrouterKey) {
+    try {
+      const { data: configRows } = await client.database
+        .from('system_config')
+        .select('*');
+      if (configRows) {
+        const config = Object.fromEntries(configRows.map(r => [r.key, r.value]));
+        openrouterKey = config['OPENROUTER_API_KEY'];
+      }
+    } catch (e) {
+      console.error('Failed to load config from DB:', e);
+    }
+  }
 
   if (!openrouterKey || !insforgeUrl || !anonKey) {
-    return new Response(JSON.stringify({ error: 'Missing environment variables' }), {
+    return new Response(JSON.stringify({ error: 'Missing environment variables or DB configuration' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
@@ -75,8 +92,6 @@ export default async function handler(req: Request): Promise<Response> {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
-
-  const client = createClient({ baseUrl: insforgeUrl, anonKey });
 
   try {
     // ── Step 1: NLP Analysis via OpenRouter ──────────────────────────
