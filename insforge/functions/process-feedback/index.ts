@@ -160,17 +160,24 @@ Return JSON:
     }
 
     // ── Step 3: Save NLP results to feedback_analysis ───────────────
-    const analysisPayload = {
-      response_id,
-      sentiment_label: nlpResult.sentiment_label ?? 'NEUTRAL',
-      sentiment_score: nlpResult.sentiment_score ?? 0.0,
-      keywords_json: JSON.stringify(nlpResult.keywords ?? []),
-      keyphrases_json: JSON.stringify(nlpResult.keyphrases ?? []),
+    const keywordsPayload = {
+      improvements_sentiment: nlpResult.sentiment_label ?? 'NEUTRAL',
+      valuable_sentiment: nlpResult.sentiment_label ?? 'NEUTRAL',
+      future_keywords: nlpResult.keywords ?? [],
+      imp_keywords: nlpResult.keyphrases ?? [],
+      val_keywords: nlpResult.keywords ?? [],
       is_actionable: nlpResult.is_actionable ?? false,
       category: nlpResult.category ?? 'general',
-      actionable_items_json: JSON.stringify(nlpResult.actionable_items ?? []),
-      processed_at: new Date().toISOString(),
-      model_used: NLP_MODEL,
+      general_keywords: nlpResult.keywords ?? [],
+    };
+
+    const analysisPayload = {
+      response_id,
+      sentiment_score: nlpResult.sentiment_score ?? 0.0,
+      sentiment_label: nlpResult.sentiment_label ?? 'NEUTRAL',
+      key_topics: keywordsPayload,
+      actionable_insights: Array.isArray(nlpResult.actionable_items) ? nlpResult.actionable_items.join('; ') : null,
+      analyzed_at: new Date().toISOString()
     };
 
     const { error: insertError } = await client.database
