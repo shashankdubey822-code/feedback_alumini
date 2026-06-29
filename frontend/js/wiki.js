@@ -38,11 +38,6 @@ const Wiki = {
         chatInput: null,
         chatSendBtn: null,
         canvas: null,
-        saveCfgBtn: null,
-        cfgGeminiKey: null,
-        cfgInsForgeUrl: null,
-        cfgInsForgeKey: null,
-        cfgStatusMsg: null,
         selectAllBtn: null,
         compileStartBtn: null
     },
@@ -87,13 +82,6 @@ const Wiki = {
         this.elements.chatSendBtn = document.getElementById('btn-wiki-chat-send');
         this.elements.chatClearBtn = document.getElementById('btn-wiki-chat-clear');
         this.elements.canvas = document.getElementById('wiki-graph-canvas');
-        
-        // Settings elements
-        this.elements.saveCfgBtn = document.getElementById('btn-save-cfg');
-        this.elements.cfgGeminiKey = document.getElementById('cfg-gemini-key');
-        this.elements.cfgInsForgeUrl = document.getElementById('cfg-insforge-url');
-        this.elements.cfgInsForgeKey = document.getElementById('cfg-insforge-key');
-        this.elements.cfgStatusMsg = document.getElementById('cfg-status-msg');
         
         // Buttons
         this.elements.selectAllBtn = document.getElementById('btn-wiki-select-all');
@@ -151,17 +139,10 @@ const Wiki = {
             });
         }
 
-        // Configuration Save
-        if (this.elements.saveCfgBtn) {
-            this.elements.saveCfgBtn.addEventListener('click', function() {
-                self.saveConfiguration();
-            });
-        }
-
         // Ingestion Select All / Actions
         if (this.elements.selectAllBtn) {
             this.elements.selectAllBtn.addEventListener('click', function() {
-                const checkboxes = self.elements.sessionsBody.querySelectorAll('input[type="checkbox"]');
+                const checkboxes = self.elements.sessionsBody.querySelectorAll('input[type="checkbox"]:not(:disabled)');
                 const allChecked = Array.from(checkboxes).every(c => c.checked);
                 checkboxes.forEach(c => c.checked = !allChecked);
             });
@@ -280,18 +261,7 @@ const Wiki = {
                         .then(() => self.loadWikiPages());
                 }
                 
-                // Populate configuration details in settings tab if configured
-                if (data.gemini_configured && self.elements.cfgGeminiKey) {
-                    self.elements.cfgGeminiKey.placeholder = "Gemini Key configured (••••••••)";
-                }
-                if (data.insforge_configured) {
-                    if (self.elements.cfgInsForgeUrl && data.insforge_url) {
-                        self.elements.cfgInsForgeUrl.value = data.insforge_url;
-                    }
-                    if (self.elements.cfgInsForgeKey) {
-                        self.elements.cfgInsForgeKey.placeholder = "InsForge Key configured (••••••••)";
-                    }
-                }
+
 
                 // AI provider status popup logic removed
             })
@@ -477,6 +447,18 @@ const Wiki = {
         });
     },
 
+    formatDate(dateStr) {
+        if (!dateStr) return '';
+        const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (match) {
+            const year = match[1].slice(-2);
+            const month = match[2];
+            const day = match[3];
+            return `${day}-${month}-${year}`;
+        }
+        return dateStr;
+    },
+
     // ─── INGESTION MANAGER ───────────────────────────────────────────────────
 
     loadSessionsList() {
@@ -499,13 +481,15 @@ const Wiki = {
                     const badgeClass = s.compiled ? 'badge-success' : 'badge-warning';
                     const badgeText = s.compiled ? 'Compiled' : 'Not Compiled';
                     const badgeStyle = s.compiled ? 'background:rgba(52,211,153,0.1); color:#34d399; border:1px solid rgba(52,211,153,0.2);' : 'background:rgba(251,191,36,0.1); color:#fbbf24; border:1px solid rgba(251,191,36,0.2);';
+                    
+                    const checkboxAttr = s.compiled ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : '';
 
                     row.innerHTML = `
                         <td style="padding: 12px; text-align: center;">
-                            <input type="checkbox" data-speaker="${s.alumni_speaker_name}" data-date="${s.date_of_lecture}" />
+                            <input type="checkbox" data-speaker="${s.alumni_speaker_name}" data-date="${s.date_of_lecture}" ${checkboxAttr} />
                         </td>
-                        <td style="padding: 12px; color: #fff; font-weight: 500;">${s.alumni_speaker_name}</td>
-                        <td style="padding: 12px; font-family: monospace;">${s.date_of_lecture}</td>
+                        <td style="padding: 12px; color: var(--text-primary); font-weight: 500;">${s.alumni_speaker_name}</td>
+                        <td style="padding: 12px; font-family: monospace;">${this.formatDate(s.date_of_lecture)}</td>
                         <td style="padding: 12px; text-align: center; font-weight:600;">${s.cnt}</td>
                         <td style="padding: 12px; text-align: center;">
                             <span class="file-badge" style="padding: 2px 6px; font-size:10px; border-radius:4px; ${badgeStyle}">${badgeText}</span>
@@ -782,63 +766,6 @@ const Wiki = {
                 console.error("Error loading suggested questions:", err);
                 container.innerHTML = '';
             });
-    },
-
-    // ─── CONFIGURATION MANAGEMENT ────────────────────────────────────────────
-
-    saveConfiguration() {
-        const gemini = this.elements.cfgGeminiKey.value.trim();
-        const url = this.elements.cfgInsForgeUrl.value.trim();
-        const key = this.elements.cfgInsForgeKey.value.trim();
-
-        if (!gemini && !url) {
-            this.showConfigMsg("Please fill in at least one credential.", "error");
-            return;
-        }
-
-        const self = this;
-        fetch('/api/v1/wiki/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                gemini_key: gemini,
-                insforge_url: url,
-                insforge_key: key
-            })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.error) {
-                self.showConfigMsg(data.error, "error");
-            } else {
-                self.showConfigMsg(data.message, "success");
-                self.elements.cfgGeminiKey.value = '';
-                self.elements.cfgInsForgeUrl.value = '';
-                self.elements.cfgInsForgeKey.value = '';
-                self.loadWikiStatus();
-                self.loadWikiPages();
-            }
-        })
-        .catch(err => {
-            console.error("Config save failed:", err);
-            self.showConfigMsg("Error connecting to settings API.", "error");
-        });
-    },
-
-    showConfigMsg(text, type) {
-        const msg = this.elements.cfgStatusMsg;
-        msg.style.display = 'block';
-        msg.innerText = text;
-        if (type === 'success') {
-            msg.style.background = 'rgba(52,211,153,0.1)';
-            msg.style.color = '#34d399';
-            msg.style.border = '1px solid rgba(52,211,153,0.2)';
-        } else {
-            msg.style.background = 'rgba(239,68,68,0.1)';
-            msg.style.color = '#ef4444';
-            msg.style.border = '1px solid rgba(239,68,68,0.2)';
-        }
-        setTimeout(() => msg.style.display = 'none', 4000);
     },
 
     // ─── CANVAS KNOWLEDGE GRAPH SIMULATOR ────────────────────────────────────

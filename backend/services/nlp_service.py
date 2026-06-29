@@ -25,7 +25,7 @@ except ImportError:
     _TEXTBLOB_AVAILABLE = False
 
 _OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
-_FREE_MODEL = 'google/gemini-2.5-flash:free'
+_FREE_MODEL = 'google/gemini-2.5-flash'
 
 
 def _call_openrouter(prompt: str, system: str = None) -> Optional[str]:
