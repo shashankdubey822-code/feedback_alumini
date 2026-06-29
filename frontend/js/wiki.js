@@ -604,6 +604,12 @@ const Wiki = {
         const text = this.elements.chatInput.value.trim();
         if (!text) return;
 
+        // Hide suggestions once chatting starts
+        const suggestionsContainer = document.getElementById('wiki-suggested-questions');
+        if (suggestionsContainer) {
+            suggestionsContainer.style.display = 'none';
+        }
+
         this.elements.chatInput.value = '';
         this.appendChatMessage('user', text);
         
@@ -667,12 +673,20 @@ const Wiki = {
             if (self.elements.chatBox) {
                 self.elements.chatBox.innerHTML = '<div class="chat-msg system" style="color: var(--text-muted); font-style: italic;">Brain memory cleared. Ask new questions regarding compiled speakers and sessions!</div>';
             }
+            const suggestionsContainer = document.getElementById('wiki-suggested-questions');
+            if (suggestionsContainer) {
+                suggestionsContainer.style.display = 'flex';
+            }
             if (window.showNotification) window.showNotification("AI memory cleared successfully.", "success");
         })
         .catch(err => {
             console.error("Error clearing memory:", err);
             if (self.elements.chatBox) {
                 self.elements.chatBox.innerHTML = '<div class="chat-msg system" style="color: var(--text-muted); font-style: italic;">Local memory cleared, but cloud sync failed. Ready for new questions.</div>';
+            }
+            const suggestionsContainer = document.getElementById('wiki-suggested-questions');
+            if (suggestionsContainer) {
+                suggestionsContainer.style.display = 'flex';
             }
             if (window.showNotification) window.showNotification("Memory cleared locally only.", "warning");
         });
@@ -742,6 +756,14 @@ const Wiki = {
                     container.innerHTML = '<div style="color: var(--text-muted); font-style: italic; font-size: 11px;">No options available.</div>';
                     return;
                 }
+                
+                // Hide suggestions if chat history is already active
+                if (self.chatHistory && self.chatHistory.length > 0) {
+                    container.style.display = 'none';
+                } else {
+                    container.style.display = 'flex';
+                }
+
                 questions.forEach(q => {
                     const chip = document.createElement('div');
                     chip.className = 'wiki-suggest-chip';

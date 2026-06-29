@@ -185,25 +185,27 @@
 
 /* AI Suggested Question Chips */
 .wiki-suggest-chip {
-    background: var(--bg-input);
-    border: 1px solid var(--border-subtle);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
     color: var(--text-muted);
-    padding: 6px 12px;
-    border-radius: 14px;
+    padding: 10px 14px;
+    border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s ease;
-    display: inline-block;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    max-width: 100%;
-    overflow: hidden;
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    white-space: normal;
+    text-overflow: clip;
+    overflow: visible;
     font-weight: 500;
+    text-align: left;
 }
 
 .wiki-suggest-chip:hover {
     background: rgba(168, 85, 247, 0.08);
-    border-color: rgba(168, 85, 247, 0.3);
-    color: var(--purple);
-    transform: translateY(-1px);
+    border-color: var(--purple);
+    color: var(--text-primary);
+    transform: translateX(2px);
 }
 
