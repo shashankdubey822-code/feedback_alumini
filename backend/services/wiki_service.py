@@ -1378,7 +1378,38 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
         if not models_to_try:
             return {"answer": "No AI available (API keys missing). Cannot execute Agentic ReAct Loop.", "citations": []}
 
-        system_instruction = """You are a conversational AI assistant specialized strictly for the Alumni Feedback Wiki Explorer.
+        is_dashboard_mode = False
+        if session_id and session_id.startswith("dashboard_rag_"):
+            is_dashboard_mode = True
+
+        if is_dashboard_mode:
+            from backend.services.agent_tools import get_schema_info
+            schema_info = get_schema_info()
+            system_instruction = f"""You are an intelligent AI analyst for a college alumni feedback dashboard. Your primary knowledge source is the live database accessed through your tools.
+
+YOUR PERSONALITY AND BEHAVIOR:
+- You are helpful, friendly, and conversational. You can greet users, introduce yourself, and engage naturally.
+- When someone says "hello" or asks who you are: introduce yourself warmly as the Alumni Feedback AI and mention 2-3 example questions they can ask.
+- When someone asks something unrelated to alumni feedback (e.g., recipes, coding help, general knowledge): politely explain you are specialized for this dashboard's feedback data, and suggest a relevant feedback question instead.
+- You do NOT refuse questions rudely. You always respond helpfully.
+
+YOUR TOOLS:
+- [TOOL: execute_readonly_sql] - Run a SELECT SQL query on the database. Input: the SQL string.
+- [TOOL: semantic_vector_search] - Find semantically similar feedback text. Input: search phrase.
+- [TOOL: get_schema_info] - Get database schema details. Input: empty string.
+
+Current Database Schema:
+{schema_info}
+
+To call a tool:
+Action: [TOOL_NAME]
+Action Input: [QUERY]
+
+When you have your complete answer:
+Final Answer: [YOUR ANSWER]
+"""
+        else:
+            system_instruction = """You are a conversational AI assistant specialized strictly for the Alumni Feedback Wiki Explorer.
 
 YOUR KNOWLEDGE LIMITS:
 - Your ONLY source of information is the compiled wiki files (markdown dossiers about events, speakers, concepts, suggestions, indexes, and logs).
@@ -1440,14 +1471,30 @@ Final Answer: [YOUR ANSWER]
                         
                         observation = ""
                         try:
-                            if "list_compiled_wiki_pages" in tool_name:
-                                observation = list_compiled_wiki_pages()
-                            elif "read_compiled_wiki_page_content" in tool_name:
-                                observation = read_compiled_wiki_page_content(tool_input)
-                            elif "search_compiled_wiki" in tool_name:
-                                observation = search_compiled_wiki(tool_input)
+                            if is_dashboard_mode:
+                                from backend.services.agent_tools import execute_readonly_sql, semantic_vector_search, get_schema_info
+                                if "execute_readonly_sql" in tool_name:
+                                    observation = execute_readonly_sql(tool_input)
+                                elif "semantic_vector_search" in tool_name:
+                                    observation = semantic_vector_search(
+                                        tool_input,
+                                        filter_year=filter_year,
+                                        filter_semester=filter_semester,
+                                        filter_dept=filter_dept,
+                                    )
+                                elif "get_schema_info" in tool_name:
+                                    observation = get_schema_info()
+                                else:
+                                    observation = f"Unknown tool: {tool_name}"
                             else:
-                                observation = f"Unknown tool: {tool_name}"
+                                if "list_compiled_wiki_pages" in tool_name:
+                                    observation = list_compiled_wiki_pages()
+                                elif "read_compiled_wiki_page_content" in tool_name:
+                                    observation = read_compiled_wiki_page_content(tool_input)
+                                elif "search_compiled_wiki" in tool_name:
+                                    observation = search_compiled_wiki(tool_input)
+                                else:
+                                    observation = f"Unknown tool: {tool_name}"
                         except Exception as e:
                             observation = f"Tool execution error: {str(e)}"
                         
