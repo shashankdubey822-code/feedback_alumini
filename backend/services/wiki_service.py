@@ -1329,45 +1329,139 @@ FORMATTING AND LENGTH RULES (CRITICAL):
         used_model_name = None
         primary_model_name = models_to_try[0][0] if models_to_try else "None"
 
-        if models_to_try:
-            for name, llm_instance in models_to_try:
-                try:
-                    logger.info(f"Attempting query with model: {name}")
-                    prompt = ChatPromptTemplate.from_messages([
-                        ("system", system_instruction),
-                        MessagesPlaceholder(variable_name="history"),
-                        ("human", "{question}")
-                    ])
-                    chain = prompt | llm_instance
-                    
-                    with_message_history = RunnableWithMessageHistory(
-                        chain,
-                        lambda sid: InsForgeChatMessageHistory(sid, self.bucket, fallback_history=history),
-                        input_messages_key="question",
-                        history_messages_key="history",
-                    )
-                    
-                    response = with_message_history.invoke(
-                        {"question": question, "context_str": context_str},
-                        config={"configurable": {"session_id": session_id if session_id else "default_session"}}
-                    )
-                    synthesis = response.content
-                    used_model_name = name
-                    break
-                except Exception as e:
-                    logger.warning(f"Model {name} failed: {str(e)}")
-                    continue
-                    
-            if synthesis is None:
-                synthesis = "Error generating response: All configured AI models failed or timed out."
-            elif used_model_name != primary_model_name:
-                synthesis += f"\n\n*(Note: Primary model '{primary_model_name}' timed out or failed. This response was generated using fallback model: '{used_model_name}')*"
-        else:
-            synthesis = f"""No AI available (API keys missing). Here's what the database shows for your query:
-- **Matching Wiki Pages**: {', '.join([f'[[{p[0]}]]' for p in matched_pages]) if matched_pages else 'None'}
-- **Feedback rows matched**: {len(similar_rows)}"""
 
-        return {"answer": synthesis, "citations": [p[0] for p in matched_pages]}
+        is_dashboard_mode = False
+        if session_id and session_id.startswith("dashboard_rag_"):
+            is_dashboard_mode = True
+
+        if is_dashboard_mode:
+            from backend.services.agent_tools import get_schema_info
+            schema_info = get_schema_info()
+            system_instruction = f"""You are an intelligent AI analyst for a college alumni feedback dashboard. Your primary knowledge source is the live database accessed through your tools.
+
+YOUR PERSONALITY AND BEHAVIOR:
+- You are helpful, friendly, and conversational. You can greet users, introduce yourself, and engage naturally.
+- When someone says "hello" or asks who you are: introduce yourself warmly as the Alumni Feedback AI and mention 2-3 example questions they can ask.
+- When someone asks something unrelated to alumni feedback (e.g., recipes, coding help, general knowledge): politely explain you are specialized for this dashboard's feedback data, and suggest a relevant feedback question instead.
+- You do NOT refuse questions rudely. You always respond helpfully.
+
+YOUR TOOLS:
+- [TOOL: execute_readonly_sql] - Run a SELECT SQL query on the database. Input: the SQL string.
+- [TOOL: semantic_vector_search] - Find semantically similar feedback text. Input: search phrase.
+- [TOOL: get_schema_info] - Get database schema details. Input: empty string.
+
+Current Database Schema:
+{schema_info}
+
+To call a tool:
+Action: [TOOL_NAME]
+Action Input: [QUERY]
+
+When you have your complete answer:
+Final Answer: [YOUR ANSWER]
+"""
+        else:
+            system_instruction = """You are a conversational AI assistant specialized strictly for the Alumni Feedback Wiki Explorer.
+
+YOUR KNOWLEDGE LIMITS:
+- Your ONLY source of information is the compiled wiki files (markdown dossiers about events, speakers, concepts, suggestions, indexes, and logs).
+- You DO NOT have access to any SQL database, database tables, ratings, or raw dashboard metrics.
+- If a user asks a question about something that is not present in the compiled wiki pages (for example, raw database metrics, database schemas, tables, or questions outside the wiki dossiers), you must explain to the user in your own words that you do not have access to that information and can only answer questions based on the compiled Wiki Explorer dossiers.
+
+YOUR TOOLS:
+- [TOOL: list_compiled_wiki_pages] - Get a list of all compiled pages. Input: empty string.
+- [TOOL: read_compiled_wiki_page_content] - Read the content of a specific compiled markdown dossier. Input: the relative file path (e.g., 'speakers/John_Doe.md').
+- [TOOL: search_compiled_wiki] - Search compiled markdown file contents for a specific keyword. Input: keyword string.
+
+To call a tool:
+Action: [TOOL_NAME]
+Action Input: [QUERY]
+
+When you have your complete answer or realize the information is not accessible:
+Final Answer: [YOUR ANSWER]
+"""
+
+        # Prepare messages
+        history_context = ""
+        if history:
+            history_context = "Conversation History:\n"
+            for h in history:
+                role = h.get('role', 'user')
+                content = h.get('content', '')
+                history_context += f"{role.capitalize()}: {content}\n"
+        
+        current_question = f"{history_context}\nUser Question: {question}"
+        
+        for model_name, llm in models_to_try:
+            try:
+                messages = [
+                    SystemMessage(content=system_instruction),
+                    HumanMessage(content=current_question)
+                ]
+                
+                max_iterations = 5
+                iterations = 0
+                final_answer = None
+                
+                while iterations < max_iterations:
+                    iterations += 1
+                    logger.info(f"ReAct Loop Iteration {iterations} with model {model_name}")
+                    messages.append(AIMessage(content=response_text))
+                    
+                    action_match = re.search(r"Action:\s*(.+)", response_text)
+                    action_input_match = re.search(r"Action Input:\s*(.*)", response_text)
+                    
+                    if action_match:
+                        tool_name = action_match.group(1).strip()
+                        tool_input = action_input_match.group(1).strip() if action_input_match else ""
+                        
+                        observation = ""
+                        try:
+                            if is_dashboard_mode:
+                                from backend.services.agent_tools import execute_readonly_sql, semantic_vector_search, get_schema_info
+                                if "execute_readonly_sql" in tool_name:
+                                    observation = execute_readonly_sql(tool_input)
+                                elif "semantic_vector_search" in tool_name:
+                                    observation = semantic_vector_search(
+                                        tool_input,
+                                        filter_year=filter_year,
+                                        filter_semester=filter_semester,
+                                        filter_dept=filter_dept,
+                                    )
+                                elif "get_schema_info" in tool_name:
+                                    observation = get_schema_info()
+                                else:
+                                    observation = f"Unknown tool: {tool_name}"
+                            else:
+                                if "list_compiled_wiki_pages" in tool_name:
+                                    observation = list_compiled_wiki_pages()
+                                elif "read_compiled_wiki_page_content" in tool_name:
+                                    observation = read_compiled_wiki_page_content(tool_input)
+                                elif "search_compiled_wiki" in tool_name:
+                                    observation = search_compiled_wiki(tool_input)
+                                else:
+                                    observation = f"Unknown tool: {tool_name}"
+                        except Exception as e:
+                            observation = f"Tool execution error: {str(e)}"
+                        
+                        logger.info(f"Observation: {observation}")
+                        messages.append(HumanMessage(content=f"Observation: {observation}"))
+                    elif "Final Answer:" in response_text:
+                        final_answer = response_text.split("Final Answer:", 1)[1].strip()
+                        break
+                    else:
+                        messages.append(HumanMessage(content="You didn't specify an action in the correct format or provide a Final Answer. Please format as 'Action: [TOOL_NAME]' and 'Action Input: [QUERY]' or 'Final Answer: [ANSWER]'."))
+                
+                if final_answer:
+                    return {"answer": final_answer, "citations": []}
+                else:
+                    return {"answer": "I apologize, but I wasn't able to reach a final answer within the allowed number of steps.", "citations": []}
+                    
+            except Exception as e:
+                logger.warning(f"Model {model_name} failed during ReAct loop: {str(e)}")
+                continue
+                
+        return {"answer": "Error generating response: All configured AI models failed or timed out during the ReAct loop.", "citations": []}
 
     def clear_memory(self, session_id: str) -> bool:
         """Delete chat history for the given session ID from InsForge bucket"""
