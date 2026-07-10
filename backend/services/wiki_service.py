@@ -1213,25 +1213,66 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
         self,
         question: str,
         history: List[Dict[str, str]] = None,
-        session_id: str = None,
+        session_id: str = "default",
         filter_year: int = None,
         filter_semester: str = None,
         filter_dept: str = None,
     ) -> Dict[str, Any]:
         """
         Query the compiled Wiki.
-        Now implemented as an Agentic ReAct Loop calling tools.
+        Now restricted to ONLY compiled wiki files, with database access completely removed.
         """
         import re
+        import json
         from langchain_core.prompts import ChatPromptTemplate
         try:
             from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
         except ImportError:
             return {"answer": "LangChain message classes failed to import. Cannot run ReAct agent.", "citations": []}
-        from backend.services.agent_tools import execute_readonly_sql, semantic_vector_search, get_schema_info
-        
-        logger.info(f"Agentic ReAct Wiki Query: '{question}' with history length {len(history) if history else 0}, session_id: {session_id}")
 
+        # Define file-bound tools operating strictly on compiled wiki pages
+        def list_compiled_wiki_pages() -> str:
+            """Get a list of all compiled page paths in the wiki."""
+            try:
+                pages = self.list_wiki_pages()
+                return json.dumps(pages)
+            except Exception as e:
+                return f"Error listing pages: {str(e)}"
+
+        def read_compiled_wiki_page_content(filepath: str) -> str:
+            """Read the full content of a specific compiled wiki markdown page."""
+            try:
+                content = self.read_wiki_file(filepath)
+                if content is None:
+                    return f"Error: Page '{filepath}' not found."
+                return content
+            except Exception as e:
+                return f"Error reading page content: {str(e)}"
+
+        def search_compiled_wiki(keyword: str) -> str:
+            """Scan through all compiled markdown pages in-memory and return matching snippets."""
+            try:
+                pages = self.list_wiki_pages()
+                results = []
+                keyword_lower = keyword.lower()
+                for p in pages:
+                    content = self.read_wiki_file(p)
+                    if content:
+                        lines = content.split('\n')
+                        for i, line in enumerate(lines):
+                            if keyword_lower in line.lower():
+                                results.append(f"File: {p} | Line {i+1}: {line.strip()}")
+                                if len(results) >= 20:
+                                    break
+                    if len(results) >= 20:
+                        break
+                if not results:
+                    return f"No matches found for keyword '{keyword}'."
+                return "\n".join(results)
+            except Exception as e:
+                return f"Error searching wiki: {str(e)}"
+
+        logger.info(f"Agentic ReAct Wiki Query: '{question}' with history length {len(history) if history else 0}, session_id: {session_id}")
 
         models_to_try = []
         
@@ -1318,13 +1359,8 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
                 timeout=15
             )))
 
-        if self.gemini_key:
-            try:
-                from langchain_google_genai import ChatGoogleGenerativeAI
-                models_to_try.append(("Gemini 2.5 Flash", ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.1, max_retries=0, request_timeout=15)))
-            except ImportError:
-                pass
-            
+        # Gemini 2.5 Flash is strictly excluded for chatting to prevent rate-limit restriction issues
+
         if self.mistral_key:
             try:
                 from langchain_mistralai import ChatMistralAI
@@ -1342,48 +1378,25 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
         if not models_to_try:
             return {"answer": "No AI available (API keys missing). Cannot execute Agentic ReAct Loop.", "citations": []}
 
-        schema_info = get_schema_info()
+        system_instruction = """You are a conversational AI assistant specialized strictly for the Alumni Feedback Wiki Explorer.
 
-        system_instruction = f"""You are an intelligent AI analyst for a college alumni feedback dashboard. Your primary knowledge source is the live database accessed through your tools.
+YOUR KNOWLEDGE LIMITS:
+- Your ONLY source of information is the compiled wiki files (markdown dossiers about events, speakers, concepts, suggestions, indexes, and logs).
+- You DO NOT have access to any SQL database, database tables, ratings, or raw dashboard metrics.
+- If a user asks a question about something that is not present in the compiled wiki pages (for example, raw database metrics, database schemas, tables, or questions outside the wiki dossiers), you must explain to the user in your own words that you do not have access to that information and can only answer questions based on the compiled Wiki Explorer dossiers.
 
-YOUR PERSONALITY AND BEHAVIOR:
-- You are helpful, friendly, and conversational. You can greet users, introduce yourself, and engage naturally.
-- When someone says "hello" or asks who you are: introduce yourself warmly as the Alumni Feedback AI and mention 2-3 example questions they can ask.
-- When someone asks something unrelated to alumni feedback (e.g., recipes, coding help, general knowledge): politely explain you are specialized for this dashboard's feedback data, and suggest a relevant feedback question instead.
-- You do NOT refuse questions rudely. You always respond helpfully.
-
-MULTI-QUESTION HANDLING:
-- If the user asks multiple questions in one message (e.g., "What is the avg rating? And which department scored highest? Also what topics do students want?"), identify EACH question separately, answer each one using the appropriate tool, then combine all answers in your Final Answer.
-- Label each sub-answer clearly: "1. ...", "2. ...", "3. ..."
-
-DATA RETRIEVAL RULES (apply only when answering feedback-related questions):
-1. ALWAYS use tools to retrieve data before answering. Never invent numbers, names, or feedback.
-2. For qualitative questions (what did students say, what topics, what improvements): use semantic_vector_search first.
-3. For quantitative questions (counts, averages, rankings): use execute_readonly_sql.
-4. Always mention how many records you found (e.g., "Based on 48 retrieved responses...").
-5. If no data is found, say exactly: "No matching data found in the current filters."
-6. Never say "typically", "usually", or "in general" — only speak from actual retrieved data.
-
-You solve feedback questions using a ReAct (Reasoning + Acting) loop:
-- [TOOL: execute_readonly_sql] - Run a SELECT SQL query. Input: the SQL string.
-- [TOOL: semantic_vector_search] - Find semantically similar feedback text. Input: search phrase.
-- [TOOL: get_schema_info] - Get database schema. Input: empty string.
-
-Current Database Schema:
-{schema_info}
-
-The embedding column is fully populated — semantic_vector_search will return REAL student feedback.
+YOUR TOOLS:
+- [TOOL: list_compiled_wiki_pages] - Get a list of all compiled pages. Input: empty string.
+- [TOOL: read_compiled_wiki_page_content] - Read the content of a specific compiled markdown dossier. Input: the relative file path (e.g., 'speakers/John_Doe.md').
+- [TOOL: search_compiled_wiki] - Search compiled markdown file contents for a specific keyword. Input: keyword string.
 
 To call a tool:
 Action: [TOOL_NAME]
 Action Input: [QUERY]
 
-When you have your complete answer:
-Final Answer: [YOUR ANSWER — conversational for greetings/off-topic, data-grounded bullet points for feedback questions]
-
-Keep feedback answers under 100 words. For greetings or off-topic, keep it under 50 words.
+When you have your complete answer or realize the information is not accessible:
+Final Answer: [YOUR ANSWER]
 """
-
 
         # Prepare messages
         history_context = ""
@@ -1396,7 +1409,6 @@ Keep feedback answers under 100 words. For greetings or off-topic, keep it under
         
         current_question = f"{history_context}\nUser Question: {question}"
         
-        # We'll just try models sequentially until one succeeds the whole loop
         for model_name, llm in models_to_try:
             try:
                 messages = [
@@ -1428,17 +1440,12 @@ Keep feedback answers under 100 words. For greetings or off-topic, keep it under
                         
                         observation = ""
                         try:
-                            if "execute_readonly_sql" in tool_name:
-                                observation = execute_readonly_sql(tool_input)
-                            elif "semantic_vector_search" in tool_name:
-                                observation = semantic_vector_search(
-                                    tool_input,
-                                    filter_year=filter_year,
-                                    filter_semester=filter_semester,
-                                    filter_dept=filter_dept,
-                                )
-                            elif "get_schema_info" in tool_name:
-                                observation = get_schema_info()
+                            if "list_compiled_wiki_pages" in tool_name:
+                                observation = list_compiled_wiki_pages()
+                            elif "read_compiled_wiki_page_content" in tool_name:
+                                observation = read_compiled_wiki_page_content(tool_input)
+                            elif "search_compiled_wiki" in tool_name:
+                                observation = search_compiled_wiki(tool_input)
                             else:
                                 observation = f"Unknown tool: {tool_name}"
                         except Exception as e:
@@ -1603,12 +1610,10 @@ Do NOT include generic questions that don't use the data.
 
 Return ONLY the 4 questions, one per line. Do not use bullet points, numbering, or introductory text."""
 
-        # Try LLMs in order of preference (Groq -> Gemini -> OpenRouter)
+        # Try LLMs in order of preference (Groq -> OpenRouter)
         candidates = []
         if self.groq_key and ChatGroq is not None:
             candidates.append(("Groq", ChatGroq(api_key=self.groq_key, model="llama-3.3-70b-versatile", temperature=0.3, max_retries=0, timeout=5)))
-        if self.gemini_key and ChatGoogleGenerativeAI is not None:
-            candidates.append(("Gemini", ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.3, max_retries=0, request_timeout=5)))
         if self.openrouter_key and ChatOpenAI is not None:
             try:
                 candidates.append(("OpenRouter", ChatOpenAI(api_key=self.openrouter_key, base_url="https://openrouter.ai/api/v1", model="meta-llama/llama-3.3-70b-instruct", temperature=0.3, max_retries=0, request_timeout=5)))

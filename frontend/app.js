@@ -784,6 +784,8 @@ function setupDashboardRAGChat() {
     if (!inputEl || !submitBtn || !logEl) return;
 
     const chatHistory = [];
+    let activeController = null;
+    let isQueryRunning = false;
 
     // ── Preset question chips ────────────────────────────────────────────────
     const PRESET_QUESTIONS = [
@@ -811,6 +813,7 @@ function setupDashboardRAGChat() {
         chip.addEventListener('mouseenter', () => { chip.style.background = 'rgba(108,92,231,0.25)'; });
         chip.addEventListener('mouseleave', () => { chip.style.background = 'rgba(108,92,231,0.1)'; });
         chip.addEventListener('click', () => {
+            if (isQueryRunning) return;
             // Strip emoji prefix
             const cleanQ = q.replace(/^[^a-zA-Z]+/, '').trim();
             inputEl.value = cleanQ;
@@ -855,6 +858,13 @@ function setupDashboardRAGChat() {
         if (!text) return;
 
         inputEl.value = '';
+        isQueryRunning = true;
+        activeController = new AbortController();
+
+        // Update UI to executing/running state
+        inputEl.disabled = true;
+        submitBtn.textContent = 'Stop';
+        submitBtn.style.background = 'linear-gradient(135deg, #e74c3c, #c0392b)';
 
         // Append user message
         appendMessage('user', text);
@@ -885,6 +895,7 @@ function setupDashboardRAGChat() {
             const res = await fetch(`${API_BASE}/api/v1/wiki/query`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                signal: activeController.signal,
                 body: JSON.stringify({
                     question: text,
                     history: chatHistory,
@@ -906,8 +917,20 @@ function setupDashboardRAGChat() {
 
         } catch (e) {
             clearTimeout(waitTimeout);
+            loadingDiv.remove();
             console.error(e);
-            loadingDiv.innerHTML = '<span style="color: #e74c3c;">Error: Failed to fetch Q&A answer. Check API status.</span>';
+            if (e.name === 'AbortError') {
+                appendMessage('ai', '<em>Query stopped by user.</em>');
+            } else {
+                appendMessage('ai', '<span style="color: #e74c3c;">We encountered an error. Please try again.</span>');
+            }
+        } finally {
+            isQueryRunning = false;
+            activeController = null;
+            inputEl.disabled = false;
+            submitBtn.textContent = 'Send';
+            submitBtn.style.background = 'linear-gradient(135deg, #0984e3, #6c5ce7)';
+            inputEl.focus();
         }
     };
 
@@ -918,36 +941,31 @@ function setupDashboardRAGChat() {
         div.style.cssText = sender === 'user' ? `
             align-self: flex-end;
             background: rgba(108, 92, 231, 0.15);
-            border: 1px solid rgba(108, 92, 231, 0.3);
+            border: 1px solid rgba(108, 92, 231, 0.25);
             padding: 10px 14px;
             border-radius: 12px 12px 0 12px;
             max-width: 80%;
             font-size: 13px;
             line-height: 1.5;
-            color: #000000;
+            color: var(--text-primary);
         ` : `
             align-self: flex-start;
-            background: rgba(255, 255, 255, 0.6);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: var(--bg-card);
+            border: 1px solid var(--border-weak);
             padding: 10px 14px;
             border-radius: 12px 12px 12px 0;
             max-width: 80%;
             font-size: 13px;
             line-height: 1.5;
-            color: #000000;
+            color: var(--text-primary);
         `;
 
-        // Parse markdown double brackets [[speakers/name.md]] -> Wiki link click
-        let parsedText = text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/- (.*?)$/gm, '<li>$1</li>')
-            .replace(/\[\[([^\]|]+)\]\]/g, (match, link) => {
-                const label = link.split('/').pop().replace('_', ' ').replace('.md', '');
-                return `<span class="wiki-link" style="color:#6c5ce7; cursor:pointer; text-decoration:underline; font-weight:600;" data-page="${link}">${label}</span>`;
-            });
+        // Native simple link parser for user responses
+        // e.g. [[speakers/John_Doe]] -> Clickable span
+        const parsedText = text.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (match, path, label) => {
+            const displayLabel = (label || path.split('/').pop().replace(/_/g, ' ')).replace('.md', '');
+            return `<span class="wiki-link" data-page="${path}" style="color:#4c3a9e; font-weight:600; cursor:pointer; text-decoration:underline;">${displayLabel}</span>`;
+        });
 
         div.innerHTML = parsedText;
 
@@ -976,17 +994,27 @@ function setupDashboardRAGChat() {
         return div;
     };
 
-    submitBtn.addEventListener('click', sendMessage);
+    submitBtn.addEventListener('click', () => {
+        if (isQueryRunning) {
+            if (activeController) activeController.abort();
+        } else {
+            sendMessage();
+        }
+    });
     inputEl.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') sendMessage();
+        if (e.key === 'Enter' && !isQueryRunning) sendMessage();
     });
 }
+
+let showCompletedChecklist = false;
 
 function renderPrescriptiveChecklist() {
     const listEl = document.getElementById('prescriptive-checklist');
     const placeholderEl = document.getElementById('checklist-placeholder');
-    if (!listEl) return;
+    const cardEl = document.getElementById('prescriptive-checklist-card');
+    if (!listEl || !cardEl) return;
 
+    // Clear list
     listEl.innerHTML = '';
 
     const tableData = state.tableData || [];
@@ -1009,8 +1037,6 @@ function renderPrescriptiveChecklist() {
             } catch (e) {}
         }
 
-
-
         if (isActionable && suggestionsText.trim()) {
             actionableItems.push({
                 id: row.id,
@@ -1022,14 +1048,51 @@ function renderPrescriptiveChecklist() {
         }
     });
 
+    // Handle toggle container
+    let toggleContainer = document.getElementById('checklist-toggle-container');
+    if (!toggleContainer) {
+        toggleContainer = document.createElement('div');
+        toggleContainer.id = 'checklist-toggle-container';
+        toggleContainer.style.cssText = `
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 12.5px;
+            color: var(--text-primary, #000000);
+        `;
+        cardEl.insertBefore(toggleContainer, cardEl.firstChild);
+    }
+
     if (actionableItems.length === 0) {
         listEl.style.display = 'none';
+        toggleContainer.style.display = 'none';
         if (placeholderEl) placeholderEl.style.display = 'block';
         return;
     }
 
     if (placeholderEl) placeholderEl.style.display = 'none';
+    toggleContainer.style.display = 'flex';
     listEl.style.display = 'flex';
+
+    // Update toggle controls
+    toggleContainer.innerHTML = `
+        <span style="font-weight: 600; color: #6c5ce7; font-size: 13px;">Prescriptive Action Queue</span>
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; font-weight: 500; font-size: 12px; color: var(--text-secondary, #333333);">
+            <input type="checkbox" id="chk-show-completed" ${showCompletedChecklist ? 'checked' : ''} style="cursor: pointer; accent-color: #6c5ce7;" />
+            Show Completed
+        </label>
+    `;
+
+    const showCompletedChk = document.getElementById('chk-show-completed');
+    if (showCompletedChk) {
+        showCompletedChk.addEventListener('change', (e) => {
+            showCompletedChecklist = e.target.checked;
+            renderPrescriptiveChecklist();
+        });
+    }
 
     const savedStates = JSON.parse(localStorage.getItem('datalens_checklist_states') || '{}');
     const uniqueItems = [];
@@ -1043,7 +1106,31 @@ function renderPrescriptiveChecklist() {
         }
     });
 
-    uniqueItems.slice(0, 15).forEach((item, idx) => {
+    // Filter based on toggle state
+    const visibleItems = uniqueItems.filter(item => {
+        const checkKey = `item_${item.id}`;
+        const isChecked = !!savedStates[checkKey];
+        if (!showCompletedChecklist && isChecked) {
+            return false;
+        }
+        return true;
+    });
+
+    if (visibleItems.length === 0) {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.style.cssText = `
+            text-align: center;
+            padding: 60px 20px;
+            font-size: 13px;
+            color: #6c5ce7;
+            font-style: italic;
+        `;
+        emptyMsg.innerHTML = "🎉 All caught up! All actionable items completed.";
+        listEl.appendChild(emptyMsg);
+        return;
+    }
+
+    visibleItems.slice(0, 15).forEach((item, idx) => {
         const li = document.createElement('li');
         li.style.cssText = `
             display: flex;
@@ -1053,7 +1140,11 @@ function renderPrescriptiveChecklist() {
             background: rgba(255, 255, 255, 0.05);
             border-radius: 8px;
             border: 1px solid rgba(255, 255, 255, 0.08);
-            transition: all 0.2s ease;
+            transition: all 0.5s ease;
+            opacity: 1;
+            max-height: 120px;
+            overflow: hidden;
+            margin-bottom: 0px;
         `;
 
         const checkKey = `item_${item.id || idx}`;
@@ -1072,20 +1163,37 @@ function renderPrescriptiveChecklist() {
         const textSpan = document.createElement('span');
         textSpan.style.cssText = `
             font-size: 13px;
-            color: #000000;
+            color: var(--text-primary, #000000);
             line-height: 1.4;
             flex-grow: 1;
             text-decoration: ${isChecked ? 'line-through' : 'none'};
             opacity: ${isChecked ? '0.6' : '1'};
             transition: all 0.2s ease;
         `;
-        textSpan.innerHTML = `<strong>[${esc(item.category)}]</strong> ${esc(item.text)} <span style="font-size: 11px; color: #333333; display: block; margin-top: 4px;">Dept: ${esc(item.department)} | Speaker: ${esc(item.speaker)}</span>`;
+        textSpan.innerHTML = `<strong>[${esc(item.category)}]</strong> ${esc(item.text)} <span style="font-size: 11px; color: var(--text-muted, #555555); display: block; margin-top: 4px;">Dept: ${esc(item.department)} | Speaker: ${esc(item.speaker)}</span>`;
 
         checkbox.addEventListener('change', () => {
             savedStates[checkKey] = checkbox.checked;
             localStorage.setItem('datalens_checklist_states', JSON.stringify(savedStates));
             textSpan.style.textDecoration = checkbox.checked ? 'line-through' : 'none';
             textSpan.style.opacity = checkbox.checked ? '0.6' : '1';
+
+            if (checkbox.checked && !showCompletedChecklist) {
+                // Micro-animation fade-out after 800ms delay
+                setTimeout(() => {
+                    li.style.opacity = '0';
+                    li.style.maxHeight = '0';
+                    li.style.paddingTop = '0';
+                    li.style.paddingBottom = '0';
+                    li.style.borderWidth = '0';
+                    li.style.marginTop = '0';
+                    
+                    // Trigger re-render to bring in next item once animation completes
+                    setTimeout(() => {
+                        renderPrescriptiveChecklist();
+                    }, 500);
+                }, 800);
+            }
         });
 
         li.appendChild(checkbox);

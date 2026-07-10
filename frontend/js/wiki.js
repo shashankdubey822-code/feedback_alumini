@@ -2,7 +2,6 @@
  * DataLens AI Knowledge Wiki - Frontend Controller
  * Handles Explorer, Ingest Queue, Chat assistant, and Force-Directed Graph Visualizer.
  */
-
 // Global namespaces and elements
 const Wiki = {
     pages: [],
@@ -37,19 +36,22 @@ const Wiki = {
         chatBox: null,
         chatInput: null,
         chatSendBtn: null,
+        chatClearBtn: null,
         canvas: null,
         selectAllBtn: null,
-        compileStartBtn: null
+        compileStartBtn: null,
+        compileAbortBtn: null,
+        compileAbortMiniBtn: null
     },
 
     init() {
         console.log("Initializing AI Knowledge Wiki Module...");
-        
-        // Generate/load persistent local session ID for InsForge bucket storage memory
         if (!localStorage.getItem('wiki_session_id')) {
             localStorage.setItem('wiki_session_id', 'session_' + Math.random().toString(36).substring(2, 11));
         }
         this.sessionId = localStorage.getItem('wiki_session_id');
+        this.activeController = null;
+        this.isQueryRunning = false;
 
         this.cacheElements();
         this.bindEvents();
@@ -183,7 +185,6 @@ const Wiki = {
                     }
                 });
         };
-
         if (this.elements.compileAbortBtn) {
             this.elements.compileAbortBtn.addEventListener('click', handleAbort);
         }
@@ -194,7 +195,11 @@ const Wiki = {
         // Chat Input actions
         if (this.elements.chatSendBtn) {
             this.elements.chatSendBtn.addEventListener('click', function() {
-                self.sendChatMessage();
+                if (self.isQueryRunning) {
+                    if (self.activeController) self.activeController.abort();
+                } else {
+                    self.sendChatMessage();
+                }
             });
         }
 
@@ -207,13 +212,12 @@ const Wiki = {
 
         if (this.elements.chatInput) {
             this.elements.chatInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
+                if (e.key === 'Enter' && !self.isQueryRunning) {
                     self.sendChatMessage();
                 }
             });
         }
 
-        // Click to expand RAG Chat panel
         const ragContainer = document.getElementById('wiki-rag-container');
         if (ragContainer) {
             ragContainer.addEventListener('click', function(e) {
@@ -611,9 +615,15 @@ const Wiki = {
         }
 
         this.elements.chatInput.value = '';
+        this.isQueryRunning = true;
+        this.activeController = new AbortController();
+
+        // Update UI to running/executing state
+        this.elements.chatInput.disabled = true;
+        this.elements.chatSendBtn.textContent = 'Stop';
+        this.elements.chatSendBtn.style.background = 'linear-gradient(135deg, #e74c3c, #c0392b)';
+
         this.appendChatMessage('user', text);
-        
-        // Push user message to history
         this.chatHistory.push({ role: 'user', content: text });
 
         const self = this;
@@ -630,6 +640,7 @@ const Wiki = {
         fetch('/api/v1/wiki/query', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            signal: this.activeController.signal,
             body: JSON.stringify({ 
                 question: text,
                 history: this.chatHistory,
@@ -639,19 +650,29 @@ const Wiki = {
         .then(res => res.json())
         .then(data => {
             clearTimeout(waitTimeout);
-            // Remove loading msg
             loadingDiv.remove();
             
             // Render result with parsed links
             self.appendChatMessage('ai', data.answer);
-            
-            // Push assistant response to history
             self.chatHistory.push({ role: 'assistant', content: data.answer });
         })
         .catch(err => {
             clearTimeout(waitTimeout);
+            loadingDiv.remove();
             console.error("Error sending query:", err);
-            loadingDiv.innerText = "Error: Failed to fetch answer from service.";
+            if (err.name === 'AbortError') {
+                self.appendChatMessage('ai', '<em>Query stopped by user.</em>');
+            } else {
+                self.appendChatMessage('ai', '<span style="color: #e74c3c;">We encountered an error. Please try again.</span>');
+            }
+        })
+        .finally(() => {
+            self.isQueryRunning = false;
+            self.activeController = null;
+            self.elements.chatInput.disabled = false;
+            self.elements.chatSendBtn.textContent = 'Send';
+            self.elements.chatSendBtn.style.background = 'linear-gradient(135deg, #6366f1, #a855f7)';
+            self.elements.chatInput.focus();
         });
     },
 
@@ -778,12 +799,12 @@ const Wiki = {
                     chip.title = q;
                     chip.addEventListener('click', function(e) {
                         e.stopPropagation(); // Stop parent click from expanding/collapsing container
+                        if (self.isQueryRunning) return;
                         self.elements.chatInput.value = q;
                         self.sendChatMessage();
                     });
                     container.appendChild(chip);
                 });
-            })
             .catch(err => {
                 console.error("Error loading suggested questions:", err);
                 container.innerHTML = '';
