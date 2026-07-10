@@ -148,21 +148,23 @@ class WikiService:
         return None
 
     def list_wiki_pages(self) -> List[str]:
-        """Get relative paths of all pages in the Wiki"""
+        """Get relative paths of all pages in the Wiki.
+        Always re-reads from InsForge bucket so freshly compiled pages are visible immediately.
+        Falls back to local file scan if InsForge is not active.
+        """
         all_pages = []
-        
+
         if is_insforge_active():
-            # List files from InsForge Storage
-            # Walk through subdirectories
             for sub in ['', 'events', 'speakers', 'concepts', 'suggestions']:
-                files = insforge_list_files(self.bucket, f"pages/{sub}".strip('/'))
+                prefix = f"pages/{sub}".strip('/')
+                files = insforge_list_files(self.bucket, prefix)
                 for f in files:
                     name = f.get('name')
                     if name and name.endswith('.md'):
                         path = f"{sub}/{name}".strip('/')
                         all_pages.append(path)
-            if all_pages:
-                return sorted(list(set(all_pages)))
+            # Always return bucket list even if only index/log exist
+            return sorted(list(set(all_pages)))
 
         # Fallback to local file scanning
         for root, _, files in os.walk(self.pages_dir):
@@ -1406,15 +1408,26 @@ Final Answer: [YOUR ANSWER]
                 while iterations < max_iterations:
                     iterations += 1
                     logger.info(f"ReAct Loop Iteration {iterations} with model {model_name}")
+
+                    response = llm.invoke(messages)
+                    response_text = response.content if hasattr(response, 'content') else str(response)
+                    logger.info(f"LLM Response:\n{response_text}")
+
                     messages.append(AIMessage(content=response_text))
-                    
+
+                    # Check Final Answer FIRST — avoids wasted tool call when LLM
+                    # writes both Action: and Final Answer: in the same response.
+                    if "Final Answer:" in response_text:
+                        final_answer = response_text.split("Final Answer:", 1)[1].strip()
+                        break
+
                     action_match = re.search(r"Action:\s*(.+)", response_text)
                     action_input_match = re.search(r"Action Input:\s*(.*)", response_text)
-                    
+
                     if action_match:
                         tool_name = action_match.group(1).strip()
                         tool_input = action_input_match.group(1).strip() if action_input_match else ""
-                        
+
                         observation = ""
                         try:
                             if is_dashboard_mode:
@@ -1443,12 +1456,9 @@ Final Answer: [YOUR ANSWER]
                                     observation = f"Unknown tool: {tool_name}"
                         except Exception as e:
                             observation = f"Tool execution error: {str(e)}"
-                        
+
                         logger.info(f"Observation: {observation}")
                         messages.append(HumanMessage(content=f"Observation: {observation}"))
-                    elif "Final Answer:" in response_text:
-                        final_answer = response_text.split("Final Answer:", 1)[1].strip()
-                        break
                     else:
                         messages.append(HumanMessage(content="You didn't specify an action in the correct format or provide a Final Answer. Please format as 'Action: [TOOL_NAME]' and 'Action Input: [QUERY]' or 'Final Answer: [ANSWER]'."))
                 
