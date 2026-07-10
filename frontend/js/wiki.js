@@ -805,11 +805,13 @@ const Wiki = {
                     });
                     container.appendChild(chip);
                 });
+            })
             .catch(err => {
                 console.error("Error loading suggested questions:", err);
                 container.innerHTML = '';
             });
     },
+
 
     // ─── CANVAS KNOWLEDGE GRAPH SIMULATOR ────────────────────────────────────
 
