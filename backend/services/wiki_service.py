@@ -20,11 +20,12 @@ from backend.utils.insforge_helper import (
     is_insforge_active
 )
 from langchain_core.chat_history import BaseChatMessageHistory
-from langchain_core.messages import BaseMessage, messages_from_dict, messages_to_dict
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage, messages_from_dict, messages_to_dict
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_groq import ChatGroq
 from langchain_google_genai import ChatGoogleGenerativeAI
+from backend.services.agent_tools import execute_readonly_sql, semantic_vector_search, get_schema_info
 
 logger = get_section_logger('wiki')
 
@@ -1229,115 +1230,14 @@ This page logs constructive critiques regarding **{s_name.replace('_', ' ')}** i
 
     def query_wiki(self, question: str, history: List[Dict[str, str]] = None, session_id: str = None) -> Dict[str, Any]:
         """
-        Query the compiled Wiki.
-        Performs vector-RAG, loads relevant files, and feeds them into the LLM context.
+        Query the compiled Wiki or live database (Dashboard RAG Mode).
+        If session_id starts with 'dashboard_rag_', routes to Dashboard Mode with agent_tools.
         """
         logger.info(f"RAG Wiki Query: '{question}' with history length {len(history) if history else 0}, session_id: {session_id}")
         
-        # 1. Fetch relevant feedback hits via vector RAG
-        search_query = question
-        if history:
-            user_msgs = [h.get('content', '') for h in history if h.get('role') == 'user']
-            if user_msgs:
-                search_query += " " + " ".join(user_msgs[-2:])
-                
-        from backend.services.rag_service import RAGService
-        rag = RAGService()
-        similar_rows = rag.search_similar_feedback(search_query, limit=5)
-        
-        # 2. Extract matching entities (find matching markdown pages)
-        pages = self.list_wiki_pages()
-        matched_pages = []
-        tokens = [t.lower() for t in search_query.split() if len(t) > 3]
-        for p in pages:
-            p_lower = p.lower()
-            if any(t in p_lower for t in tokens):
-                content = self.read_wiki_file(p)
-                if content:
-                    matched_pages.append((p, content))
-        matched_pages = matched_pages[:3]
-        
-        # 3. SYNTHESIZE RESPONSE
-        context_str = ""
-        if matched_pages:
-            context_str += "=== RELEVANT WIKI PAGES ===\n"
-            for p_path, p_content in matched_pages:
-                context_str += f"File: [[{p_path}]]\n{p_content}\n\n"
-        
-        if similar_rows:
-            context_str += "=== STUDENT FEEDBACK DATA ===\n"
-            for r in similar_rows:
-                student_name = r.get('name_of_student') or 'Anonymous'
-                context_str += f"- Student: {student_name}, Speaker: {r.get('alumni_speaker_name')}, Valuable aspect: {r.get('aspect_most_valuable')}, Critique/Suggestions: {r.get('improvements_suggestions')}\n"
-
-        if not context_str.strip():
-            context_str = "No compiled wiki pages or feedback records matched this query in the database."
-
-        # Softened Prompt for Factual Integrity and Counter-Questioning
-        system_instruction = """You are a smart, highly empathetic, and human-like AI analyst for a college alumni feedback dashboard. 
-
-CRITICAL RULES:
-1. You have access to the data provided below in the "AVAILABLE DATA" section. Base your answers heavily on this context.
-2. If the user asks about a specific person, event, or topic that is not in the AVAILABLE DATA, politely explain that you don't have that specific data in your current context yet, but offer to answer based on what you do know or ask them to compile that session. Do NOT sound like a robotic data parser.
-3. If the user asks general-knowledge questions (e.g., how to code, general trivia, math), decline politely: "I am your alumni feedback assistant. I focus on guest lecture data. Please ask questions about the compiled sessions."
-4. If the data is empty, suggest they compile the lectures first.
-5. If the user asks to "name the students" or "name them", inspect the "Student:" prefix in the AVAILABLE DATA. If no names are present, explain that the feedback is anonymous.
-6. If the user's question is ambiguous, ask a clarifying counter-question.
-7. Be conversational, warm, and highly humanized. Use words like "I", "you", "we". Greet the user by their name if they told you it previously!
-
-FORMATTING AND LENGTH RULES (CRITICAL):
-1. NO PARAGRAPHS ALLOWED. You must respond ONLY in short, concise bullet points (pointers).
-2. Maximum length of the entire response is 50 words. Be ultra-brief.
-3. NEVER put multiple bullet points on the same line or inside a paragraph. You MUST separate each bullet point with a newline.
-4. Put the direct answer or main statistic FIRST.
-5. Only use double-bracket WikiLinks (e.g. [[speakers/Name]]) when referring to compiled files that actually exist in the AVAILABLE DATA.
-
-=== AVAILABLE DATA ===
-{context_str}
-"""
-
-        # Build the models list from highest priority to lowest
-        models_to_try = []
-        
-        if self.groq_key:
-            models_to_try.append(("Groq (Llama-3.3)", ChatGroq(api_key=self.groq_key, model="llama-3.3-70b-versatile", temperature=0.1, max_retries=0, timeout=7)))
-            
-        if self.openrouter_key:
-            try:
-                from langchain_openai import ChatOpenAI
-                models_to_try.append(("OpenRouter (Llama-3-70b)", ChatOpenAI(
-                    api_key=self.openrouter_key, 
-                    base_url="https://openrouter.ai/api/v1", 
-                    model="meta-llama/llama-3-70b-instruct", 
-                    temperature=0.1, 
-                    max_retries=0, 
-                    request_timeout=7
-                )))
-            except ImportError:
-                pass
-                
-        if self.gemini_key:
-            models_to_try.append(("Gemini 2.5 Flash", ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.1, max_retries=0, request_timeout=7)))
-            
-        if self.mistral_key:
-            from langchain_mistralai import ChatMistralAI
-            models_to_try.append(("Mistral Large", ChatMistralAI(api_key=self.mistral_key, model="mistral-large-latest", temperature=0.1, max_retries=0, timeout=7)))
-
-        if self.cohere_key:
-            from langchain_cohere import ChatCohere
-            models_to_try.append(("Cohere Command-R", ChatCohere(cohere_api_key=self.cohere_key, model="command-r-plus", temperature=0.1, max_retries=0, timeout=7)))
-
-        synthesis = None
-        used_model_name = None
-        primary_model_name = models_to_try[0][0] if models_to_try else "None"
-
-
-        is_dashboard_mode = False
-        if session_id and session_id.startswith("dashboard_rag_"):
-            is_dashboard_mode = True
+        is_dashboard_mode = bool(session_id and session_id.startswith("dashboard_rag_"))
 
         if is_dashboard_mode:
-            from backend.services.agent_tools import get_schema_info
             schema_info = get_schema_info()
             system_instruction = f"""You are an intelligent AI analyst for a college alumni feedback dashboard. Your primary knowledge source is the live database accessed through your tools.
 
@@ -1363,12 +1263,48 @@ When you have your complete answer:
 Final Answer: [YOUR ANSWER]
 """
         else:
-            system_instruction = """You are a conversational AI assistant specialized strictly for the Alumni Feedback Wiki Explorer.
+            search_query = question
+            if history:
+                user_msgs = [h.get('content', '') for h in history if h.get('role') == 'user']
+                if user_msgs:
+                    search_query += " " + " ".join(user_msgs[-2:])
+                    
+            from backend.services.rag_service import RAGService
+            rag = RAGService()
+            similar_rows = rag.search_similar_feedback(search_query, limit=5)
+            
+            pages = self.list_wiki_pages()
+            matched_pages = []
+            tokens = [t.lower() for t in search_query.split() if len(t) > 3]
+            for p in pages:
+                p_lower = p.lower()
+                if any(t in p_lower for t in tokens):
+                    content = self.read_wiki_file(p)
+                    if content:
+                        matched_pages.append((p, content))
+            matched_pages = matched_pages[:3]
+            
+            context_str = ""
+            if matched_pages:
+                context_str += "=== RELEVANT WIKI PAGES ===\n"
+                for p_path, p_content in matched_pages:
+                    context_str += f"File: [[{p_path}]]\n{p_content}\n\n"
+            
+            if similar_rows:
+                context_str += "=== STUDENT FEEDBACK DATA ===\n"
+                for r in similar_rows:
+                    student_name = r.get('name_of_student') or 'Anonymous'
+                    context_str += f"- Student: {student_name}, Speaker: {r.get('alumni_speaker_name')}, Valuable aspect: {r.get('aspect_most_valuable')}, Critique/Suggestions: {r.get('improvements_suggestions')}\n"
+
+            if not context_str.strip():
+                context_str = "No compiled wiki pages or feedback records matched this query in the database."
+
+            system_instruction = f"""You are a conversational AI assistant specialized strictly for the Alumni Feedback Wiki Explorer.
 
 YOUR KNOWLEDGE LIMITS:
 - Your ONLY source of information is the compiled wiki files (markdown dossiers about events, speakers, concepts, suggestions, indexes, and logs).
 - You DO NOT have access to any SQL database, database tables, ratings, or raw dashboard metrics.
-- If a user asks a question about something that is not present in the compiled wiki pages (for example, raw database metrics, database schemas, tables, or questions outside the wiki dossiers), you must explain to the user in your own words that you do not have access to that information and can only answer questions based on the compiled Wiki Explorer dossiers.
+- If a user asks a question about something that is not present in the compiled wiki pages, explain that you do not have access to that information and can only answer questions based on the compiled Wiki Explorer dossiers.
 
 YOUR TOOLS:
 - [TOOL: list_compiled_wiki_pages] - Get a list of all compiled pages. Input: empty string.
@@ -1381,9 +1317,42 @@ Action Input: [QUERY]
 
 When you have your complete answer or realize the information is not accessible:
 Final Answer: [YOUR ANSWER]
+
+=== AVAILABLE DATA ===
+{context_str}
 """
 
-        # Prepare messages
+        # Build the models list from highest priority to lowest
+        models_to_try = []
+        
+        if self.groq_key:
+            models_to_try.append(("Groq (Llama-3.3)", ChatGroq(api_key=self.groq_key, model="llama-3.3-70b-versatile", temperature=0.1, max_retries=0, timeout=25)))
+            
+        if self.openrouter_key:
+            try:
+                from langchain_openai import ChatOpenAI
+                models_to_try.append(("OpenRouter (Llama-3-70b)", ChatOpenAI(
+                    api_key=self.openrouter_key, 
+                    base_url="https://openrouter.ai/api/v1", 
+                    model="meta-llama/llama-3-70b-instruct", 
+                    temperature=0.1, 
+                    max_retries=0, 
+                    request_timeout=25
+                )))
+            except ImportError:
+                pass
+                
+        if self.gemini_key:
+            models_to_try.append(("Gemini 2.5 Flash", ChatGoogleGenerativeAI(google_api_key=self.gemini_key, model="gemini-2.5-flash", temperature=0.1, max_retries=0, request_timeout=25)))
+            
+        if self.mistral_key:
+            from langchain_mistralai import ChatMistralAI
+            models_to_try.append(("Mistral Large", ChatMistralAI(api_key=self.mistral_key, model="mistral-large-latest", temperature=0.1, max_retries=0, timeout=25)))
+
+        if self.cohere_key:
+            from langchain_cohere import ChatCohere
+            models_to_try.append(("Cohere Command-R", ChatCohere(cohere_api_key=self.cohere_key, model="command-r-plus", temperature=0.1, max_retries=0, timeout=25)))
+
         history_context = ""
         if history:
             history_context = "Conversation History:\n"
@@ -1409,56 +1378,67 @@ Final Answer: [YOUR ANSWER]
                     iterations += 1
                     logger.info(f"ReAct Loop Iteration {iterations} with model {model_name}")
 
+                    # Sliding context window: Keep SystemMessage (0), User Question (1), and last 6 messages
+                    if len(messages) > 8:
+                        messages = [messages[0], messages[1]] + messages[-6:]
+
                     response = llm.invoke(messages)
                     response_text = response.content if hasattr(response, 'content') else str(response)
                     logger.info(f"LLM Response:\n{response_text}")
 
                     messages.append(AIMessage(content=response_text))
 
-                    # Check Final Answer FIRST — avoids wasted tool call when LLM
-                    # writes both Action: and Final Answer: in the same response.
+                    # Check Final Answer FIRST
                     if "Final Answer:" in response_text:
                         final_answer = response_text.split("Final Answer:", 1)[1].strip()
                         break
 
                     action_match = re.search(r"Action:\s*(.+)", response_text)
-                    action_input_match = re.search(r"Action Input:\s*(.*)", response_text)
+                    action_input_match = re.search(r"Action Input:\s*(.*?)(?=\n(?:Action|Observation|Final Answer):|\Z)", response_text, re.DOTALL)
 
                     if action_match:
                         tool_name = action_match.group(1).strip()
-                        tool_input = action_input_match.group(1).strip() if action_input_match else ""
+                        raw_tool_input = action_input_match.group(1).strip() if action_input_match else ""
+                        tool_input = re.sub(r"^```(?:sql)?\s*", "", raw_tool_input, flags=re.IGNORECASE)
+                        tool_input = re.sub(r"\s*```$", "", tool_input).strip()
 
                         observation = ""
                         try:
                             if is_dashboard_mode:
-                                from backend.services.agent_tools import execute_readonly_sql, semantic_vector_search, get_schema_info
                                 if "execute_readonly_sql" in tool_name:
                                     observation = execute_readonly_sql(tool_input)
                                 elif "semantic_vector_search" in tool_name:
-                                    observation = semantic_vector_search(
-                                        tool_input,
-                                        filter_year=filter_year,
-                                        filter_semester=filter_semester,
-                                        filter_dept=filter_dept,
-                                    )
+                                    observation = semantic_vector_search(tool_input)
                                 elif "get_schema_info" in tool_name:
                                     observation = get_schema_info()
                                 else:
                                     observation = f"Unknown tool: {tool_name}"
                             else:
                                 if "list_compiled_wiki_pages" in tool_name:
-                                    observation = list_compiled_wiki_pages()
+                                    observation = "\n".join(self.list_wiki_pages())
                                 elif "read_compiled_wiki_page_content" in tool_name:
-                                    observation = read_compiled_wiki_page_content(tool_input)
+                                    content = self.read_wiki_file(tool_input.strip())
+                                    observation = content if content else f"File not found: {tool_input}"
                                 elif "search_compiled_wiki" in tool_name:
-                                    observation = search_compiled_wiki(tool_input)
+                                    query_term = tool_input.strip().lower()
+                                    matching_snippets = []
+                                    for page_path in self.list_wiki_pages():
+                                        p_content = self.read_wiki_file(page_path)
+                                        if p_content and query_term in p_content.lower():
+                                            matching_snippets.append(f"File: [[{page_path}]]\n{p_content[:500]}...")
+                                    observation = "\n\n".join(matching_snippets[:3]) if matching_snippets else f"No wiki pages matched '{query_term}'."
                                 else:
                                     observation = f"Unknown tool: {tool_name}"
                         except Exception as e:
                             observation = f"Tool execution error: {str(e)}"
 
-                        logger.info(f"Observation: {observation}")
-                        messages.append(HumanMessage(content=f"Observation: {observation}"))
+                        # Truncate observation string to 1500 chars limit
+                        obs_str = str(observation)
+                        if len(obs_str) > 1500:
+                            obs_str = obs_str[:1500] + "\n... [Observation truncated to 1500 characters]"
+
+                        logger.info(f"Observation: {obs_str}")
+                        messages.append(HumanMessage(content=f"Observation: {obs_str}"))
                     else:
                         messages.append(HumanMessage(content="You didn't specify an action in the correct format or provide a Final Answer. Please format as 'Action: [TOOL_NAME]' and 'Action Input: [QUERY]' or 'Final Answer: [ANSWER]'."))
                 

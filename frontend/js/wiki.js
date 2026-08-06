@@ -14,6 +14,110 @@ const Wiki = {
         draggedNode: null
     },
     ingestInterval: null,
+    isDashboardMode: false,
+    rawSessionId: null,
+
+    getSessionId() {
+        let base = this.rawSessionId || localStorage.getItem('wiki_session_id') || 'session_default';
+        base = base.replace(/^dashboard_rag_/, '');
+        if (!base.startsWith('session_')) {
+            base = 'session_' + base;
+        }
+        return this.isDashboardMode ? `dashboard_rag_${base}` : base;
+    },
+
+    get sessionId() {
+        return this.getSessionId();
+    },
+
+    set sessionId(val) {
+        if (typeof val === 'string') {
+            if (val.startsWith('dashboard_rag_')) {
+                this.isDashboardMode = true;
+                this.rawSessionId = val.replace('dashboard_rag_', '');
+            } else {
+                this.isDashboardMode = false;
+                this.rawSessionId = val;
+            }
+            if (!this.rawSessionId.startsWith('session_')) {
+                this.rawSessionId = 'session_' + this.rawSessionId;
+            }
+            localStorage.setItem('wiki_session_id', this.rawSessionId);
+        }
+    },
+
+    setDashboardMode(isDashboard) {
+        this.isDashboardMode = !!isDashboard;
+        localStorage.setItem('wiki_dashboard_mode', this.isDashboardMode ? 'true' : 'false');
+        this.updateDashboardModeUI();
+        console.log(`[Wiki] Dashboard Mode updated: ${this.isDashboardMode} | Active Session ID: ${this.sessionId}`);
+        return this.sessionId;
+    },
+
+    toggleDashboardMode() {
+        return this.setDashboardMode(!this.isDashboardMode);
+    },
+
+    initDashboardModeUI() {
+        const ragContainer = document.getElementById('wiki-rag-container');
+        if (ragContainer) {
+            const headerDiv = ragContainer.querySelector('div');
+            if (headerDiv && !document.getElementById('btn-wiki-dashboard-toggle')) {
+                const toggleBtn = document.createElement('button');
+                toggleBtn.id = 'btn-wiki-dashboard-toggle';
+                toggleBtn.className = 'wiki-mode-toggle-btn';
+                toggleBtn.style.cssText = `
+                    background: rgba(168, 85, 247, 0.1);
+                    border: 1px solid rgba(168, 85, 247, 0.3);
+                    color: var(--purple, #a855f7);
+                    font-size: 10px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    padding: 2px 8px;
+                    border-radius: 4px;
+                    margin-left: 8px;
+                    transition: all 0.2s ease;
+                `;
+                toggleBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.toggleDashboardMode();
+                });
+                
+                const titleEl = headerDiv.querySelector('h4');
+                if (titleEl && titleEl.parentNode === headerDiv) {
+                    titleEl.insertAdjacentElement('afterend', toggleBtn);
+                } else {
+                    headerDiv.appendChild(toggleBtn);
+                }
+            }
+        }
+        this.updateDashboardModeUI();
+    },
+
+    updateDashboardModeUI() {
+        const toggleBtn = document.getElementById('btn-wiki-dashboard-toggle') || (this.elements && this.elements.dashboardToggle);
+        if (toggleBtn) {
+            if (toggleBtn.type === 'checkbox') {
+                toggleBtn.checked = this.isDashboardMode;
+            } else {
+                toggleBtn.innerText = this.isDashboardMode ? '⚡ Dashboard RAG (ReAct)' : '📖 Wiki RAG';
+                if (this.isDashboardMode) {
+                    toggleBtn.style.background = 'rgba(52, 211, 153, 0.15)';
+                    toggleBtn.style.borderColor = 'rgba(52, 211, 153, 0.4)';
+                    toggleBtn.style.color = '#34d399';
+                } else {
+                    toggleBtn.style.background = 'rgba(168, 85, 247, 0.1)';
+                    toggleBtn.style.borderColor = 'rgba(168, 85, 247, 0.3)';
+                    toggleBtn.style.color = '#a855f7';
+                }
+            }
+        }
+
+        const modeBadge = document.getElementById('wiki-mode-badge');
+        if (modeBadge) {
+            modeBadge.innerText = this.isDashboardMode ? 'Dashboard Mode Active' : 'Standard Mode Active';
+        }
+    },
     
     // Config elements
     elements: {
@@ -51,13 +155,34 @@ const Wiki = {
         console.log("Initializing AI Knowledge Wiki Module...");
         
         // Generate/load persistent local session ID for InsForge bucket storage memory
-        if (!localStorage.getItem('wiki_session_id')) {
-            localStorage.setItem('wiki_session_id', 'session_' + Math.random().toString(36).substring(2, 11));
+        let storedId = localStorage.getItem('wiki_session_id');
+        if (!storedId) {
+            storedId = 'session_' + Math.random().toString(36).substring(2, 11);
+            localStorage.setItem('wiki_session_id', storedId);
         }
-        this.sessionId = localStorage.getItem('wiki_session_id');
+        
+        let baseId = storedId.replace(/^dashboard_rag_/, '');
+        if (!baseId.startsWith('session_')) {
+            baseId = 'session_' + baseId;
+        }
+        this.rawSessionId = baseId;
+
+        // Check Dashboard Mode activation from URL query params, localStorage, or UI
+        const urlParams = new URLSearchParams(window.location.search);
+        const modeParam = urlParams.get('mode') || urlParams.get('rag_mode') || urlParams.get('dashboard_mode');
+        const dashParam = urlParams.get('dashboard');
+        
+        if (modeParam === 'dashboard' || dashParam === 'true' || dashParam === '1') {
+            this.isDashboardMode = true;
+        } else if (modeParam === 'standard' || modeParam === 'wiki' || dashParam === 'false' || dashParam === '0') {
+            this.isDashboardMode = false;
+        } else {
+            this.isDashboardMode = localStorage.getItem('wiki_dashboard_mode') === 'true';
+        }
 
         this.cacheElements();
         this.bindEvents();
+        this.initDashboardModeUI();
         this.initGraphSimulation();
         this.loadWikiStatus();
         this.loadSessionsList();
@@ -95,11 +220,12 @@ const Wiki = {
         this.elements.cfgInsForgeKey = document.getElementById('cfg-insforge-key');
         this.elements.cfgStatusMsg = document.getElementById('cfg-status-msg');
         
-        // Buttons
+        // Buttons & Toggles
         this.elements.selectAllBtn = document.getElementById('btn-wiki-select-all');
         this.elements.compileStartBtn = document.getElementById('btn-wiki-compile-start');
         this.elements.compileAbortBtn = document.getElementById('btn-wiki-compile-abort');
         this.elements.compileAbortMiniBtn = document.getElementById('btn-wiki-compile-abort-mini');
+        this.elements.dashboardToggle = document.getElementById('btn-wiki-dashboard-toggle') || document.getElementById('chk-dashboard-mode') || document.getElementById('wiki-dashboard-toggle');
     },
 
     bindEvents() {
@@ -208,6 +334,13 @@ const Wiki = {
         }
         if (this.elements.compileAbortMiniBtn) {
             this.elements.compileAbortMiniBtn.addEventListener('click', handleAbort);
+        }
+
+        // Dashboard Mode Toggle element bind
+        if (this.elements.dashboardToggle) {
+            this.elements.dashboardToggle.addEventListener('change', function(e) {
+                self.setDashboardMode(e.target.checked);
+            });
         }
 
         // Chat Input actions
@@ -635,7 +768,10 @@ const Wiki = {
 
         const self = this;
         // Show indicator
-        const loadingDiv = self.appendChatMessage('ai', 'Searching wiki channels & synthesizing answer...');
+        const loadingText = this.isDashboardMode 
+            ? 'Executing ReAct reasoning loop (schema inspection, SQL & vector search)...' 
+            : 'Searching wiki channels & synthesizing answer...';
+        const loadingDiv = self.appendChatMessage('ai', loadingText);
         
         // Acknowledge if the request takes more than 3 seconds
         const waitTimeout = setTimeout(() => {
@@ -1136,7 +1272,8 @@ const Wiki = {
     }
 };
 
-// Bootstrap Wiki on Document ready
+// Export Wiki globally and bootstrap on Document ready
+window.Wiki = Wiki;
 document.addEventListener('DOMContentLoaded', function() {
     Wiki.init();
 });
