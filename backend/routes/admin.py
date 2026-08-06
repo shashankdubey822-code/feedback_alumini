@@ -28,6 +28,27 @@ logger = get_logger(__name__)
 admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
 
+def _upsert_speaker(speaker_name: str) -> str:
+    """Normalize speaker name, upsert into speakers table, return speaker UUID.
+    Safe to call repeatedly — uses ON CONFLICT DO NOTHING."""
+    import re as _re
+    normalized = _re.sub(r'^(Mr\.|Ms\.|Dr\.|Adv\.)\s*', '', speaker_name.strip(), flags=_re.IGNORECASE).strip()
+    if not normalized:
+        return None
+    try:
+        # Try to insert; if name already exists, do nothing
+        execute_returning(
+            "INSERT INTO speakers (name) VALUES (%s) ON CONFLICT (name) DO NOTHING RETURNING id",
+            (normalized,)
+        )
+        # Always fetch the id (handles both new insert and existing row)
+        row = execute_one("SELECT id FROM speakers WHERE name = %s", (normalized,))
+        return row['id'] if row else None
+    except Exception as e:
+        logger.warning(f"Speaker upsert failed for '{normalized}': {e}")
+        return None
+
+
 _transformer_model = None
 
 def get_transformer_model():
@@ -324,6 +345,10 @@ def create_event_and_form():
             else:
                 return jsonify({'success': False, 'error': 'Database insert failed'}), 500
             logger.info(f"Event #{event_id} inserted")
+            # Auto-link speaker
+            speaker_id = _upsert_speaker(speaker_name)
+            if speaker_id:
+                api_update('events', 'id', event_id, {'speaker_id': speaker_id})
         except Exception as e:
             logger.error(f"Event insert failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
@@ -389,6 +414,11 @@ def create_event():
             "INSERT INTO events (speaker_name, venue_date, status) VALUES (%s,%s,'pending') RETURNING id",
             (speaker_name, venue_date)
         )
+        # Auto-link speaker
+        speaker_id = _upsert_speaker(speaker_name)
+        if speaker_id:
+            from backend.utils.insforge_db import execute_write
+            execute_write("UPDATE events SET speaker_id = %s WHERE id = %s", (speaker_id, event_id))
         return jsonify({'success': True, 'event_id': event_id}), 200
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
